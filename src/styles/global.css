@@ -47,6 +47,19 @@ nav a.active { color: #11221b; background: #d5ef89; font-weight: 800; }
 .online span { color: #d5ef89; }
 .offline span { color: #ffc36c; }
 
+/* Loading card mostrada por AuthGate mientras verifica la sesión */
+.loading-card {
+  padding: 2rem 2.5rem;
+  border-radius: 1.25rem;
+  font-size: .9rem;
+  color: #afd8a5;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .45; }
+}
+
 @media (max-width: 600px) {
   .topbar { align-items: flex-start; flex-wrap: wrap; }
   .topbar .button { margin-left: auto; }

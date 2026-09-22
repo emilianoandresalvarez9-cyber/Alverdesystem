@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from "react";
 import { hasSupabaseConfig } from "../shared/config/env";
-import { signIn } from "../shared/auth/session";
+import { signIn, currentSession } from "../shared/auth/session";
+import { getSupabase } from "../shared/supabase/client";
 
 export function LoginPage() {
   const [email, setEmail] = useState("");
@@ -15,7 +16,15 @@ export function LoginPage() {
 
     try {
       await signIn(email, password);
-      location.assign("/catalog.html");
+
+      // Redirigir según el rol: administrador va a /admin.html, empleado a /catalog.html
+      const { data } = await getSupabase()
+        .from("profiles")
+        .select("role")
+        .single();
+
+      const destination = data?.role === "administrator" ? "/admin.html" : "/catalog.html";
+      location.assign(destination);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "No se pudo iniciar sesión.");
     } finally {
