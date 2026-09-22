@@ -10,9 +10,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
       - run: npm install
       - run: npm run typecheck
       - run: npm test
@@ -20,10 +23,32 @@ jobs:
 
   database:
     runs-on: ubuntu-latest
+    services:
+      supabase:
+        image: supabase/postgres:15.6.1.143
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: supabase/setup-cli@v1
         with:
           version: latest
-      - run: supabase start
-      - run: supabase db reset
+      - name: Iniciar Supabase local
+        run: supabase start
+      - name: Aplicar migraciones
+        run: supabase db reset
+      - name: Correr tests SQL
+        run: |
+          for f in supabase/tests/*.sql; do
+            echo "=== Corriendo $f ==="
+            psql postgresql://postgres:postgres@localhost:54322/postgres -f "$f"
+          done
