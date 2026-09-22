@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#11221b" />
+    <title>Alverde · Muestrario del sistema de diseño</title>
+    <link rel="stylesheet" href="../src/styles/global.css" />
+    <style>
+      .demo-section { margin-bottom: 2.5rem; }
+      .demo-row { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+      .demo-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: .75rem; }
+      .swatch { border-radius: .7rem; padding: .8rem; font-size: .75rem; font-weight: 700; border: 1px solid #ffffff1c; }
+    </style>
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar glass">
+        <span class="brand"><span class="brand-mark">A</span><span>Alverde</span></span>
+        <nav aria-label="Navegación de ejemplo">
+          <a class="active" href="#">Catálogo</a>
+          <a href="#">Administración</a>
+        </nav>
+        <button class="button button-secondary">Salir</button>
+      </header>
+
+      <section class="page-heading">
+        <p class="eyebrow">Sistema de diseño · Agente D</p>
+        <h1>Muestrario</h1>
+      </section>
+
+      <section class="demo-section">
+        <h2>Colores (tokens.css)</h2>
+        <div class="demo-swatches">
+          <div class="swatch" style="background:#10221a">fondo</div>
+          <div class="swatch" style="background:#06130a">fondo profundo</div>
+          <div class="swatch" style="background:#d5ef89;color:#11221b">acento (lima)</div>
+          <div class="swatch" style="background:#d9ab55;color:#11221b">dorado</div>
+          <div class="swatch" style="background:#4d956a">verde medio</div>
+          <div class="swatch" style="background:#b9e88b;color:#11221b">éxito</div>
+          <div class="swatch" style="background:#ffc36c;color:#34230a">aviso</div>
+          <div class="swatch" style="background:#ff8d80;color:#2b0f0a">error</div>
+        </div>
+      </section>
+
+      <section class="demo-section">
+        <h2>Botones</h2>
+        <div class="demo-row">
+          <button class="button">Guardar</button>
+          <button class="button button-secondary">Cancelar</button>
+          <button class="button button-ghost">Ver detalle</button>
+          <button class="button button-danger">Archivar</button>
+          <button class="button" disabled>Guardando…</button>
+        </div>
+      </section>
+
+      <section class="demo-section">
+        <h2>Campos de formulario</h2>
+        <div class="glass card" style="max-width: 30rem">
+          <form>
+            <label>Nombre del producto
+              <input type="text" placeholder="Lentejas" />
+              <span class="field-help">Como figura en la etiqueta.</span>
+            </label>
+            <label>Rubro
+              <select><option>Granos</option><option>Chocolates</option><option>Suplementos</option></select>
+            </label>
+            <label>Precio por kilo
+              <input type="text" aria-invalid="true" value="abc" />
+              <span class="field-error">Tiene que ser un número.</span>
+            </label>
+            <button class="button" type="button">Guardar producto</button>
+          </form>
+        </div>
+      </section>
+
+      <section class="demo-section">
+        <h2>Tags de filtro y badges de estado</h2>
+        <div class="tag-row" style="margin-bottom:1rem">
+          <button class="tag tag-activo" aria-pressed="true">Vegano</button>
+          <button class="tag" aria-pressed="false">Sin TACC</button>
+          <button class="tag" aria-pressed="false">Apto diabético</button>
+          <button class="tag" aria-pressed="false">Sin azúcar</button>
+        </div>
+        <div class="demo-row">
+          <span class="badge">Del local</span>
+          <span class="badge badge-exito">Sincronizado</span>
+          <span class="badge badge-aviso">3 pendientes</span>
+          <span class="badge badge-error">Stock negativo</span>
+        </div>
+      </section>
+
+      <section class="demo-section">
+        <h2>Toolbar + tabla de listado</h2>
+        <div class="toolbar glass-lite">
+          <input type="search" placeholder="Buscar producto…" aria-label="Buscar producto" />
+          <button class="button button-secondary">Filtros</button>
+          <button class="button">Exportar a Excel</button>
+        </div>
+        <div class="glass-lite card card-flush table-wrap">
+          <table>
+            <thead>
+              <tr><th>Producto</th><th>Marca</th><th>Rubro</th><th>Stock</th><th>Estado</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Lentejas</td><td>Del local</td><td>Granos</td><td>12,4 kg</td><td><span class="badge badge-exito">OK</span></td></tr>
+              <tr><td>Garrapiñada 150 g</td><td>Del local</td><td>Frutos secos</td><td>18 u.</td><td><span class="badge badge-aviso">Por vencer</span></td></tr>
+              <tr><td>Chocolate 70%</td><td>Águila</td><td>Chocolates</td><td>0 u.</td><td><span class="badge badge-error">Falta</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="demo-section">
+        <h2>Estado vacío y esqueleto de carga</h2>
+        <div class="glass-lite card" style="margin-bottom:1rem">
+          <div class="empty-state">
+            <h2>Sin resultados</h2>
+            <p>Probá con menos filtros o revisá la ortografía.</p>
+            <button class="button button-secondary">Limpiar filtros</button>
+          </div>
+        </div>
+        <div class="demo-row">
+          <div class="skeleton" style="width:14rem;height:1.1rem"></div>
+          <div class="skeleton" style="width:8rem;height:1.1rem"></div>
+          <div class="skeleton" style="width:5rem;height:2.4rem"></div>
+        </div>
+      </section>
+
+      <section class="demo-section">
+        <h2>Modal</h2>
+        <button class="button button-danger" onclick="document.getElementById('demo-modal').showModal()">Abrir modal de ejemplo</button>
+        <dialog id="demo-modal" class="modal glass">
+          <div class="modal-head">
+            <h2>Archivar producto</h2>
+            <button type="button" class="button button-ghost" aria-label="Cerrar" onclick="document.getElementById('demo-modal').close()">✕</button>
+          </div>
+          <div class="modal-body">
+            <p>El producto no se borra: queda archivado y conserva su historial (RF-56).</p>
+          </div>
+          <div class="modal-foot">
+            <button class="button button-secondary" onclick="document.getElementById('demo-modal').close()">Cancelar</button>
+            <button class="button button-danger" onclick="document.getElementById('demo-modal').close()">Archivar</button>
+          </div>
+        </dialog>
+      </section>
+    </main>
+  </body>
+</html>
