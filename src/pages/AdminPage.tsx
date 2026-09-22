@@ -1,4 +1,5 @@
 import { AppShell } from "../shared/components/AppShell";
+import { BackupSettings } from "../shared/components/BackupSettings";
 import { OfflineIndicator } from "../shared/components/OfflineIndicator";
 
 export function AdminPage() {
@@ -14,6 +15,7 @@ export function AdminPage() {
           <h2>Fundación técnica</h2>
           <p>Esquema relacional, auditoría de cambios, autenticación y cola de sincronización instalados en la Fase 0.</p>
         </section>
+        <BackupSettings />
       </div>
     </AppShell>
   );

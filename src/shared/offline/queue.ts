@@ -1,3 +1,4 @@
+import { tryWritePendingOperationsBackup } from "./backup";
 import type { CatalogSnapshot, NewQueuedOperation, QueuedOperation } from "./types";
 
 const DB_NAME = "alverde-offline";
@@ -9,22 +10,7 @@ const queueEvents = new EventTarget();
 
 let databasePromise: Promise<IDBDatabase> | undefined;
 
-function requestAsPromise<T>(request: IDBRequest<T>): Promise<T> {
-  return new Promise((resolve, reject) => {
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error("Error de IndexedDB."));
-  });
-}
-
-function transactionAsPromise(transaction: IDBTransaction): Promise<void> {
-  return new Promise((resolve, reject) => {
-    transaction.oncomplete = () => resolve();
-    transaction.onerror = () => reject(transaction.error ?? new Error("No se pudo guardar en el dispositivo."));
-    transaction.onabort = () => reject(transaction.error ?? new Error("La operación local fue cancelada."));
-  });
-}
-
-function database(): Promise<IDBDatabase> {
+function openDatabase(): Promise<IDBDatabase> {
   databasePromise ??= new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
@@ -35,12 +21,8 @@ function database(): Promise<IDBDatabase> {
         store.createIndex("syncedAt", "syncedAt");
         store.createIndex("createdAt", "createdAt");
       }
-      if (!db.objectStoreNames.contains(CATALOG_STORE)) {
-        db.createObjectStore(CATALOG_STORE, { keyPath: "key" });
-      }
-      if (!db.objectStoreNames.contains(SETTING_STORE)) {
-        db.createObjectStore(SETTING_STORE, { keyPath: "key" });
-      }
+      if (!db.objectStoreNames.contains(CATALOG_STORE)) db.createObjectStore(CATALOG_STORE, { keyPath: "key" });
+      if (!db.objectStoreNames.contains(SETTING_STORE)) db.createObjectStore(SETTING_STORE, { keyPath: "key" });
     };
 
     request.onsuccess = () => resolve(request.result);
@@ -48,6 +30,45 @@ function database(): Promise<IDBDatabase> {
   });
 
   return databasePromise;
+}
+
+async function readRecord<T>(storeName: string, key: IDBValidKey): Promise<T | undefined> {
+  const db = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(storeName, "readonly");
+    const request = transaction.objectStore(storeName).get(key);
+    let result: T | undefined;
+
+    request.onsuccess = () => { result = request.result as T | undefined; };
+    transaction.oncomplete = () => resolve(result);
+    transaction.onerror = () => reject(transaction.error ?? new Error("No se pudo leer el almacenamiento local."));
+    transaction.onabort = () => reject(transaction.error ?? new Error("La lectura local fue cancelada."));
+  });
+}
+
+async function readAll<T>(storeName: string): Promise<T[]> {
+  const db = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(storeName, "readonly");
+    const request = transaction.objectStore(storeName).getAll();
+    let result: T[] = [];
+
+    request.onsuccess = () => { result = request.result as T[]; };
+    transaction.oncomplete = () => resolve(result);
+    transaction.onerror = () => reject(transaction.error ?? new Error("No se pudo leer el almacenamiento local."));
+    transaction.onabort = () => reject(transaction.error ?? new Error("La lectura local fue cancelada."));
+  });
+}
+
+async function putRecord(storeName: string, value: unknown): Promise<void> {
+  const db = await openDatabase();
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(storeName, "readwrite");
+    transaction.objectStore(storeName).put(value);
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error ?? new Error("No se pudo guardar en el dispositivo."));
+    transaction.onabort = () => reject(transaction.error ?? new Error("La operación local fue cancelada."));
+  });
 }
 
 function emitQueueChange(): void {
@@ -58,20 +79,22 @@ function uuid(): string {
   return crypto.randomUUID();
 }
 
-export async function deviceId(): Promise<string> {
-  const db = await database();
-  const transaction = db.transaction(SETTING_STORE, "readwrite");
-  const store = transaction.objectStore(SETTING_STORE);
-  const saved = await requestAsPromise(store.get("device-id")) as { key: string; value: string } | undefined;
-
-  if (saved?.value) {
-    await transactionAsPromise(transaction);
-    return saved.value;
+async function mirrorPendingQueue(): Promise<void> {
+  try {
+    await tryWritePendingOperationsBackup(await pendingOperations());
+  } catch (error) {
+    // The browser may temporarily revoke a previously granted directory permission.
+    // The queued data remains safe in IndexedDB and will be retried on the next operation.
+    console.warn("No se pudo actualizar la segunda copia local.", error);
   }
+}
+
+export async function deviceId(): Promise<string> {
+  const saved = await readRecord<{ key: string; value: string }>(SETTING_STORE, "device-id");
+  if (saved?.value) return saved.value;
 
   const value = uuid();
-  store.put({ key: "device-id", value });
-  await transactionAsPromise(transaction);
+  await putRecord(SETTING_STORE, { key: "device-id", value });
   return value;
 }
 
@@ -83,19 +106,14 @@ export async function enqueueOperation<TPayload>(input: NewQueuedOperation<TPayl
     createdAt: new Date().toISOString()
   };
 
-  const db = await database();
-  const transaction = db.transaction(OPERATION_STORE, "readwrite");
-  transaction.objectStore(OPERATION_STORE).put(operation);
-  await transactionAsPromise(transaction);
+  await putRecord(OPERATION_STORE, operation);
   emitQueueChange();
+  void mirrorPendingQueue();
   return operation;
 }
 
 export async function pendingOperations(): Promise<QueuedOperation[]> {
-  const db = await database();
-  const transaction = db.transaction(OPERATION_STORE, "readonly");
-  const values = await requestAsPromise(transaction.objectStore(OPERATION_STORE).getAll()) as QueuedOperation[];
-  await transactionAsPromise(transaction);
+  const values = await readAll<QueuedOperation>(OPERATION_STORE);
   return values
     .filter((operation) => !operation.syncedAt)
     .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
@@ -106,53 +124,42 @@ export async function pendingOperationCount(): Promise<number> {
 }
 
 export async function markOperationSynced(localId: string): Promise<void> {
-  const db = await database();
-  const transaction = db.transaction(OPERATION_STORE, "readwrite");
-  const store = transaction.objectStore(OPERATION_STORE);
-  const operation = await requestAsPromise(store.get(localId)) as QueuedOperation | undefined;
+  const operation = await readRecord<QueuedOperation>(OPERATION_STORE, localId);
+  if (!operation) throw new Error("No se encontró la operación local a sincronizar.");
 
-  if (!operation) {
-    transaction.abort();
-    throw new Error("No se encontró la operación local a sincronizar.");
-  }
-
-  store.put({ ...operation, syncedAt: new Date().toISOString(), failedAt: undefined, failureMessage: undefined });
-  await transactionAsPromise(transaction);
+  await putRecord(OPERATION_STORE, {
+    ...operation,
+    syncedAt: new Date().toISOString(),
+    failedAt: undefined,
+    failureMessage: undefined
+  });
   emitQueueChange();
+  void mirrorPendingQueue();
 }
 
 export async function markOperationFailed(localId: string, reason: string): Promise<void> {
-  const db = await database();
-  const transaction = db.transaction(OPERATION_STORE, "readwrite");
-  const store = transaction.objectStore(OPERATION_STORE);
-  const operation = await requestAsPromise(store.get(localId)) as QueuedOperation | undefined;
+  const operation = await readRecord<QueuedOperation>(OPERATION_STORE, localId);
+  if (!operation) return;
 
-  if (operation) {
-    store.put({ ...operation, failedAt: new Date().toISOString(), failureMessage: reason });
-  }
-
-  await transactionAsPromise(transaction);
+  await putRecord(OPERATION_STORE, {
+    ...operation,
+    failedAt: new Date().toISOString(),
+    failureMessage: reason
+  });
   emitQueueChange();
+  void mirrorPendingQueue();
 }
 
 export async function saveCatalogSnapshot(rows: unknown[]): Promise<void> {
-  const db = await database();
-  const transaction = db.transaction(CATALOG_STORE, "readwrite");
-  transaction.objectStore(CATALOG_STORE).put({
+  await putRecord(CATALOG_STORE, {
     key: "employee-catalog",
     refreshedAt: new Date().toISOString(),
     rows
   });
-  await transactionAsPromise(transaction);
 }
 
 export async function loadCatalogSnapshot(): Promise<CatalogSnapshot | undefined> {
-  const db = await database();
-  const transaction = db.transaction(CATALOG_STORE, "readonly");
-  const record = await requestAsPromise(transaction.objectStore(CATALOG_STORE).get("employee-catalog")) as
-    | ({ key: string } & CatalogSnapshot)
-    | undefined;
-  await transactionAsPromise(transaction);
+  const record = await readRecord<({ key: string } & CatalogSnapshot)>(CATALOG_STORE, "employee-catalog");
   return record && { refreshedAt: record.refreshedAt, rows: record.rows };
 }
 
@@ -162,7 +169,7 @@ export function subscribeToQueueChanges(listener: () => void): () => void {
 }
 
 export async function resetOfflineStorageForTests(): Promise<void> {
-  const db = await database();
+  const db = await openDatabase();
   db.close();
   databasePromise = undefined;
   await new Promise<void>((resolve, reject) => {
