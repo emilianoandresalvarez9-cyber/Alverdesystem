@@ -1,5 +1,5 @@
 # Documento de Requisitos — Sistema de Gestión para Dietética
-
+Antes de que se queden sin tokens o capacidad de procesamiento indicar hasta que parte se quedaron para que otra IA continue
 **Estado:** Planificación cerrada, lista para pasar a desarrollo (Fase 1)
 **Última actualización:** 21 de septiembre de 2026
 
