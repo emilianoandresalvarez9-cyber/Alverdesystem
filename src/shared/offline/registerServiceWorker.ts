@@ -1,9 +1,13 @@
-export function registerServiceWorker(): void {
-  if (!("serviceWorker" in navigator)) return;
+import { startOfflineSynchronization } from "./sync";
 
-  window.addEventListener("load", () => {
-    void navigator.serviceWorker.register("/sw.js").catch((error: unknown) => {
-      console.warn("No se pudo registrar el modo offline.", error);
+export function registerServiceWorker(): void {
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      void navigator.serviceWorker.register("/sw.js").catch((error: unknown) => {
+        console.warn("No se pudo registrar el modo offline.", error);
+      });
     });
-  });
+  }
+
+  startOfflineSynchronization();
 }
