@@ -25,7 +25,7 @@ describe("saldo de fiado (RF-46, RF-48)", () => {
       op("sale", { paymentMethod: "cash", customerId: "c1", totalAmount: 99999 }),
       op("credit_movement", { customerId: "c1", movementKind: "charge", amount: 5000 }, true)
     ]);
-    expect(pending.get("c1")).toBe(700.1);
+    expect(pending.deltas.get("c1")).toBe(700.1);
     expect(withPending([account({ balance: 2000 })], pending)[0]?.balance).toBe(2700.1);
   });
 });
