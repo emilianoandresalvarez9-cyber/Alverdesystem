@@ -12,8 +12,10 @@ import { BulkDashboard } from "../modules/fractioning";
 import { Button, GlassCard } from "../shared/ui";
 import { ReportsDashboard } from "../modules/reports/ReportsDashboard";
 import { AuditHistoryPage } from "../modules/audit/AuditHistoryPage";
+import { BranchesManager } from "../modules/admin/BranchesManager";
+import "../styles/pos.css";
 
-type AdminTab = "reports" | "stock" | "fractioning" | "classifiers" | "restock" | "barcodes" | "audit" | "settings";
+type AdminTab = "reports" | "stock" | "fractioning" | "classifiers" | "restock" | "barcodes" | "branches" | "audit" | "settings";
 
 export function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>("reports");
@@ -67,6 +69,13 @@ export function AdminPage() {
             onClick={() => setActiveTab("barcodes")}
           >
             🖨️ Códigos y Planilla
+          </Button>
+
+          <Button
+            variant={activeTab === "branches" ? "primario" : "fantasma"}
+            onClick={() => setActiveTab("branches")}
+          >
+            🏪 Sucursales y cajas
           </Button>
 
           <Button
@@ -133,6 +142,9 @@ export function AdminPage() {
             <ClassifierManager type={classifierType} />
           </div>
         )}
+
+        {/* Sucursales y cajas (RF-53, RF-55): la caja de /pos.html elige de esta lista */}
+        {activeTab === "branches" && <BranchesManager />}
 
         {/* Tab 4: Trazabilidad y Auditoría (Agente O) */}
         {activeTab === "audit" && <AuditHistoryPage />}
