@@ -10,10 +10,12 @@ const queueEvents = new EventTarget();
 
 let databasePromise: Promise<IDBDatabase> | undefined;
 
-// Flag activado por resetOfflineStorageForTests() para evitar que
-// mirrorPendingQueue() mantenga conexiones abiertas durante el afterEach.
-// Resuelve la condicion de carrera: IDBDatabase.onblocked -> timeout en tests.
-let _skipMirrorForTests = false;
+// Referencia a la ultima llamada de mirrorPendingQueue() en vuelo.
+// resetOfflineStorageForTests() hace await sobre esta promesa antes de
+// cerrar la base, garantizando que no queden conexiones abiertas cuando
+// se llama a deleteDatabase(). Esto resuelve la condicion de carrera:
+//   void mirrorPendingQueue() -> promesa en vuelo -> db.close() -> onblocked
+let pendingMirror: Promise<void> = Promise.resolve();
 
 function openDatabase(): Promise<IDBDatabase> {
   databasePromise ??= new Promise((resolve, reject) => {
@@ -85,9 +87,6 @@ function uuid(): string {
 }
 
 async function mirrorPendingQueue(): Promise<void> {
-  // No ejecutar durante tests para evitar conexiones en vuelo que bloqueen
-  // deleteDatabase() en resetOfflineStorageForTests() -> IDBDatabase.onblocked
-  if (_skipMirrorForTests) return;
   try {
     await tryWritePendingOperationsBackup(await pendingOperations());
   } catch (error) {
@@ -116,7 +115,9 @@ export async function enqueueOperation<TPayload>(input: NewQueuedOperation<TPayl
 
   await putRecord(OPERATION_STORE, operation);
   emitQueueChange();
-  void mirrorPendingQueue();
+  // Fire-and-forget en produccion, pero trackeado para que resetOfflineStorageForTests()
+  // pueda hacer await antes de cerrar la DB.
+  pendingMirror = mirrorPendingQueue();
   return operation;
 }
 
@@ -142,7 +143,7 @@ export async function markOperationSynced(localId: string): Promise<void> {
     failureMessage: undefined
   });
   emitQueueChange();
-  void mirrorPendingQueue();
+  pendingMirror = mirrorPendingQueue();
 }
 
 export async function markOperationFailed(localId: string, reason: string): Promise<void> {
@@ -155,7 +156,7 @@ export async function markOperationFailed(localId: string, reason: string): Prom
     failureMessage: reason
   });
   emitQueueChange();
-  void mirrorPendingQueue();
+  pendingMirror = mirrorPendingQueue();
 }
 
 export async function saveCatalogSnapshot(rows: unknown[]): Promise<void> {
@@ -177,10 +178,11 @@ export function subscribeToQueueChanges(listener: () => void): () => void {
 }
 
 export async function resetOfflineStorageForTests(): Promise<void> {
-  // Desactivar el mirror ANTES de cerrar la DB para que ninguna llamada en vuelo
-  // a mirrorPendingQueue() abra una nueva conexion despues del db.close().
-  // Esto resuelve la condicion de carrera: IDBOpenDBRequest.onblocked -> timeout.
-  _skipMirrorForTests = true;
+  // Esperar a que termine el ultimo mirror en vuelo antes de cerrar la DB.
+  // Si hacemos db.close() mientras mirrorPendingQueue() tiene una transaccion
+  // abierta, IDBOpenDBRequest.onblocked bloquea deleteDatabase() y el test
+  // falla por timeout. El await aqui garantiza que no hay conexiones en vuelo.
+  await pendingMirror;
 
   const db = await openDatabase();
   db.close();
@@ -192,7 +194,4 @@ export async function resetOfflineStorageForTests(): Promise<void> {
     request.onerror = () => reject(request.error ?? new Error("No se pudo limpiar IndexedDB."));
     request.onblocked = () => reject(new Error("IndexedDB quedo bloqueada durante la limpieza."));
   });
-
-  // Reactivar el mirror para el proximo test
-  _skipMirrorForTests = false;
 }
