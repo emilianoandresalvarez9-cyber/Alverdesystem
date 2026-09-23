@@ -1,4 +1,4 @@
-﻿# 🚨 Registro de Deuda Técnica y Autocrítica (Versión 1.0.0)
+# 🚨 Registro de Deuda Técnica y Autocrítica (Versión 1.0.0)
 
 Este documento fue generado tras la orden directa de revisar honestamente la calidad del código del Sistema Alverde. El equipo original se ha reducido; actualmente solo operan los Agentes 1, 2, 3 y 4.
 
