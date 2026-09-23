@@ -173,3 +173,99 @@ new file mode 100644
 +## Criterio de salida
 +
 +Una tarea solo se considera lista para QA cuando su PR es pequeño, pasa sus pruebas relevantes en CI, no introduce un bypass de seguridad y demuestra el comportamiento contra una base real de prueba. La aprobación final pertenece a QA/QC, no al agente que implementa.
+
+Copilot QA dice: Sí. Revisé la estructura real del repo y hay una diferencia importante entre “la base técnica compila” y “el negocio está cubierto”.
+
+La señal más importante es la que está en Codex Info: dice que la release estaba bloqueada, con P0 abiertos, y que la UI todavía consultaba tablas restringidas, había caja/clientes simulados, contratos incompatibles de ventas, fraccionamiento sin transacción y rutas no protegidas por rol.
+
+Resumen corto:
+
+Sí hay base técnica y varias piezas buenas.
+No está listo para cumplir los requisitos funcionales reales del negocio.
+Lo que falta no es “detalle de UX”; es la parte crítica del flujo operativo.
+Lo que está bien
+
+Hay foundation de Fase 0: login, catálogo base, Auth, service worker, cola offline, etc.
+Hay componentes de diseño y algunas pantallas.
+Hay una capa de FEFO / lote / restock educativa.
+Hay un diagnóstico QA muy claro en Codex Info y QA_SEGUIMIENTO.md.
+Lo que falta con respecto a requisitos funcionales reales
+
+Contrato de datos y seguridad no está cerrado
+En src/modules/catalog/useCatalog.ts se consulta directamente a products, brands, categories, labels, y no a employee_catalog ni a una proyección segura explícita.
+Eso contradice la regla del requisito: empleado no debe ver costos ni márgenes, y el acceso debe ser por vista/proyección segura.
+El QA en Codex Info lo marca como P0 abierto: “Catálogo seguro de empleado: existe vista employee_catalog, pero la UI consulta tablas restringidas”.
+No hay flujo real de caja / POS
+El repo tiene páginas mínimas LoginPage, CatalogPage, AdminPage, pero no veo una verdadera implementación de:
+carrito de venta,
+escaneo real con código de barras,
+cobro,
+cierre de turno,
+venta offline idempotente,
+cálculo FEFO al vender.
+El QA dice: “Caja y clientes: UI simulada; no persisten datos” y “POS real offline” es un bloque de trabajo futuro P0.
+Fraccionamiento no está transaccional
+src/modules/stock/fefo.ts es un helper útil de FEFO, pero no se ve conectado a una operación real de venta/fraccionamiento.
+src/modules/restock/QuickRestock.tsx hace inserciones directas en stock_lots y stock_movements, sin una RPC transaccional ni validación fuerte de regla de “una sola bolsa abierta” ni rollback.
+El QA lo marca como P0: “Fraccionamiento: Operación multi-paso desde cliente, sin transacción”.
+No hay contrato final de ventas / clientes / crédito
+Hay modelos de negocio definidos, pero no veo una capa real de:
+ventas con cliente,
+crédito y abonos,
+saldo persistente,
+historial real,
+RLS bien cerrado.
+Codex Info lo deja explícito: “Migraciones, ventas, reportes y RLS: Contratos incompatibles y políticas permisivas”.
+Rutas por rol no están realmente protegidas
+Hay AuthGate y login por rol, pero la validación real del rol para acceso a páginas/operaciones no está demostrada como una capa robusta.
+QA pide “autorización de ruta; no basta verificar que exista sesión”.
+Backups/reportes no están cerrados
+Esto todavía está como P1/P0 según el diagnóstico: backup/restauración no verificado, reportes no conectados al contrato final.
+El repo presenta una contradicción de estado
+TAREAS.md dice que Fase 1 está mergeada y completada.
+Codex Info dice que la release está bloqueada y que hay P0 abiertos.
+Eso es una señal de que el repo tiene documentación de “estado final” que no coincide con la realidad de negocio.
+Evidencias directas del código
+
+src/modules/catalog/useCatalog.ts
+Consulta products y no employee_catalog.
+Esto no cumple la restricción de empleado para costos y márgenes.
+src/modules/restock/QuickRestock.tsx
+Inserta stock directo al cliente.
+No hay servicio transaccional.
+src/modules/stock/fefo.ts
+Tiene lógica útil, pero es una utilidad aislada, no el flujo completo de venta.
+src/modules/admin/ClassifierManager.tsx
+Está implementado, pero es solo administración de clasificación, no el conjunto de requisitos de negocio.
+Lo que debería hacerse antes de decir “está listo”
+
+Reconciliar baseline
+Decidir cuál es la línea base real de repo.
+No mezclar docs de “todo mergeado” con la realidad de QA.
+Corregir contrato de datos
+Un esquema único para ventas, clientes, lotes, pagos, crédito.
+RLS mínimo y pruebas SQL.
+Reemplazar consultas directas del catálogo por vista segura.
+Implementar transacciones reales para:
+ingreso de stock,
+fraccionamiento,
+venta,
+crédito y abono.
+Construir POS y clientes reales.
+Integrar backup/reportes con ese contrato final.
+QA de aceptación en CI.
+Mi conclusión honesta
+
+El código actual no está “listo para release” según el diagnóstico del QA/QC que está en Codex Info.
+Hay una base sólida y varios módulos avanzados, pero el proyecto todavía no cumple la parte funcional crítica del negocio.
+Si lo que querés es una guía práctica, te puedo armar ahora mismo una lista exacta de:
+P0 a resolver primero,
+archivos a tocar,
+orden recomendado de PRs,
+y una batería de tests de aceptación que debería pasar antes de cerrar release.
+Si querés, te hago la próxima respuesta en formato de roadmap de trabajo, con:
+
+prioridad 0/1/2,
+archivos afectados,
+qué falta exactamente,
+y qué validar en cada módulo.
