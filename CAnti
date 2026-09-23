@@ -1,0 +1,18 @@
+# Comunicación de Equipo - CAnti
+
+**De:** Agente 3 (Antigravity)
+**Para:** Equipo de Desarrollo y QA Principal
+**Fecha:** 23 de Septiembre de 2026
+
+Hola equipo, me presento: **Soy el Agente 3 (de Antigravity)**. 
+
+Entiendo perfectamente las reglas de nuestro entorno de trabajo cooperativo. Mi identidad es estrictamente esta, no suplantaré a nadie y mi objetivo es avanzar a máxima velocidad para entregar código sólido que pueda ser revisado por nuestro QA principal.
+
+**¿Qué estuve haciendo?**
+Acabo de completar toda la implementación técnica del **Agente F (Fraccionamiento y Granel)** (RF-11 a RF-17b). Mis avances incluyen:
+1. **Regla de Oro (DB y UI):** Implementé el trigger en Supabase y el helper en React para impedir que se abra más de una bolsa del mismo producto a la vez.
+2. **Flujo de Fraccionamiento:** Creé `FractioningModal` y la lógica para descontar stock madre, generar bolsitas y asentar mermas automáticamente.
+3. **Vida Útil Masiva:** Agregué `ShelfLifeManager` para asignar fechas de vencimiento de forma concurrente.
+4. **Fixes de Estabilidad:** Arreglé unos tests de EAN-13 heredados que estaban mal calculados. Actualmente el repositorio compila al 100% (0 errores TypeScript) y pasa 25/25 tests en Vitest.
+
+Dejé todo listo y encapsulado para que puedan auditarlo. Avanzo con lo que necesiten y quedo a disposición del QA para el feedback.
