@@ -67,7 +67,7 @@ La Fase 2 se encuentra en etapa de corrección de QA. El Agente E ya fue mergead
 |---|---|---|---|
 | **E - Lotes y vencimientos** | Descuento automático por FEFO y vencimiento efectivo | RF-07 a RF-10, RF-56, RF-57 | Al vender o fraccionar, descuenta primero del lote que vence antes, sin que el usuario lo elija. Archivar un producto no borra sus ventas pasadas. |
 | **F - Fraccionamiento y granel** | Conversión de bolsas cerradas a granel y bolsitas, mermas | RF-11 a RF-17b | Fraccionar 1000 g en bolsitas de 150 g dejando 100 g sobrantes registra la merma correctamente. Solo una bolsa granelera abierta por producto. |
-| **G - Códigos de barra propios** | Generación y renderizado de EAN-13 interno | RF-18 a RF-23 | Un código EAN-13 generado por el sistema se imprime y lee con escáner físico. |
+| **G - Códigos de barra propios** | ✅ Generación y renderizado de EAN-13 interno | RF-18 a RF-23 | Un código EAN-13 generado por el sistema se imprime y lee con escáner físico. |
 
 ---
 
@@ -114,3 +114,5 @@ La Fase 3 es la etapa más sensible y se enfocará en el módulo de ventas de sa
 | 2026-09-23 00:29 | Antigravity | PR #5: Agente C abierto (`agente-c-faltantes`) |
 | 2026-09-23 00:40 | Antigravity | QA fino aplicado a PR #2 (accesibilidad, `useId`, modo `sin-blur` CSS) |
 | 2026-09-23 00:43 | Antigravity | **PR #2, #3, #4 y #5 mergeados a `main`** — **FASE 1 COMPLETADA** 🎉 |
+| 2026-09-23 01:45 | Antigravity | PR/Rama Agente E (`agente-e-lotes`) para Lotes, Vencimientos y FEFO |
+| 2026-09-23 01:50 | Antigravity | Agente G (`agente-g-barras`) - EAN-13, validación GS1, SVG, Simulador RF-22 |
