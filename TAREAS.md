@@ -1,15 +1,13 @@
 # TAREAS.md — Alverde System
 
 > **Fuente de verdad para agentes de IA.** Leé esto antes de tocar cualquier cosa.
-> Actualizado: 2026-09-23 00:30 ART
+> Actualizado: 2026-09-23 00:45 ART
 
 ---
 
 ## ✅ FASE 0 — COMPLETADA Y VERIFICADA
 
 **Tests: 2/2 pasando. CI: verde.**
-
-### Qué está en `main` ahora mismo
 
 | Área | Estado | Notas |
 |---|---|---|
@@ -23,35 +21,20 @@
 | TypeCheck | ✅ Pasa | `npm run typecheck` sin errores |
 | Tests | ✅ **2/2 verde** | `npm test` — verificado en máquina real 2026-09-23 |
 
-### Esquema de base de datos (Supabase — todos los nombres en inglés)
+---
 
-| Concepto | Tabla real |
-|---|---|
-| Sucursales | `branches` |
-| Puestos/Cajas | `registers` |
-| Perfiles/Usuarios | `profiles` |
-| Marcas | `brands` |
-| Rubros | `categories` |
-| Etiquetas | `labels` |
-| Productos | `products` |
-| Relación producto-etiqueta | `product_labels` |
-| Presentaciones | `product_presentations` |
-| Proveedores | `suppliers` |
-| Relación proveedor-producto | `supplier_products` |
-| Lotes de stock | `stock_lots` |
-| Movimientos de stock | `stock_movements` |
-| Ventas | `sales` |
-| Ítems de venta | `sale_items` |
-| Clientes | `customers` |
-| Fiado | `credit_movements` |
-| Historial de auditoría | `audit_history` |
-| Cola offline | `offline_operations` |
+## ✅ FASE 1 — COMPLETADA Y MERGEADA A MAIN
 
-**Tipos PostgreSQL custom:** `app_role` (administrator/employee), `base_unit` (gram/millilitre/unit), `stock_lot_status`, `sale_status`, `payment_method`, `stock_movement_kind`, `credit_movement_kind`, `offline_operation_kind`
+Todos los Pull Requests de la Fase 1 fueron revisados, pulidos y fusionados exitosamente en `main`:
 
-### Sistema de diseño (Agente D — en PR #2)
+| PR | Rama | Agente | Alcance / RFs | Estado |
+|---|---|---|---|---|
+| **[#2](https://github.com/emilianoandresalvarez9-cyber/Alverdesystem/pull/2)** | `agente-d-diseno` | **D (Diseño)** | Tokens de estilo, componentes glassmórficos con accesibilidad (`Button`, `GlassCard`, `SelectField`, `Badge`, `Tag`, `Modal`, `EmptyState`, `TextField`), modo `sin-blur` para hardware modesto y guía en `DISENO.md`. | 🟣 **Mergeado** |
+| **[#3](https://github.com/emilianoandresalvarez9-cyber/Alverdesystem/pull/3)** | `agente-a-catalogo` | **A (Catálogo)** | Catálogo responsive, buscador de texto y código de barras, filtros combinables, soporte offline con IndexedDB y exportación a Excel (RF-01 a RF-06). | 🟣 **Mergeado** |
+| **[#4](https://github.com/emilianoandresalvarez9-cyber/Alverdesystem/pull/4)** | `agente-b-roles` | **B (Roles y Auditoría)** | Panel `ClassifierManager` (RF-03) + migración SQL `20260923000001` con tabla `missing_items`, RLS y triggers de auditoría en 5 tablas (RF-49/50, RF-58). | 🟣 **Mergeado** |
+| **[#5](https://github.com/emilianoandresalvarez9-cyber/Alverdesystem/pull/5)** | `agente-c-faltantes` | **C (Faltantes y Reposición)** | Reporte de faltantes offline (RF-49), lista de reposición agrupada por proveedor con contacto (RF-50) e ingreso rápido de mercadería con lector de barras y alta de lotes (RF-51). | 🟣 **Mergeado** |
 
-Variantes y props **reales** de los componentes (convención en español):
+### API del sistema de diseño (estandarizada en español)
 
 ```tsx
 // Button — variant: "primario" | "secundario" | "fantasma" | "peligro"
@@ -65,8 +48,10 @@ Variantes y props **reales** de los componentes (convención en español):
   <option value="1">Del local</option>
 </SelectField>
 
-// EmptyState — prop title + children, NO prop message ni icon
-<EmptyState title="Sin productos">Agregá el primero.</EmptyState>
+// EmptyState — prop title + children, acción opcional
+<EmptyState title="Sin productos" action={<Button variant="primario">Nuevo</Button>}>
+  Agregá el primero desde aquí.
+</EmptyState>
 
 // TextField — extiende InputHTMLAttributes, onChange ES evento nativo
 <TextField label="Nombre" value={v} onChange={e => setV(e.target.value)} />
@@ -74,34 +59,24 @@ Variantes y props **reales** de los componentes (convención en español):
 
 ---
 
-## 🚀 FASE 1 — LISTA PARA INTEGRACIÓN (4/4 AGENTES COMPLETADOS)
+## 🎯 FASE 2 — PRÓXIMO OBJETIVO: STOCK, LOTES Y FRACCIONAMIENTO
 
-Todos los agentes de la Fase 1 han completado su implementación y tienen sus correspondientes Pull Requests abiertos:
+La siguiente fase se enfoca en la gestión física de la mercadería:
 
-| PR | Rama | Agente | Contenido / RFs | Estado |
-|---|---|---|---|---|
-| [#2](https://github.com/emilianoandresalvarez9-cyber/Alverdesystem/pull/2) | `agente-d-diseno` | D | Sistema de diseño: tokens, componentes glassmórficos, DISENO.md (RNF-06 a RNF-09) | 🟢 PR Abierto |
-| [#3](https://github.com/emilianoandresalvarez9-cyber/Alverdesystem/pull/3) | `agente-a-catalogo` | A | Catálogo: búsqueda, filtros combinables, soporte offline, exportación a Excel (RF-01 a RF-06) | 🟢 PR Abierto |
-| [#4](https://github.com/emilianoandresalvarez9-cyber/Alverdesystem/pull/4) | `agente-b-roles` | B | ClassifierManager (RF-03) + migración SQL `missing_items` con RLS y triggers de auditoría (RF-49/50, RF-58) | 🟢 PR Abierto |
-| [#5](https://github.com/emilianoandresalvarez9-cyber/Alverdesystem/pull/5) | `agente-c-faltantes` | C | Faltantes, reposición agrupada por proveedor e ingreso rápido con código de barras (RF-49, RF-50, RF-51) | 🟢 PR Abierto |
-
-### Orden de merge e integración recomendado:
-
-```text
-PR #2 (Diseño) ──▶ PR #3 (Catálogo) ──▶ PR #4 (Roles y Auditoría) ──▶ PR #5 (Faltantes)
-```
-
-Cada rama fue construida de forma incremental. Al mergear en este orden secuencial, todos los componentes, estilos y migraciones se integran de manera limpia en `main`.
+| Agente | Qué construye | RFs asociados | QA / Criterio de aceptación |
+|---|---|---|---|
+| **E - Lotes y vencimientos** | Descuento automático por FEFO y vencimiento efectivo | RF-07 a RF-10, RF-56, RF-57 | Al vender o fraccionar, descuenta primero del lote que vence antes, sin que el usuario lo elija. Archivar un producto no borra sus ventas pasadas. |
+| **F - Fraccionamiento y granel** | Conversión de bolsas cerradas a granel y bolsitas, mermas | RF-11 a RF-17b | Fraccionar 1000 g en bolsitas de 150 g dejando 100 g sobrantes registra la merma correctamente. Solo una bolsa granelera abierta por producto. |
+| **G - Códigos de barra propios** | Generación y renderizado de EAN-13 interno | RF-18 a RF-23 | Un código EAN-13 generado por el sistema se imprime y lee con escáner físico. |
 
 ---
 
-## 📋 REGLAS PARA AGENTES (de AGENTS.md)
+## 📋 REGLAS VIGENTES PARA AGENTES (de AGENTS.md)
 
-- **Nadie escribe directo en `main`** — una rama por feature, PR obligatorio
-- **El esquema SQL es la fuente de verdad** — solo `20260922060000_phase_0_foundation.sql` + migraciones incrementales
-- **Costos y márgenes NUNCA en el frontend de empleado** — enforcement en RLS, no solo UI
-- **Convención de nombres**: tablas de base de datos en inglés; variables CSS y variantes de componentes de UI en español
-- **No tocar `Cluade fases/`** — es material de referencia estático
+- **Nadie escribe directo en `main`** — crear una rama por feature y abrir Pull Request.
+- **El esquema SQL es la fuente de verdad** — tablas en inglés, migraciones incrementales idempotentes.
+- **Costos y márgenes NUNCA en el frontend de empleado** — enforcement a nivel de RLS y tipos.
+- **Convención**: tablas de BD en inglés; componentes UI y tokens en español.
 
 ---
 
@@ -123,4 +98,6 @@ Cada rama fue construida de forma incremental. Al mergear en este orden secuenci
 | 2026-09-23 00:08 | Emiliano (humano) | Verificación local de `npm test`: **2/2 verde** ✅ |
 | 2026-09-23 00:10 | Antigravity | **FASE 0 finalizada y verificada** |
 | 2026-09-23 00:25 | Antigravity | PR #4: Agente B abierto (`agente-b-roles`) |
-| 2026-09-23 00:29 | Antigravity | PR #5: Agente C abierto (`agente-c-faltantes`) — Fase 1 100% implementada en PRs |
+| 2026-09-23 00:29 | Antigravity | PR #5: Agente C abierto (`agente-c-faltantes`) |
+| 2026-09-23 00:40 | Antigravity | QA fino aplicado a PR #2 (accesibilidad, `useId`, modo `sin-blur` CSS) |
+| 2026-09-23 00:43 | Antigravity | **PR #2, #3, #4 y #5 mergeados a `main`** — **FASE 1 COMPLETADA** 🎉 |
