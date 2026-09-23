@@ -12,9 +12,12 @@ export function OfflineIndicator() {
 
     addEventListener("online", updateNetwork);
     addEventListener("offline", updateNetwork);
-    return subscribeToQueueChanges(() => {
-      updatePending();
-    });
+    const unsubscribe = subscribeToQueueChanges(updatePending);
+    return () => {
+      removeEventListener("online", updateNetwork);
+      removeEventListener("offline", updateNetwork);
+      unsubscribe();
+    };
   }, []);
 
   return (

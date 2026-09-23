@@ -25,6 +25,8 @@ export interface ProductPresentation {
   base_quantity: number;
   internal_barcode: string | null;
   sale_price: number;
+  /** Se vende pesando: la caja pide el peso (RF-22, RF-33). Ver docs/decisiones/ADR-001. */
+  sold_by_weight: boolean;
   active: boolean;
 }
 
