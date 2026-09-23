@@ -14,6 +14,9 @@ import {
 import type { ShiftSummary } from "./shiftSummary";
 import { PAYMENT_LABELS, type CurrentShift, type PaymentMethod, type PosEntry } from "./types";
 import { useScanner } from "./useScanner";
+import { loadAccounts } from "../customers/api";
+import { exceedsLimit, filterAccounts } from "../customers/balance";
+import type { CustomerAccount } from "../customers/types";
 
 type Stage = { kind: "loading" } | { kind: "register" } | { kind: "open"; register: RegisterOption } | { kind: "selling"; shift: CurrentShift };
 
@@ -126,7 +129,7 @@ function OpenShiftForm({ register, onOpened, onChangeRegister }: {
   );
 }
 
-const SELLING_METHODS: PaymentMethod[] = ["cash", "transfer", "qr"];
+const SELLING_METHODS: PaymentMethod[] = ["cash", "transfer", "qr", "credit"];
 
 function Register({ shift, onClosed }: { shift: CurrentShift; onClosed: () => void }) {
   const { products, isLoading, isOffline } = useCatalog();
@@ -139,6 +142,7 @@ function Register({ shift, onClosed }: { shift: CurrentShift; onClosed: () => vo
   const [feedback, setFeedback] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [charging, setCharging] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [customer, setCustomer] = useState<CustomerAccount | null>(null);
   const scanRef = useRef<HTMLInputElement>(null);
 
   const total = cartTotal(lines);
@@ -182,11 +186,22 @@ function Register({ shift, onClosed }: { shift: CurrentShift; onClosed: () => vo
   async function charge() {
     setCharging(true);
     try {
-      const payload = buildSalePayload(lines, { shiftId: shift.id, paymentMethod: method, newId: () => crypto.randomUUID() });
+      const payload = buildSalePayload(lines, {
+        shiftId: shift.id,
+        paymentMethod: method,
+        ...(method === "credit" && customer ? { customerId: customer.id } : {}),
+        newId: () => crypto.randomUUID()
+      });
       await enqueueOperation({ kind: "sale", payload });
       dispatch({ type: "clear" });
       setMethod("cash");
-      setFeedback({ tone: "ok", text: `Venta guardada: ${formatMoney(payload.totalAmount)} en ${PAYMENT_LABELS[payload.paymentMethod].toLowerCase()}.` });
+      setCustomer(null);
+      setFeedback({
+        tone: "ok",
+        text: payload.paymentMethod === "credit" && customer
+          ? `Fiado guardado: ${formatMoney(payload.totalAmount)} a la cuenta de ${customer.name}.`
+          : `Venta guardada: ${formatMoney(payload.totalAmount)} en ${PAYMENT_LABELS[payload.paymentMethod].toLowerCase()}.`
+      });
       void synchronizePendingOperations().catch(() => undefined);
     } catch (err) {
       setFeedback({ tone: "error", text: err instanceof Error ? err.message : "No se pudo guardar la venta." });
@@ -280,7 +295,10 @@ function Register({ shift, onClosed }: { shift: CurrentShift; onClosed: () => vo
           ))}
         </fieldset>
 
-        <Button className="pos-charge" onClick={() => void charge()} disabled={lines.length === 0} loading={charging}>
+        {method === "credit" && <CustomerPicker selected={customer} onSelect={setCustomer} saleTotal={total} />}
+
+        <Button className="pos-charge" onClick={() => void charge()}
+          disabled={lines.length === 0 || (method === "credit" && !customer)} loading={charging}>
           Cobrar {lines.length > 0 ? formatMoney(total) : ""}
         </Button>
         <Button variant="fantasma" onClick={() => dispatch({ type: "clear" })} disabled={lines.length === 0}>Vaciar</Button>
@@ -301,6 +319,50 @@ function Register({ shift, onClosed }: { shift: CurrentShift; onClosed: () => vo
           }} />
       )}
       {closing && <CloseShiftDialog shift={shift} onCancel={() => setClosing(false)} onClosed={onClosed} />}
+    </div>
+  );
+}
+
+function CustomerPicker({ selected, onSelect, saleTotal }: {
+  selected: CustomerAccount | null; onSelect: (account: CustomerAccount | null) => void; saleTotal: number;
+}) {
+  const [accounts, setAccounts] = useState<CustomerAccount[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [text, setText] = useState("");
+
+  useEffect(() => {
+    loadAccounts()
+      .then((result) => setAccounts(result.accounts.filter((a) => a.active)))
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : "No se pudieron cargar los clientes."));
+  }, []);
+
+  if (selected) {
+    const over = exceedsLimit(selected, saleTotal);
+    return (
+      <div className="notice" role="status">
+        <p><strong>{selected.name}</strong> · saldo {formatMoney(selected.balance)}
+          {selected.credit_limit !== null ? ` · tope ${formatMoney(selected.credit_limit)}` : ""}</p>
+        {over && <p className="form-error">Con esta venta supera su tope de fiado. Confirmá con la dueña antes de cobrar.</p>}
+        <Button variant="fantasma" onClick={() => onSelect(null)}>Cambiar cliente</Button>
+      </div>
+    );
+  }
+
+  const matches = accounts ? filterAccounts(accounts, text).slice(0, 6) : [];
+  return (
+    <div>
+      <TextField label="Cliente del fiado" placeholder="Nombre o teléfono" value={text} onChange={(e) => setText(e.target.value)} />
+      {error && <p className="form-error" role="alert">{error}</p>}
+      {text && accounts && matches.length === 0 && <p className="field-help">No aparece. Se da de alta en Clientes.</p>}
+      <ul className="pos-results">
+        {text && matches.map((account) => (
+          <li key={account.id}>
+            <Button variant="fantasma" onClick={() => onSelect(account)}>
+              <span>{account.name}</span><span>{formatMoney(account.balance)}</span>
+            </Button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
