@@ -10,6 +10,11 @@ const queueEvents = new EventTarget();
 
 let databasePromise: Promise<IDBDatabase> | undefined;
 
+// Flag activado por resetOfflineStorageForTests() para evitar que
+// mirrorPendingQueue() mantenga conexiones abiertas durante el afterEach.
+// Resuelve la condicion de carrera: IDBDatabase.onblocked -> timeout en tests.
+let _skipMirrorForTests = false;
+
 function openDatabase(): Promise<IDBDatabase> {
   databasePromise ??= new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -67,7 +72,7 @@ async function putRecord(storeName: string, value: unknown): Promise<void> {
     transaction.objectStore(storeName).put(value);
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error ?? new Error("No se pudo guardar en el dispositivo."));
-    transaction.onabort = () => reject(transaction.error ?? new Error("La operación local fue cancelada."));
+    transaction.onabort = () => reject(transaction.error ?? new Error("La operacion local fue cancelada."));
   });
 }
 
@@ -80,11 +85,14 @@ function uuid(): string {
 }
 
 async function mirrorPendingQueue(): Promise<void> {
+  // No ejecutar durante tests para evitar conexiones en vuelo que bloqueen
+  // deleteDatabase() en resetOfflineStorageForTests() -> IDBDatabase.onblocked
+  if (_skipMirrorForTests) return;
   try {
     await tryWritePendingOperationsBackup(await pendingOperations());
   } catch (error) {
-    // The browser may temporarily revoke a previously granted directory permission.
-    // The queued data remains safe in IndexedDB and will be retried on the next operation.
+    // El browser puede revocar temporalmente el permiso de directorio.
+    // Los datos quedan seguros en IndexedDB y se reintentara en la proxima operacion.
     console.warn("No se pudo actualizar la segunda copia local.", error);
   }
 }
@@ -125,7 +133,7 @@ export async function pendingOperationCount(): Promise<number> {
 
 export async function markOperationSynced(localId: string): Promise<void> {
   const operation = await readRecord<QueuedOperation>(OPERATION_STORE, localId);
-  if (!operation) throw new Error("No se encontró la operación local a sincronizar.");
+  if (!operation) throw new Error("No se encontro la operacion local a sincronizar.");
 
   await putRecord(OPERATION_STORE, {
     ...operation,
@@ -169,13 +177,22 @@ export function subscribeToQueueChanges(listener: () => void): () => void {
 }
 
 export async function resetOfflineStorageForTests(): Promise<void> {
+  // Desactivar el mirror ANTES de cerrar la DB para que ninguna llamada en vuelo
+  // a mirrorPendingQueue() abra una nueva conexion despues del db.close().
+  // Esto resuelve la condicion de carrera: IDBOpenDBRequest.onblocked -> timeout.
+  _skipMirrorForTests = true;
+
   const db = await openDatabase();
   db.close();
   databasePromise = undefined;
+
   await new Promise<void>((resolve, reject) => {
     const request = indexedDB.deleteDatabase(DB_NAME);
     request.onsuccess = () => resolve();
     request.onerror = () => reject(request.error ?? new Error("No se pudo limpiar IndexedDB."));
-    request.onblocked = () => reject(new Error("IndexedDB quedó bloqueada durante la limpieza."));
+    request.onblocked = () => reject(new Error("IndexedDB quedo bloqueada durante la limpieza."));
   });
+
+  // Reactivar el mirror para el proximo test
+  _skipMirrorForTests = false;
 }
