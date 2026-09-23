@@ -51,30 +51,17 @@ export function StockAdjustmentModal({
       const newLotQuantity = Number(Math.max(0, lot.current_quantity - qty).toFixed(3));
       const shouldClose = newLotQuantity <= 0.0001;
 
-      // 1. Registrar movimiento de stock con motivo obligatorio
-      const { error: movErr } = await supabase.from("stock_movements").insert({
-        local_id: crypto.randomUUID(),
-        kind,
-        product_id: lot.product_id,
-        lot_id: lot.id,
-        quantity: -qty, // Salida de stock
-        reason: reason.trim(),
-        user_id: userId,
-        occurred_at: new Date().toISOString(),
+      const { error: rpcErr } = await supabase.rpc('adjust_stock', {
+        p_lot_id: lot.id,
+        p_product_id: lot.product_id,
+        p_kind: kind,
+        p_quantity: -qty,
+        p_reason: reason.trim(),
+        p_new_lot_quantity: newLotQuantity,
+        p_should_close_lot: shouldClose
       });
 
-      if (movErr) throw movErr;
-
-      // 2. Actualizar cantidad en el lote
-      const { error: lotErr } = await supabase
-        .from("stock_lots")
-        .update({
-          current_quantity: newLotQuantity,
-          status: shouldClose ? "closed" : lot.status,
-        })
-        .eq("id", lot.id);
-
-      if (lotErr) throw lotErr;
+      if (rpcErr) throw rpcErr;
 
       onSuccess();
       onClose();
@@ -146,3 +133,4 @@ export function StockAdjustmentModal({
     </Modal>
   );
 }
+

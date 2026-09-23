@@ -1,0 +1,483 @@
+From 054899e9fad6ce59d5e8fc08a32babc01dd5a6c6 Mon Sep 17 00:00:00 2001
+From: Alverde QA Lead <qa-lead@alverde.invalid>
+Date: Wed, 23 Sep 2026 17:40:47 +0000
+Subject: [PATCH 01/10] =?UTF-8?q?ci(qa):=20convertir=20el=20CI=20en=20una?=
+ =?UTF-8?q?=20compuerta=20real=20y=20fijar=20la=20definici=C3=B3n=20de=20t?=
+ =?UTF-8?q?erminado?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- El job de base de datos usaba `psql -f`, que devuelve 0 aunque pgTAP no esté
+  instalado o un test falle: nunca podía ponerse rojo. Ahora usa
+  `supabase db start` + `supabase test db` (pg_prove) con la CLI fijada en 2.117.0.
+- Nuevo job `migrations`: falla si un PR edita, renombra o borra una migración existente.
+- Nuevo `npm run qa:guard`: bloquea aserciones constantes, `.only`, casos sin expect(),
+  tests SQL sin plan/finish y mocks nuevos en src/ (lista de trinquete que solo se achica).
+- Se eliminan los 3 tests de integración que no probaban nada; quedan como it.todo
+  visibles (26 aprobados + 3 pendientes, en vez de 29 "aprobados").
+- `npm ci` en lugar de `npm install` para builds reproducibles.
+- Arnés `qa/pg-harness` para correr migraciones y pgTAP sin Docker.
+- AGENTS.md reescrito con definición de terminado y prohibiciones; plantilla de PR.
+
+Cierra: CRÍTICO-02 (tests falsos). Defecto nuevo: CI de BD siempre verde.
+---
+ .github/pull_request_template.md      | 27 +++++++++++
+ .github/workflows/ci.yml              | 46 +++++++++----------
+ AGENTS.md                             | 64 +++++++++++++++++++++++---
+ integration.test.ts                   | 19 --------
+ package.json                          |  5 ++-
+ qa/mocks-conocidos.txt                |  5 +++
+ qa/pg-harness/README.md               | 16 +++++++
+ qa/pg-harness/run.sh                  | 35 +++++++++++++++
+ qa/pg-harness/supabase_stub.sql       | 33 ++++++++++++++
+ scripts/check-migrations-immutable.sh | 12 +++++
+ scripts/qa-guard.mjs                  | 65 +++++++++++++++++++++++++++
+ src/acceptance.todo.test.ts           | 11 +++++
+ 12 files changed, 287 insertions(+), 51 deletions(-)
+ create mode 100644 .github/pull_request_template.md
+ delete mode 100644 integration.test.ts
+ create mode 100644 qa/mocks-conocidos.txt
+ create mode 100644 qa/pg-harness/README.md
+ create mode 100755 qa/pg-harness/run.sh
+ create mode 100644 qa/pg-harness/supabase_stub.sql
+ create mode 100755 scripts/check-migrations-immutable.sh
+ create mode 100644 scripts/qa-guard.mjs
+ create mode 100644 src/acceptance.todo.test.ts
+
+diff --git a/.github/pull_request_template.md b/.github/pull_request_template.md
+new file mode 100644
+index 0000000..098f412
+--- /dev/null
++++ b/.github/pull_request_template.md
+@@ -0,0 +1,27 @@
++## Qué resuelve
++
++<!-- Problema concreto, con el RF/RNF o el defecto QA que cierra (ej: CRÍTICO-03, P5). -->
++
++## Cómo se verificó
++
++<!-- Pegar la salida real, no un resumen. -->
++
++- [ ] `npm run verify`
++- [ ] `supabase test db` o `npm run test:db:nodocker` (si toca SQL)
++- [ ] Prueba manual descrita paso a paso (si toca UI)
++
++## Tests que fallarían si esto se rompe
++
++<!-- Archivo y nombre del test por cada RF que dice cubrir. -->
++
++## Checklist QA
++
++- [ ] No edita migraciones existentes
++- [ ] Objetos nuevos en `public` revocan `anon`
++- [ ] Sin `expect(true)`, `.only` ni mocks nuevos en `src/`
++- [ ] Sin costos ni márgenes hacia Empleado (RNF-04)
++- [ ] No declara "completado" ni "listo para producción"
++
++## Lo que queda fuera
++
++<!-- Defectos vistos y no resueltos en este PR. -->
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 855231a..9deb36b 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -1,4 +1,4 @@
+-name: Verificación de Fase 0
++name: Verificación
+ 
+ on:
+   pull_request:
+@@ -16,39 +16,35 @@ jobs:
+         with:
+           node-version: 22
+           cache: npm
+-      - run: npm install
++      - run: npm ci
++      - name: Compuerta de calidad (tests vacíos, .only, mocks nuevos)
++        run: npm run qa:guard
+       - run: npm run typecheck
+       - run: npm test
+       - run: npm run build
+ 
++  migrations:
++    if: github.event_name == 'pull_request'
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++        with:
++          fetch-depth: 0
++          persist-credentials: false
++      - name: Las migraciones existentes no se editan
++        run: bash scripts/check-migrations-immutable.sh "origin/${{ github.base_ref }}"
++
+   database:
+     runs-on: ubuntu-latest
+-    services:
+-      supabase:
+-        image: supabase/postgres:15.6.1.143
+-        env:
+-          POSTGRES_PASSWORD: postgres
+-        ports:
+-          - 5432:5432
+-        options: >-
+-          --health-cmd pg_isready
+-          --health-interval 10s
+-          --health-timeout 5s
+-          --health-retries 5
+     steps:
+       - uses: actions/checkout@v4
+         with:
+           persist-credentials: false
+       - uses: supabase/setup-cli@v1
+         with:
+-          version: latest
+-      - name: Iniciar Supabase local
+-        run: supabase start
+-      - name: Aplicar migraciones
+-        run: supabase db reset
+-      - name: Correr tests SQL
+-        run: |
+-          for f in supabase/tests/*.sql; do
+-            echo "=== Corriendo $f ==="
+-            psql postgresql://postgres:postgres@localhost:54322/postgres -f "$f"
+-          done
++          version: 2.117.0
++      # Aplica todas las migraciones y seed.sql sobre una base limpia.
++      - run: supabase db start
++      # pg_prove devuelve código de salida distinto de 0 si falla cualquier test.
++      # (El job anterior usaba `psql -f`, que devuelve 0 aunque los tests fallen.)
++      - run: supabase test db
+diff --git a/AGENTS.md b/AGENTS.md
+index e179d73..bcd7217 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -1,7 +1,59 @@
+-# Alverde — reglas de trabajo
++# Alverde — reglas de trabajo para agentes
+ 
+-- Leer completo \`requisitos-sistema-dietetica.md\` antes de implementar una tarea.
+-- Trabajar solo en una rama de tarea y abrir un Pull Request hacia \`main\`; no escribir directamente en \`main\`.
+-- No exponer costos, márgenes, multiplicadores, claves ni secretos en rutas, vistas o cachés para Empleado.
+-- Mantener las operaciones offline como eventos con \`localId\` idempotente: no sobrescribirlas ni descartarlas si falla la sincronización.
+-- Cada cambio debe incluir una prueba o una verificación concreta y un commit pequeño, descriptivo y vinculado a los RF/RNF que cubre.
++Este archivo manda sobre cualquier otro documento del repo. Si `TAREAS.md`, un prompt o un
++comentario dicen otra cosa, vale lo que dice acá.
++
++## Antes de empezar
++
++1. Leer `requisitos-sistema-dietetica.md` completo y el RF/RNF que vas a tocar.
++2. Correr `npm ci && npm run verify` sobre `main` y anotar el resultado. Si `main` ya está roja,
++   no empezás tu tarea: lo reportás.
++3. Trabajar en una rama propia y abrir Pull Request hacia `main`. Nunca escribir en `main`.
++
++## Definición de terminado
++
++Una tarea está terminada solo si se cumplen **todas**:
++
++- `npm run verify` pasa (guard, tipos, tests, build) y el CI del PR está verde, incluido el job
++  `database` (`supabase test db`).
++- Cada RF que el PR dice cubrir tiene al menos un test que **falla si el RF se rompe**. Un test que
++  pasaría igual con el código borrado no cuenta.
++- Si tocaste SQL: hay un test pgTAP en `supabase/tests/` que ejercita el cambio con los roles reales
++  (empleado, otro empleado, administrador y, si aplica, `anon`).
++- No quedan datos inventados, `console.log` de depuración ni `alert()` como única confirmación de
++  una operación que debería persistir.
++- La descripción del PR usa la plantilla y adjunta la salida real de los comandos.
++
++## Prohibido (el CI lo bloquea o QA rechaza el PR)
++
++- `expect(true).toBe(true)` o cualquier aserción que no depende del código. Si el test todavía no
++  existe, usá `it.todo(...)`: queda visible como pendiente en vez de figurar como aprobado.
++- `.only` en tests.
++- Datos mock en `src/` fuera de archivos `*.test.ts`. La lista `qa/mocks-conocidos.txt` solo se achica.
++- **Editar una migración que ya existe.** Toda corrección de esquema va en una migración nueva con
++  timestamp posterior. El job `migrations` del CI lo verifica.
++- Crear una vista o tabla en `public` sin revocar `anon`. Supabase concede todo objeto nuevo a `anon`
++  por defecto; una vista con `security_invoker = false` queda legible sin login.
++- Funciones `security definer` sin `set search_path = public`.
++- Escrituras de ventas, stock o fiado directo desde el navegador a las tablas. Van por RPC
++  (`process_offline_sale`, `apply_offline_operation` o una RPC nueva) para ser atómicas e idempotentes.
++- Exponer costos, márgenes o multiplicadores a Empleado (RNF-04), ni siquiera ocultos en una caché.
++- Declarar "completado", "100 %", "listo para producción" o "aprobado" en commits, `TAREAS.md` o
++  PRs. El estado lo declara QA después de revisar evidencia.
++
++## Contratos que no se rompen
++
++- Operaciones offline: eventos con `localId` idempotente. No se sobrescriben ni se descartan si
++  falla la sincronización.
++- Medios de pago: los valores del enum `payment_method` de la base (`cash`, `transfer`, `qr`,
++  `credit`). El frontend no inventa otros.
++- Saldo de fiado: suma de `credit_movements`. Nunca un campo que se pisa (RF-46).
++- Solo Administrador ajusta o perdona deuda (RF-48) y define el tope de fiado (RF-47).
++
++## Commits y PRs
++
++- Commits pequeños, en español, con el formato `tipo(ámbito): qué cambia (RF-xx)`.
++- Un PR resuelve un problema. Si encontrás otro defecto, lo reportás en la descripción; no lo
++  mezclás.
++- Si no pudiste correr algo (por ejemplo, sin Docker), lo decís explícitamente en el PR. Para SQL
++  sin Docker existe `npm run test:db:nodocker` (ver `qa/pg-harness/README.md`).
+diff --git a/integration.test.ts b/integration.test.ts
+deleted file mode 100644
+index bb7017a..0000000
+--- a/integration.test.ts
++++ /dev/null
+@@ -1,19 +0,0 @@
+-﻿import { describe, it, expect, vi } from 'vitest';
+-import { getSupabase } from './src/shared/supabase/client';
+-import { processOfflineSale } from './src/shared/offline/sync';
+-
+-// Simulación de las funciones principales para QA de integración
+-describe('Integration QA - Fase 3', () => {
+-  it('RF-Transversal: Una venta offline descuenta el stock por FEFO', () => {
+-    // Ya comprobado en el test de process_offline_sale SQL y fefo.test.ts
+-    expect(true).toBe(true);
+-  });
+-
+-  it('RF-Transversal: Un fiado cargado y un pago actualizan el mismo saldo de Clientes sin duplicar', () => {
+-    expect(true).toBe(true);
+-  });
+-
+-  it('RF-Transversal: Archivar un producto no rompe las ventas históricas', () => {
+-    expect(true).toBe(true);
+-  });
+-});
+diff --git a/package.json b/package.json
+index 8d1a218..a6c835a 100644
+--- a/package.json
++++ b/package.json
+@@ -9,7 +9,10 @@
+     "typecheck": "tsc -b",
+     "test": "vitest run",
+     "test:watch": "vitest",
+-    "preview": "vite preview"
++    "preview": "vite preview",
++    "qa:guard": "node scripts/qa-guard.mjs",
++    "test:db:nodocker": "bash qa/pg-harness/run.sh .",
++    "verify": "npm run qa:guard && npm run typecheck && npm test && npm run build"
+   },
+   "dependencies": {
+     "@supabase/supabase-js": "^2.49.1",
+diff --git a/qa/mocks-conocidos.txt b/qa/mocks-conocidos.txt
+new file mode 100644
+index 0000000..8edb4ea
+--- /dev/null
++++ b/qa/mocks-conocidos.txt
+@@ -0,0 +1,5 @@
++# Archivos de producción que TODAVÍA contienen datos mock.
++# Esta lista solo puede achicarse: scripts/qa-guard.mjs falla si aparece un mock nuevo
++# o si un archivo de esta lista ya no tiene mocks y no se lo quitó.
++src/modules/customers/CustomersPage.tsx
++src/modules/pos/usePosCart.ts
+diff --git a/qa/pg-harness/README.md b/qa/pg-harness/README.md
+new file mode 100644
+index 0000000..bd5bd7f
+--- /dev/null
++++ b/qa/pg-harness/README.md
+@@ -0,0 +1,16 @@
++# Arnés de base de datos sin Docker
++
++Emula lo mínimo de Supabase (roles `anon`, `authenticated`, `service_role`, esquema `auth`,
++`auth.uid()` y los privilegios por defecto de Supabase) sobre un PostgreSQL 16 local, aplica
++todas las migraciones y corre `supabase/tests/*.sql` con `pg_prove`.
++
++```bash
++sudo apt-get install -y postgresql-16 postgresql-16-pgtap libtap-parser-sourcehandler-pgtap-perl
++npm run test:db:nodocker
++```
++
++Importante: los privilegios por defecto son los de Supabase, incluido que **todo objeto nuevo en
++`public` queda concedido a `anon`**. Por eso este arnés detecta fugas a usuarios no logueados.
++
++El CI sigue usando la CLI oficial (`supabase db start` + `supabase test db`); si el arnés y el CI
++discrepan, manda el CI y hay que corregir el arnés.
+diff --git a/qa/pg-harness/run.sh b/qa/pg-harness/run.sh
+new file mode 100755
+index 0000000..ea9f7e3
+--- /dev/null
++++ b/qa/pg-harness/run.sh
+@@ -0,0 +1,35 @@
++#!/usr/bin/env bash
++# Corre migraciones + seed + tests pgTAP contra un PostgreSQL 16 local, SIN Docker.
++# Pensado para agentes en sandboxes donde `supabase start` no está disponible.
++# No reemplaza al CI (que usa la CLI oficial): es una verificación previa rápida.
++#
++# Requisitos (Ubuntu/Debian): apt-get install postgresql-16 postgresql-16-pgtap libtap-parser-sourcehandler-pgtap-perl
++# Uso: bash qa/pg-harness/run.sh [ruta-del-repo]
++set -euo pipefail
++REPO="$(cd "${1:-.}" && pwd)"
++HERE="$(cd "$(dirname "$0")" && pwd)"
++PGBIN="${PGBIN:-/usr/lib/postgresql/16/bin}"
++DATA="${PGQA_DATA:-/tmp/pgqa}"
++export PGHOST=/tmp PGPORT="${PGQA_PORT:-55432}" PGUSER=postgres
++export PGOPTIONS='-c client_min_messages=warning'
++
++as_pg() { if [ "$(id -u)" = "0" ]; then su postgres -c "$*"; else bash -c "$*"; fi; }
++
++if [ ! -d "$DATA" ]; then
++  as_pg "$PGBIN/initdb -D $DATA -A trust -U postgres" >/dev/null
++fi
++if ! as_pg "$PGBIN/pg_ctl -D $DATA status" >/dev/null 2>&1; then
++  as_pg "$PGBIN/pg_ctl -D $DATA -o '-k /tmp -p $PGPORT' -l /tmp/pgqa.log start" >/dev/null
++  sleep 2
++fi
++
++psql -q -d postgres -c "drop database if exists alverde" -c "create database alverde"
++psql -q -d alverde -c "alter database alverde set search_path = \"\$user\", public, extensions"
++psql -q -v ON_ERROR_STOP=1 -d alverde -f "$HERE/supabase_stub.sql"
++for f in "$REPO"/supabase/migrations/*.sql; do
++  echo "== migración $(basename "$f")"
++  psql -q -v ON_ERROR_STOP=1 -d alverde -f "$f"
++done
++[ -f "$REPO/supabase/seed.sql" ] && psql -q -v ON_ERROR_STOP=1 -d alverde -f "$REPO/supabase/seed.sql"
++echo "== pgTAP"
++pg_prove -d alverde "$REPO"/supabase/tests/*.sql
+diff --git a/qa/pg-harness/supabase_stub.sql b/qa/pg-harness/supabase_stub.sql
+new file mode 100644
+index 0000000..affdb78
+--- /dev/null
++++ b/qa/pg-harness/supabase_stub.sql
+@@ -0,0 +1,33 @@
++-- Emulación mínima de Supabase para correr migraciones y pgTAP fuera de Docker.
++do $$ begin
++  if not exists (select 1 from pg_roles where rolname='anon') then create role anon nologin noinherit; end if;
++  if not exists (select 1 from pg_roles where rolname='authenticated') then create role authenticated nologin noinherit; end if;
++  if not exists (select 1 from pg_roles where rolname='service_role') then create role service_role nologin noinherit bypassrls; end if;
++end $$;
++create schema if not exists auth;
++create schema if not exists extensions;
++create table if not exists auth.users (
++  id uuid primary key,
++  email text,
++  raw_user_meta_data jsonb default '{}'::jsonb,
++  created_at timestamptz default now()
++);
++create or replace function auth.uid() returns uuid language sql stable as $$
++  select coalesce(
++    nullif(current_setting('request.jwt.claim.sub', true), ''),
++    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub')
++  )::uuid
++$$;
++create or replace function auth.role() returns text language sql stable as $$
++  select coalesce(nullif(current_setting('request.jwt.claim.role', true), ''),
++    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role'))
++$$;
++grant usage on schema auth to anon, authenticated, service_role;
++grant execute on all functions in schema auth to anon, authenticated, service_role;
++grant usage on schema public to postgres, anon, authenticated, service_role;
++grant usage on schema extensions to postgres, anon, authenticated, service_role;
++-- Privilegios por defecto idénticos a los de Supabase: TODO objeto nuevo en public queda concedido a anon.
++alter default privileges in schema public grant all on tables to postgres, anon, authenticated, service_role;
++alter default privileges in schema public grant all on functions to postgres, anon, authenticated, service_role;
++alter default privileges in schema public grant all on sequences to postgres, anon, authenticated, service_role;
++create extension if not exists pgtap schema extensions;
+diff --git a/scripts/check-migrations-immutable.sh b/scripts/check-migrations-immutable.sh
+new file mode 100755
+index 0000000..f82e5b6
+--- /dev/null
++++ b/scripts/check-migrations-immutable.sh
+@@ -0,0 +1,12 @@
++#!/usr/bin/env bash
++# Falla si un PR modifica, renombra o borra una migración que ya existe en la rama base.
++# Las correcciones de esquema van SIEMPRE en una migración nueva.
++set -euo pipefail
++BASE_REF="${1:-origin/main}"
++changed=$(git diff --name-status "$BASE_REF"...HEAD -- supabase/migrations | awk '$1 !~ /^A/ {print}')
++if [ -n "$changed" ]; then
++  echo "✗ Se modificaron migraciones existentes (solo se permite agregar nuevas):"
++  echo "$changed"
++  exit 1
++fi
++echo "Migraciones OK: solo se agregaron archivos nuevos."
+diff --git a/scripts/qa-guard.mjs b/scripts/qa-guard.mjs
+new file mode 100644
+index 0000000..49c9149
+--- /dev/null
++++ b/scripts/qa-guard.mjs
+@@ -0,0 +1,65 @@
++#!/usr/bin/env node
++// Compuerta de calidad estática. Corre en CI y localmente con `npm run qa:guard`.
++// Falla (exit 1) ante patrones que en este repo ya produjeron falsos verdes.
++import { readdirSync, readFileSync, statSync, existsSync } from "node:fs";
++import { join, relative, sep } from "node:path";
++
++const root = process.cwd();
++const errors = [];
++
++function walk(dir, out = []) {
++  for (const name of readdirSync(dir)) {
++    if (["node_modules", "dist", ".git", "coverage"].includes(name)) continue;
++    const full = join(dir, name);
++    if (statSync(full).isDirectory()) walk(full, out);
++    else out.push(full);
++  }
++  return out;
++}
++
++const rel = (p) => relative(root, p).split(sep).join("/");
++const files = walk(root).map((p) => ({ path: rel(p), full: p }));
++const isTest = (p) => /\.test\.(ts|tsx)$/.test(p);
++
++// 1. Tests que no prueban nada.
++const fakeAssertion = /expect\(\s*(true|false|1|0|null|undefined)\s*\)\s*\.\s*(toBe|toEqual|toStrictEqual)\(\s*(true|false|1|0|null|undefined)\s*\)/;
++const focused = /\b(it|test|describe)\.only\s*\(/;
++for (const f of files.filter((f) => isTest(f.path))) {
++  const src = readFileSync(f.full, "utf8");
++  if (fakeAssertion.test(src)) errors.push(`${f.path}: aserción vacía (expect(true).toBe(true) o similar). Usá it.todo si el test aún no existe.`);
++  if (focused.test(src)) errors.push(`${f.path}: test enfocado (.only) — oculta el resto de la suite.`);
++  const cases = (src.match(/\b(it|test)\s*\(/g) ?? []).length;
++  if (cases > 0 && !/\bexpect\s*\(/.test(src)) errors.push(`${f.path}: tiene casos pero ningún expect().`);
++}
++
++// 2. Mocks en código de producción: lista de trinquete que solo puede achicarse.
++const allowFile = "qa/mocks-conocidos.txt";
++const allowed = existsSync(allowFile)
++  ? readFileSync(allowFile, "utf8").split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith("#"))
++  : [];
++const mockPattern = /\bmock/i;
++const prodSources = files.filter((f) => f.path.startsWith("src/") && /\.(ts|tsx)$/.test(f.path) && !isTest(f.path));
++for (const f of prodSources) {
++  const hasMock = mockPattern.test(readFileSync(f.full, "utf8"));
++  if (hasMock && !allowed.includes(f.path)) errors.push(`${f.path}: contiene datos/lógica mock en código de producción.`);
++}
++for (const path of allowed) {
++  const f = prodSources.find((s) => s.path === path);
++  if (!f || !mockPattern.test(readFileSync(f.full, "utf8"))) {
++    errors.push(`${allowFile}: '${path}' ya no tiene mocks. Quitalo de la lista (la lista solo se achica).`);
++  }
++}
++
++// 3. Tests SQL con plan y cierre explícitos (pg_prove necesita ambos para reportar bien).
++for (const f of files.filter((f) => /^supabase\/tests\/.+\.sql$/.test(f.path))) {
++  const sql = readFileSync(f.full, "utf8").toLowerCase();
++  if (!/\bplan\s*\(/.test(sql) || !/\bfinish\s*\(/.test(sql)) errors.push(`${f.path}: falta plan(n) o finish().`);
++}
++
++if (errors.length) {
++  console.error(`\nqa:guard encontró ${errors.length} problema(s):\n`);
++  for (const e of errors) console.error(`  ✗ ${e}`);
++  console.error("");
++  process.exit(1);
++}
++console.log(`qa:guard OK — ${files.filter((f) => isTest(f.path)).length} archivos de test revisados, ${allowed.length} mock(s) conocidos pendientes.`);
+diff --git a/src/acceptance.todo.test.ts b/src/acceptance.todo.test.ts
+new file mode 100644
+index 0000000..101466c
+--- /dev/null
++++ b/src/acceptance.todo.test.ts
+@@ -0,0 +1,11 @@
++import { describe, it } from "vitest";
++
++// Criterios de aceptación transversales (requisitos, sección de agentes H, I y K).
++// Antes eran aserciones constantes (siempre verdaderas) y figuraban como aprobados sin probar nada.
++// Quedan como pendientes visibles en la salida de Vitest hasta que exista un test real
++// (pgTAP en supabase/tests o E2E). Reemplazar cada `it.todo` por el test que lo cubre.
++describe("Aceptación transversal (pendiente de test real)", () => {
++  it.todo("Una venta offline descuenta stock por FEFO — cubierto por supabase/tests/venta_contrato_test.sql cuando se mergee PR-04");
++  it.todo("Un fiado y un pago posterior actualizan el mismo saldo sin duplicar");
++  it.todo("Archivar un producto no rompe las ventas históricas");
++});
+-- 
+2.43.0
+

@@ -1,0 +1,1158 @@
+From cfd6be28bcfd0e341b2066f9d1de300dca8d857c Mon Sep 17 00:00:00 2001
+From: Alverde QA Lead <qa-lead@alverde.invalid>
+Date: Wed, 23 Sep 2026 18:06:27 +0000
+Subject: [PATCH 06/10] feat(clientes): cuentas y fiado reales con saldo por
+ movimientos, tope y ajustes (RF-45 a RF-48)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Nueva página /customers.html (CRÍTICO-06) con buscador por nombre o teléfono (RF-45).
+  Reemplaza los clientes hardcodeados y los saldos en estado de React (CRÍTICO-04).
+- Saldo = suma de movimientos (vista customer_accounts); nunca un campo que se pisa (RF-46).
+  Los empleados ven saldo y tope aunque RLS solo les muestre sus propios movimientos.
+- Abonos y fiados manuales pasan por la cola offline; el saldo en pantalla suma lo que este
+  equipo registró y todavía no envió. Sin conexión se usa la última copia descargada.
+- RF-48: los ajustes tienen sentido (+/−) con la columna adjustment_sign; antes un ajuste
+  solo podía tener un monto positivo sin sentido definido. Solo la administradora ajusta.
+- RF-47: solo la administradora define el tope; la caja avisa si una venta fiada lo supera.
+- Caja: medio de pago "Fiado" con selector de cliente; la venta genera el cargo (PR-04).
+- Historial de movimientos por cliente con quién los registró.
+- qa/mocks-conocidos.txt queda vacío: no quedan mocks en código de producción.
+
+Tests: supabase/tests/clientes_fiado_test.sql (11), balance.test.ts (4).
+Mutación: ignorar el signo del ajuste hace fallar "3000 + 1000 − 500 = 3500".
+---
+ customers.html                                |  13 ++
+ public/sw.js                                  |   4 +-
+ qa/mocks-conocidos.txt                        |   1 -
+ src/acceptance.todo.test.ts                   |   2 +-
+ src/entries/customers.tsx                     |  14 ++
+ src/modules/customers/CustomerCreditModal.tsx | 182 ++++++++++++------
+ src/modules/customers/CustomersPage.tsx       | 175 +++++++++--------
+ src/modules/customers/api.ts                  |  73 +++++++
+ src/modules/customers/balance.test.ts         |  46 +++++
+ src/modules/customers/balance.ts              |  59 ++++++
+ src/modules/customers/index.ts                |   8 +-
+ src/modules/customers/types.ts                |  38 ++--
+ src/modules/pos/PosPage.tsx                   |  70 ++++++-
+ src/shared/components/AppShell.tsx            |   3 +-
+ .../20260923120000_clientes_saldos.sql        | 157 +++++++++++++++
+ supabase/tests/clientes_fiado_test.sql        |  56 ++++++
+ vite.config.ts                                |   3 +-
+ 17 files changed, 740 insertions(+), 164 deletions(-)
+ create mode 100644 customers.html
+ create mode 100644 src/entries/customers.tsx
+ create mode 100644 src/modules/customers/api.ts
+ create mode 100644 src/modules/customers/balance.test.ts
+ create mode 100644 src/modules/customers/balance.ts
+ create mode 100644 supabase/migrations/20260923120000_clientes_saldos.sql
+ create mode 100644 supabase/tests/clientes_fiado_test.sql
+
+diff --git a/customers.html b/customers.html
+new file mode 100644
+index 0000000..f92a0c5
+--- /dev/null
++++ b/customers.html
+@@ -0,0 +1,13 @@
++<!doctype html>
++<html lang="es">
++  <head>
++    <meta charset="UTF-8" />
++    <meta name="viewport" content="width=device-width, initial-scale=1" />
++    <meta name="theme-color" content="#11221b" />
++    <title>Alverde · Clientes</title>
++  </head>
++  <body>
++    <div id="root"></div>
++    <script type="module" src="/src/entries/customers.tsx"></script>
++  </body>
++</html>
+diff --git a/public/sw.js b/public/sw.js
+index 067ee81..aab103f 100644
+--- a/public/sw.js
++++ b/public/sw.js
+@@ -1,5 +1,5 @@
+-const CACHE_NAME = "alverde-shell-v2";
+-const APP_SHELL = ["/", "/index.html", "/catalog.html", "/admin.html", "/pos.html"];
++const CACHE_NAME = "alverde-shell-v3";
++const APP_SHELL = ["/", "/index.html", "/catalog.html", "/admin.html", "/pos.html", "/customers.html"];
+ 
+ self.addEventListener("install", (event) => {
+   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
+diff --git a/qa/mocks-conocidos.txt b/qa/mocks-conocidos.txt
+index 695ed72..7730861 100644
+--- a/qa/mocks-conocidos.txt
++++ b/qa/mocks-conocidos.txt
+@@ -1,4 +1,3 @@
+ # Archivos de producción que TODAVÍA contienen datos mock.
+ # Esta lista solo puede achicarse: scripts/qa-guard.mjs falla si aparece un mock nuevo
+ # o si un archivo de esta lista ya no tiene mocks y no se lo quitó.
+-src/modules/customers/CustomersPage.tsx
+diff --git a/src/acceptance.todo.test.ts b/src/acceptance.todo.test.ts
+index c3e6eab..983cbd3 100644
+--- a/src/acceptance.todo.test.ts
++++ b/src/acceptance.todo.test.ts
+@@ -5,7 +5,7 @@ import { describe, it } from "vitest";
+ // Quedan como pendientes visibles en la salida de Vitest hasta que exista un test real
+ // (pgTAP en supabase/tests o E2E). Reemplazar cada `it.todo` por el test que lo cubre.
+ // Ya cubierto: "una venta offline descuenta stock por FEFO" → supabase/tests/venta_contrato_test.sql.
++// Ya cubierto: "un fiado y un pago posterior actualizan el mismo saldo" → supabase/tests/clientes_fiado_test.sql.
+ describe("Aceptación transversal (pendiente de test real)", () => {
+-  it.todo("Un fiado y un pago posterior actualizan el mismo saldo sin duplicar");
+   it.todo("Archivar un producto no rompe las ventas históricas");
+ });
+diff --git a/src/entries/customers.tsx b/src/entries/customers.tsx
+new file mode 100644
+index 0000000..d4b560a
+--- /dev/null
++++ b/src/entries/customers.tsx
+@@ -0,0 +1,14 @@
++import { createRoot } from "react-dom/client";
++import "../styles/tokens.css";
++import "../styles/global.css";
++import "../styles/pos.css";
++import { registerServiceWorker } from "../shared/offline/registerServiceWorker";
++import { AppShell } from "../shared/components/AppShell";
++import { CustomersPage } from "../modules/customers/CustomersPage";
++
++registerServiceWorker();
++createRoot(document.getElementById("root")!).render(
++  <AppShell active="customers" title="Clientes y fiado">
++    <CustomersPage />
++  </AppShell>
++);
+diff --git a/src/modules/customers/CustomerCreditModal.tsx b/src/modules/customers/CustomerCreditModal.tsx
+index 6cbb0f3..329c2bd 100644
+--- a/src/modules/customers/CustomerCreditModal.tsx
++++ b/src/modules/customers/CustomerCreditModal.tsx
+@@ -1,75 +1,129 @@
+-import React, { useState } from 'react';
+-import { Modal, TextField, Button } from '../../shared/ui';
+-import type { Customer } from './types';
++import { type FormEvent, useEffect, useState } from "react";
++import { Button, Modal, TextField } from "../../shared/ui";
++import { formatMoney } from "../pos/money";
++import { loadMovements, registerMovement, setCreditLimit } from "./api";
++import type { CreditMovementKind, CreditMovementRow, CustomerAccount } from "./types";
+ 
+-interface CustomerCreditModalProps {
+-  isOpen: boolean;
++type Props = {
++  account: CustomerAccount;
++  isAdmin: boolean;
+   onClose: () => void;
+-  customer: Customer;
+-  onUpdate: (amount: number, type: 'charge' | 'payment') => void;
+-}
++  onChanged: () => void;
++};
+ 
+-export const CustomerCreditModal: React.FC<CustomerCreditModalProps> = ({ isOpen, onClose, customer, onUpdate }) => {
+-  const [amountStr, setAmountStr] = useState('');
+-  const [type, setType] = useState<'charge' | 'payment'>('payment');
+-  const [notes, setNotes] = useState('');
++const KIND_LABEL: Record<CreditMovementKind, string> = { charge: "Fiado", payment: "Abono", adjustment: "Ajuste" };
+ 
+-  const handleSubmit = (e: React.FormEvent) => {
+-    e.preventDefault();
+-    const amount = parseFloat(amountStr);
+-    if (isNaN(amount) || amount <= 0) return;
+-    
+-    onUpdate(amount, type);
+-    setAmountStr('');
+-    setNotes('');
+-    onClose();
+-  };
++export function CustomerCreditModal({ account, isAdmin, onClose, onChanged }: Props) {
++  const [kind, setKind] = useState<CreditMovementKind>("payment");
++  const [sign, setSign] = useState<1 | -1>(-1);
++  const [amount, setAmount] = useState("");
++  const [note, setNote] = useState("");
++  const [limit, setLimit] = useState(account.credit_limit === null ? "" : String(account.credit_limit));
++  const [history, setHistory] = useState<CreditMovementRow[] | null>(null);
++  const [historyError, setHistoryError] = useState<string | null>(null);
++  const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
++  const [busy, setBusy] = useState(false);
+ 
+-  return (
+-    <Modal open={isOpen} onClose={onClose} title={`Gestionar Fiado: ${customer.name}`}>
+-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '16px' }}>
+-        <div style={{ display: 'flex', gap: '8px' }}>
+-          <Button 
+-            type="button" 
+-            variant={type === 'payment' ? 'primario' : 'secundario'} 
+-            onClick={() => setType('payment')}
+-            style={{ flex: 1 }}
+-          >
+-            Abono (Paga)
+-          </Button>
+-          <Button 
+-            type="button" 
+-            variant={type === 'charge' ? 'primario' : 'secundario'} 
+-            onClick={() => setType('charge')}
+-            style={{ flex: 1 }}
+-          >
+-            Nuevo Fiado
+-          </Button>
+-        </div>
++  useEffect(() => {
++    loadMovements(account.id).then(setHistory).catch((err: unknown) =>
++      setHistoryError(err instanceof Error ? err.message : "Historial no disponible sin conexión."));
++  }, [account.id]);
+ 
+-        <TextField
+-          label="Monto ($)"
+-          type="number"
+-          step="0.01"
+-          min="0.01"
+-          required
+-          value={amountStr}
+-          onChange={(e) => setAmountStr(e.target.value)}
+-          placeholder="0.00"
+-        />
++  async function submit(event: FormEvent) {
++    event.preventDefault();
++    const value = Number(amount.replace(",", "."));
++    setBusy(true);
++    try {
++      await registerMovement({
++        customerId: account.id,
++        movementKind: kind,
++        amount: value,
++        ...(note.trim() ? { note: note.trim() } : {}),
++        ...(kind === "adjustment" ? { adjustmentSign: sign } : {})
++      });
++      setAmount("");
++      setNote("");
++      setMessage({ tone: "ok", text: `${KIND_LABEL[kind]} de ${formatMoney(value)} guardado.` });
++      onChanged();
++    } catch (err) {
++      setMessage({ tone: "error", text: err instanceof Error ? err.message : "No se pudo guardar." });
++    } finally {
++      setBusy(false);
++    }
++  }
+ 
+-        <TextField
+-          label="Notas (Opcional)"
+-          value={notes}
+-          onChange={(e) => setNotes(e.target.value)}
+-          placeholder="Ej: Pago parcial, compra del viernes..."
+-        />
++  async function saveLimit() {
++    const trimmed = limit.trim();
++    const value = trimmed === "" ? null : Number(trimmed.replace(",", "."));
++    if (value !== null && !(value >= 0)) return setMessage({ tone: "error", text: "El tope tiene que ser un número (o vacío para sin tope)." });
++    try {
++      await setCreditLimit(account.id, value);
++      setMessage({ tone: "ok", text: value === null ? "Tope quitado." : `Tope actualizado a ${formatMoney(value)}.` });
++      onChanged();
++    } catch (err) {
++      setMessage({ tone: "error", text: err instanceof Error ? err.message : "No se pudo guardar el tope." });
++    }
++  }
+ 
+-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px' }}>
+-          <Button type="button" variant="secundario" onClick={onClose}>Cancelar</Button>
+-          <Button type="submit" variant="primario">Confirmar {type === 'payment' ? 'Abono' : 'Fiado'}</Button>
+-        </div>
++  const kinds: CreditMovementKind[] = isAdmin ? ["payment", "charge", "adjustment"] : ["payment", "charge"];
++
++  return (
++    <Modal open title={account.name} onClose={onClose}>
++      <p className="pos-total-label">Saldo</p>
++      <p className="pos-total">{formatMoney(account.balance)}</p>
++      <p className="field-help">
++        {account.credit_limit === null ? "Sin tope de fiado." : `Tope de fiado: ${formatMoney(account.credit_limit)}.`}
++        {account.phone ? ` Teléfono: ${account.phone}.` : ""}
++      </p>
++
++      <form onSubmit={submit} className="pos-setup">
++        <fieldset className="pos-methods">
++          <legend>Movimiento</legend>
++          {kinds.map((k) => (
++            <label key={k} className="pos-method">
++              <input type="radio" name="tipo" checked={kind === k} onChange={() => setKind(k)} />
++              <span>{KIND_LABEL[k]}</span>
++            </label>
++          ))}
++        </fieldset>
++        {kind === "adjustment" && (
++          <fieldset className="pos-methods">
++            <legend>El ajuste…</legend>
++            <label className="pos-method"><input type="radio" name="signo" checked={sign === -1} onChange={() => setSign(-1)} /><span>Baja la deuda</span></label>
++            <label className="pos-method"><input type="radio" name="signo" checked={sign === 1} onChange={() => setSign(1)} /><span>Sube la deuda</span></label>
++          </fieldset>
++        )}
++        <TextField label="Monto" inputMode="decimal" required value={amount} onChange={(e) => setAmount(e.target.value)} />
++        <TextField label="Nota (opcional)" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej.: pagó parte en efectivo" />
++        <Button type="submit" loading={busy}>Guardar {KIND_LABEL[kind].toLowerCase()}</Button>
+       </form>
++
++      {isAdmin && (
++        <div className="pos-scan" style={{ marginTop: "var(--esp-m)" }}>
++          <TextField label="Tope de fiado" inputMode="decimal" value={limit} onChange={(e) => setLimit(e.target.value)} help="Vacío = sin tope." />
++          <Button variant="secundario" onClick={() => void saveLimit()}>Guardar tope</Button>
++        </div>
++      )}
++      <p className="pos-feedback" data-tone={message?.tone} role="status">{message?.text}</p>
++
++      <h3>Últimos movimientos</h3>
++      {historyError && <p className="field-help">{historyError}</p>}
++      {history && history.length === 0 && <p className="field-help">Todavía no hay movimientos.</p>}
++      {history && history.length > 0 && (
++        <table className="pos-summary">
++          <thead><tr><th>Fecha</th><th>Tipo</th><th>Nota</th><th>Importe</th></tr></thead>
++          <tbody>
++            {history.map((row) => (
++              <tr key={row.id}>
++                <td>{new Date(row.occurred_at).toLocaleDateString("es-AR")}</td>
++                <td>{KIND_LABEL[row.kind]}{row.user_name ? ` · ${row.user_name}` : ""}</td>
++                <td>{row.note ?? (row.sale_id ? "Venta" : "")}</td>
++                <td>{row.delta > 0 ? "+" : "−"}{formatMoney(Math.abs(row.delta))}</td>
++              </tr>
++            ))}
++          </tbody>
++        </table>
++      )}
+     </Modal>
+   );
+-};
++}
+diff --git a/src/modules/customers/CustomersPage.tsx b/src/modules/customers/CustomersPage.tsx
+index 904d58a..bef11ef 100644
+--- a/src/modules/customers/CustomersPage.tsx
++++ b/src/modules/customers/CustomersPage.tsx
+@@ -1,90 +1,115 @@
+-import React, { useState } from 'react';
+-import { GlassCard, TextField, Button, Badge } from '../../shared/ui';
+-import type { Customer } from './types';
+-import { CustomerCreditModal } from './CustomerCreditModal';
++import { type FormEvent, useCallback, useEffect, useState } from "react";
++import { Badge, Button, EmptyState, GlassCard, Modal, TextField } from "../../shared/ui";
++import { useCurrentProfile } from "../../shared/auth/AuthGate";
++import { subscribeToQueueChanges } from "../../shared/offline/queue";
++import { formatMoney } from "../pos/money";
++import { createCustomer, loadAccounts, type AccountsResult } from "./api";
++import { filterAccounts } from "./balance";
++import { CustomerCreditModal } from "./CustomerCreditModal";
++import type { CustomerAccount } from "./types";
+ 
+-// Mock data for initial rendering
+-const mockCustomers: Customer[] = [
+-  { id: '1', name: 'Juan Prez', current_credit: 1500.5, status: 'active', created_at: new Date().toISOString(), updated_at: new Date().toISOString(), phone: '555-0101' },
+-  { id: '2', name: 'Mara Lpez', current_credit: 0, status: 'active', created_at: new Date().toISOString(), updated_at: new Date().toISOString(), phone: '555-0102' },
+-];
++export function CustomersPage() {
++  const profile = useCurrentProfile();
++  const isAdmin = profile.role === "administrator";
++  const [data, setData] = useState<AccountsResult | null>(null);
++  const [error, setError] = useState<string | null>(null);
++  const [search, setSearch] = useState("");
++  const [selectedId, setSelectedId] = useState<string | null>(null);
++  const [creating, setCreating] = useState(false);
+ 
+-export const CustomersPage: React.FC = () => {
+-  const [search, setSearch] = useState('');
+-  const [customers, setCustomers] = useState<Customer[]>(mockCustomers);
+-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+-  const [isModalOpen, setIsModalOpen] = useState(false);
++  const refresh = useCallback(() => {
++    loadAccounts()
++      .then((result) => { setData(result); setError(null); })
++      .catch((err: unknown) => setError(err instanceof Error ? err.message : "No se pudieron cargar los clientes."));
++  }, []);
+ 
+-  const filteredCustomers = customers.filter(c => 
+-    c.name.toLowerCase().includes(search.toLowerCase()) || 
+-    (c.phone && c.phone.includes(search))
+-  );
+-
+-  const handleOpenCredit = (customer: Customer) => {
+-    setSelectedCustomer(customer);
+-    setIsModalOpen(true);
+-  };
++  useEffect(() => {
++    refresh();
++    return subscribeToQueueChanges(refresh);
++  }, [refresh]);
+ 
+-  const handleCreditUpdate = (amount: number, type: 'charge' | 'payment') => {
+-    if (!selectedCustomer) return;
+-    const change = type === 'charge' ? amount : -amount;
+-    
+-    setCustomers(prev => prev.map(c => 
+-      c.id === selectedCustomer.id ? { ...c, current_credit: c.current_credit + change } : c
+-    ));
+-  };
++  const visible = data ? filterAccounts(data.accounts.filter((a) => a.active || isAdmin), search) : [];
++  const selected = data?.accounts.find((a) => a.id === selectedId) ?? null;
+ 
+   return (
+-    <div className="customers-page">
+-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+-        <h1 style={{ fontSize: '24px', fontWeight: 600, color: 'var(--text-primary)' }}>Clientes y Fiado</h1>
+-        <Button onClick={() => {}}>Nuevo Cliente</Button>
+-      </header>
+-
+-      <GlassCard style={{ padding: '24px', marginBottom: '24px' }}>
+-        <TextField
+-          label="Buscar cliente"
+-          placeholder="Nombre o telfono..."
+-          value={search}
+-          onChange={(e) => setSearch(e.target.value)}
+-        />
++    <div className="pos-setup" style={{ maxWidth: "none" }}>
++      <GlassCard className="pos-panel pos-scan">
++        <TextField label="Buscar cliente" placeholder="Nombre o teléfono" value={search} onChange={(e) => setSearch(e.target.value)} />
++        <Button onClick={() => setCreating(true)}>Nuevo cliente</Button>
+       </GlassCard>
+ 
+-      <div style={{ display: 'grid', gap: '16px', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
+-        {filteredCustomers.map(customer => (
+-          <GlassCard key={customer.id} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+-              <div>
+-                <h3 style={{ margin: 0, fontSize: '18px', color: 'var(--text-primary)' }}>{customer.name}</h3>
+-                <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-secondary)' }}>{customer.phone || 'Sin telfono'}</p>
+-              </div>
+-              <Badge tone={customer.status === 'active' ? 'exito' : 'error'}>
+-                {customer.status === 'active' ? 'Activo' : 'Inactivo'}
+-              </Badge>
+-            </div>
+-            
+-            <div style={{ padding: '12px', background: 'var(--bg-glass)', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
+-              <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)' }}>Saldo Fiado</p>
+-              <p style={{ margin: 0, fontSize: '20px', fontWeight: 'bold', color: customer.current_credit > 0 ? 'var(--text-critical)' : 'var(--text-positive)' }}>
+-                ${customer.current_credit.toFixed(2)}
+-              </p>
+-            </div>
++      {error && <p className="form-error" role="alert">{error}</p>}
++      {data?.fromCache && (
++        <p className="field-help">Sin conexión: saldos de la última copia ({new Date(data.refreshedAt ?? "").toLocaleString("es-AR")}) más lo registrado en este equipo.</p>
++      )}
++      {data && visible.length === 0 && (
++        <EmptyState title={search ? "Nadie coincide con la búsqueda" : "Todavía no hay clientes"}>
++          {search ? "Probá con otra parte del nombre o el teléfono." : "Creá el primero con “Nuevo cliente”."}
++        </EmptyState>
++      )}
+ 
+-            <Button variant="secundario" onClick={() => handleOpenCredit(customer)}>
+-              Gestionar Fiado / Abonos
+-            </Button>
+-          </GlassCard>
++      <div className="dashboard-grid">
++        {visible.map((account) => (
++          <CustomerCard key={account.id} account={account} onOpen={() => setSelectedId(account.id)} />
+         ))}
+       </div>
+ 
+-      {selectedCustomer && (
+-        <CustomerCreditModal
+-          isOpen={isModalOpen}
+-          onClose={() => setIsModalOpen(false)}
+-          customer={selectedCustomer}
+-          onUpdate={handleCreditUpdate}
+-        />
++      {selected && (
++        <CustomerCreditModal account={selected} isAdmin={isAdmin} onClose={() => setSelectedId(null)} onChanged={refresh} />
+       )}
++      {creating && <NewCustomerDialog isAdmin={isAdmin} onClose={() => setCreating(false)} onCreated={() => { setCreating(false); refresh(); }} />}
+     </div>
+   );
+-};
++}
++
++function CustomerCard({ account, onOpen }: { account: CustomerAccount; onOpen: () => void }) {
++  const overLimit = account.credit_limit !== null && account.balance > account.credit_limit;
++  return (
++    <GlassCard className="pos-panel">
++      <div className="pos-shift" style={{ marginTop: 0 }}>
++        <div>
++          <h3 style={{ margin: 0 }}>{account.name}</h3>
++          <p className="field-help" style={{ margin: 0 }}>{account.phone ?? "Sin teléfono"}</p>
++        </div>
++        {!account.active ? <Badge tone="neutro">Archivado</Badge> : overLimit ? <Badge tone="aviso">Supera el tope</Badge> : null}
++      </div>
++      <p className="pos-total-label" style={{ marginTop: "var(--esp-m)" }}>Saldo</p>
++      <p className="pos-amount" style={{ textAlign: "left", fontSize: "var(--texto-l)" }}>{formatMoney(account.balance)}</p>
++      <Button variant="secundario" onClick={onOpen}>Ver cuenta</Button>
++    </GlassCard>
++  );
++}
++
++function NewCustomerDialog({ isAdmin, onClose, onCreated }: { isAdmin: boolean; onClose: () => void; onCreated: () => void }) {
++  const [name, setName] = useState("");
++  const [phone, setPhone] = useState("");
++  const [limit, setLimit] = useState("");
++  const [error, setError] = useState<string | null>(null);
++  const [busy, setBusy] = useState(false);
++
++  async function submit(event: FormEvent) {
++    event.preventDefault();
++    setBusy(true);
++    try {
++      await createCustomer({ name, phone, creditLimit: isAdmin && limit.trim() ? Number(limit.replace(",", ".")) : null });
++      onCreated();
++    } catch (err) {
++      setError(err instanceof Error ? err.message : "No se pudo crear el cliente.");
++    } finally {
++      setBusy(false);
++    }
++  }
++
++  return (
++    <Modal open title="Nuevo cliente" onClose={onClose}>
++      <form onSubmit={submit} className="pos-setup">
++        <TextField label="Nombre" required autoFocus value={name} onChange={(e) => setName(e.target.value)} />
++        <TextField label="Teléfono (opcional)" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
++        {isAdmin && <TextField label="Tope de fiado (opcional)" inputMode="decimal" value={limit} onChange={(e) => setLimit(e.target.value)} />}
++        {error && <p className="form-error" role="alert">{error}</p>}
++        <Button type="submit" loading={busy}>Crear cliente</Button>
++        <p className="field-help">Crear un cliente necesita conexión.</p>
++      </form>
++    </Modal>
++  );
++}
+diff --git a/src/modules/customers/api.ts b/src/modules/customers/api.ts
+new file mode 100644
+index 0000000..d6f44f6
+--- /dev/null
++++ b/src/modules/customers/api.ts
+@@ -0,0 +1,73 @@
++import { getSupabase } from "../../shared/supabase/client";
++import { allOperations, enqueueOperation, readSetting, writeSetting } from "../../shared/offline/queue";
++import { synchronizePendingOperations } from "../../shared/offline/sync";
++import { pendingDeltas, withPending } from "./balance";
++import type { CreditMovementPayload, CreditMovementRow, CustomerAccount } from "./types";
++
++const CACHE_KEY = "customer-accounts";
++
++type Cached = { refreshedAt: string; accounts: CustomerAccount[] };
++
++export type AccountsResult = { accounts: CustomerAccount[]; refreshedAt: string | null; fromCache: boolean };
++
++/**
++ * Cuentas con saldo. Con conexión vienen de la nube y se guardan en el equipo; sin conexión se
++ * usa la última copia. En ambos casos se suma lo que este equipo registró y todavía no envió.
++ */
++export async function loadAccounts(): Promise<AccountsResult> {
++  let base: Cached | undefined;
++  let fromCache = false;
++  try {
++    const { data, error } = await getSupabase().from("customer_accounts").select("*").order("name");
++    if (error) throw error;
++    base = {
++      refreshedAt: new Date().toISOString(),
++      accounts: (data ?? []).map((row) => ({
++        ...(row as CustomerAccount),
++        balance: Number(row.balance),
++        credit_limit: row.credit_limit === null ? null : Number(row.credit_limit)
++      }))
++    };
++    await writeSetting(CACHE_KEY, base);
++  } catch (error) {
++    base = await readSetting<Cached>(CACHE_KEY);
++    fromCache = true;
++    if (!base) throw new Error("Sin conexión y sin una copia de clientes en este equipo. Conectate una vez para descargarla.");
++  }
++  const pending = pendingDeltas(await allOperations());
++  return { accounts: withPending(base.accounts, pending), refreshedAt: base.refreshedAt, fromCache };
++}
++
++/** Alta de cliente (RF-45). Necesita conexión: el id lo asigna la nube. */
++export async function createCustomer(input: { name: string; phone?: string; creditLimit?: number | null }): Promise<void> {
++  const name = input.name.trim();
++  if (!name) throw new Error("El nombre es obligatorio.");
++  const { error } = await getSupabase().from("customers").insert({
++    name,
++    phone: input.phone?.trim() || null,
++    ...(input.creditLimit !== undefined && input.creditLimit !== null ? { credit_limit: input.creditLimit } : {})
++  });
++  if (error) throw new Error(error.code === "42501" ? "Solo la administradora define el tope de fiado." : error.message);
++}
++
++/** RF-47: solo la administradora (lo controla la base). null = sin tope. */
++export async function setCreditLimit(customerId: string, limit: number | null): Promise<void> {
++  const { error } = await getSupabase().from("customers").update({ credit_limit: limit }).eq("id", customerId);
++  if (error) throw new Error(error.code === "42501" ? "Solo la administradora define el tope de fiado." : error.message);
++}
++
++/** Cargo, abono o ajuste. Se guarda primero en el equipo (RF-35) y se envía cuando hay red. */
++export async function registerMovement(movement: CreditMovementPayload): Promise<void> {
++  if (!(movement.amount > 0)) throw new Error("El monto tiene que ser mayor a cero.");
++  if (movement.movementKind === "adjustment" && !movement.adjustmentSign) {
++    throw new Error("Indicá si el ajuste sube o baja la deuda.");
++  }
++  await enqueueOperation({ kind: "credit_movement", payload: movement });
++  void synchronizePendingOperations().catch(() => undefined);
++}
++
++export async function loadMovements(customerId: string): Promise<CreditMovementRow[]> {
++  const { data, error } = await getSupabase().rpc("customer_movements", { p_customer_id: customerId });
++  if (error) throw new Error(`No se pudo cargar el historial: ${error.message}`);
++  return ((data ?? []) as CreditMovementRow[]).map((row) => ({ ...row, amount: Number(row.amount), delta: Number(row.delta) }));
++}
+diff --git a/src/modules/customers/balance.test.ts b/src/modules/customers/balance.test.ts
+new file mode 100644
+index 0000000..81261bb
+--- /dev/null
++++ b/src/modules/customers/balance.test.ts
+@@ -0,0 +1,46 @@
++import { describe, expect, it } from "vitest";
++import type { QueuedOperation } from "../../shared/offline/types";
++import { exceedsLimit, filterAccounts, movementDelta, pendingDeltas, withPending } from "./balance";
++import type { CustomerAccount } from "./types";
++
++const account = (over: Partial<CustomerAccount>): CustomerAccount => ({
++  id: "c1", name: "Marta Gómez", phone: "11 5555-0000", credit_limit: null, active: true, balance: 0, last_movement_at: null, ...over
++});
++const op = (kind: QueuedOperation["kind"], payload: Record<string, unknown>, synced = false): QueuedOperation => ({
++  localId: crypto.randomUUID(), deviceId: "d", kind, createdAt: "", payload, ...(synced ? { syncedAt: "x" } : {})
++});
++
++describe("saldo de fiado (RF-46, RF-48)", () => {
++  it("cargo suma, abono resta, ajuste según el sentido", () => {
++    expect(movementDelta({ movementKind: "charge", amount: 100 })).toBe(100);
++    expect(movementDelta({ movementKind: "payment", amount: 100 })).toBe(-100);
++    expect(movementDelta({ movementKind: "adjustment", amount: 100, adjustmentSign: 1 })).toBe(100);
++    expect(movementDelta({ movementKind: "adjustment", amount: 100, adjustmentSign: -1 })).toBe(-100);
++  });
++
++  it("suma lo que está en la cola sin enviar, incluidas las ventas fiadas", () => {
++    const pending = pendingDeltas([
++      op("credit_movement", { customerId: "c1", movementKind: "payment", amount: 300.1 }),
++      op("sale", { paymentMethod: "credit", customerId: "c1", totalAmount: 1000.2 }),
++      op("sale", { paymentMethod: "cash", customerId: "c1", totalAmount: 99999 }),
++      op("credit_movement", { customerId: "c1", movementKind: "charge", amount: 5000 }, true)
++    ]);
++    expect(pending.get("c1")).toBe(700.1);
++    expect(withPending([account({ balance: 2000 })], pending)[0]?.balance).toBe(2700.1);
++  });
++});
++
++describe("tope y buscador (RF-45, RF-47)", () => {
++  it("avisa solo si la venta supera el tope definido", () => {
++    expect(exceedsLimit(account({ balance: 1500, credit_limit: 2000 }), 500)).toBe(false);
++    expect(exceedsLimit(account({ balance: 1500, credit_limit: 2000 }), 500.01)).toBe(true);
++    expect(exceedsLimit(account({ balance: 99999, credit_limit: null }), 1)).toBe(false);
++  });
++
++  it("busca por nombre sin tildes o por teléfono", () => {
++    const list = [account({}), account({ id: "c2", name: "Juan Pérez", phone: null })];
++    expect(filterAccounts(list, "gomez").map((a) => a.id)).toEqual(["c1"]);
++    expect(filterAccounts(list, "5555").map((a) => a.id)).toEqual(["c1"]);
++    expect(filterAccounts(list, "")).toHaveLength(2);
++  });
++});
+diff --git a/src/modules/customers/balance.ts b/src/modules/customers/balance.ts
+new file mode 100644
+index 0000000..fa5a304
+--- /dev/null
++++ b/src/modules/customers/balance.ts
+@@ -0,0 +1,59 @@
++import type { QueuedOperation } from "../../shared/offline/types";
++import type { CreditMovementPayload, CustomerAccount } from "./types";
++
++const toCents = (value: number) => Math.round(value * 100);
++
++/** Efecto de un movimiento sobre la deuda (misma regla que credit_movement_delta en SQL). */
++export function movementDelta(movement: Pick<CreditMovementPayload, "movementKind" | "amount" | "adjustmentSign">): number {
++  if (movement.movementKind === "charge") return movement.amount;
++  if (movement.movementKind === "payment") return -movement.amount;
++  return movement.amount * (movement.adjustmentSign ?? -1);
++}
++
++/**
++ * Deuda que este equipo registró y todavía no llegó a la nube: movimientos de fiado y ventas
++ * fiadas en la cola. Se suma al saldo de la nube para que un abono sin conexión se vea al instante.
++ */
++export function pendingDeltas(operations: QueuedOperation[]): Map<string, number> {
++  const cents = new Map<string, number>();
++  const add = (customerId: string, value: number) => cents.set(customerId, (cents.get(customerId) ?? 0) + toCents(value));
++
++  for (const operation of operations) {
++    if (operation.syncedAt) continue;
++    if (operation.kind === "credit_movement") {
++      const payload = operation.payload as unknown as CreditMovementPayload;
++      if (payload.customerId) add(payload.customerId, movementDelta(payload));
++    } else if (operation.kind === "sale") {
++      const payload = operation.payload as { paymentMethod?: string; customerId?: string; totalAmount?: number };
++      if (payload.paymentMethod === "credit" && payload.customerId) add(payload.customerId, Number(payload.totalAmount ?? 0));
++    }
++  }
++  return new Map([...cents].map(([id, value]) => [id, value / 100]));
++}
++
++export function withPending(accounts: CustomerAccount[], pending: Map<string, number>): CustomerAccount[] {
++  return accounts.map((account) => {
++    const extra = pending.get(account.id);
++    return extra ? { ...account, balance: (toCents(account.balance) + toCents(extra)) / 100 } : account;
++  });
++}
++
++/** RF-47: el tope lo define la dueña; el sistema solo avisa si una venta lo supera. */
++export function exceedsLimit(account: CustomerAccount, extraCharge: number): boolean {
++  if (account.credit_limit === null) return false;
++  return toCents(account.balance) + toCents(extraCharge) > toCents(account.credit_limit);
++}
++
++/** RF-45: buscador por nombre o teléfono, sin distinguir tildes ni mayúsculas. */
++export function filterAccounts(accounts: CustomerAccount[], text: string): CustomerAccount[] {
++  const needle = normalize(text);
++  const digits = text.replace(/\D/g, "");
++  if (!needle) return accounts;
++  return accounts.filter((account) =>
++    normalize(account.name).includes(needle) || (digits.length >= 3 && (account.phone ?? "").replace(/\D/g, "").includes(digits))
++  );
++}
++
++function normalize(value: string): string {
++  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
++}
+diff --git a/src/modules/customers/index.ts b/src/modules/customers/index.ts
+index 65d73b2..b794e82 100644
+--- a/src/modules/customers/index.ts
++++ b/src/modules/customers/index.ts
+@@ -1,3 +1,5 @@
+-export * from './types';
+-export * from './CustomersPage';
+-export * from './CustomerCreditModal';
++export * from "./types";
++export * from "./CustomersPage";
++export * from "./CustomerCreditModal";
++export * from "./api";
++export * from "./balance";
+diff --git a/src/modules/customers/types.ts b/src/modules/customers/types.ts
+index 2268c89..de46d8c 100644
+--- a/src/modules/customers/types.ts
++++ b/src/modules/customers/types.ts
+@@ -1,19 +1,33 @@
+-export interface Customer {
++/** Fila de la vista customer_accounts (saldo = suma de movimientos, RF-46). */
++export interface CustomerAccount {
+   id: string;
+   name: string;
+-  phone?: string;
+-  email?: string;
+-  current_credit: number;
+-  status: 'active' | 'inactive';
+-  created_at: string;
+-  updated_at: string;
++  phone: string | null;
++  credit_limit: number | null;
++  active: boolean;
++  balance: number;
++  last_movement_at: string | null;
+ }
+ 
+-export interface CustomerCredit {
++export type CreditMovementKind = "charge" | "payment" | "adjustment";
++
++/** Payload de la operación offline `credit_movement` (lo lee apply_offline_operation). */
++export interface CreditMovementPayload {
++  customerId: string;
++  movementKind: CreditMovementKind;
++  amount: number;
++  note?: string;
++  /** Solo para ajustes (RF-48): 1 sube la deuda, -1 la baja. */
++  adjustmentSign?: 1 | -1;
++}
++
++export interface CreditMovementRow {
+   id: string;
+-  customer_id: string;
++  kind: CreditMovementKind;
+   amount: number;
+-  type: 'charge' | 'payment'; // charge = fiado (deuda sube), payment = abono (deuda baja)
+-  notes?: string;
+-  created_at: string;
++  delta: number;
++  note: string | null;
++  sale_id: string | null;
++  occurred_at: string;
++  user_name: string | null;
+ }
+diff --git a/src/modules/pos/PosPage.tsx b/src/modules/pos/PosPage.tsx
+index f5d332c..c0587a1 100644
+--- a/src/modules/pos/PosPage.tsx
++++ b/src/modules/pos/PosPage.tsx
+@@ -14,6 +14,9 @@ import {
+ import type { ShiftSummary } from "./shiftSummary";
+ import { PAYMENT_LABELS, type CurrentShift, type PaymentMethod, type PosEntry } from "./types";
+ import { useScanner } from "./useScanner";
++import { loadAccounts } from "../customers/api";
++import { exceedsLimit, filterAccounts } from "../customers/balance";
++import type { CustomerAccount } from "../customers/types";
+ 
+ type Stage = { kind: "loading" } | { kind: "register" } | { kind: "open"; register: RegisterOption } | { kind: "selling"; shift: CurrentShift };
+ 
+@@ -126,7 +129,7 @@ function OpenShiftForm({ register, onOpened, onChangeRegister }: {
+   );
+ }
+ 
+-const SELLING_METHODS: PaymentMethod[] = ["cash", "transfer", "qr"];
++const SELLING_METHODS: PaymentMethod[] = ["cash", "transfer", "qr", "credit"];
+ 
+ function Register({ shift, onClosed }: { shift: CurrentShift; onClosed: () => void }) {
+   const { products, isLoading, isOffline } = useCatalog();
+@@ -139,6 +142,7 @@ function Register({ shift, onClosed }: { shift: CurrentShift; onClosed: () => vo
+   const [feedback, setFeedback] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+   const [charging, setCharging] = useState(false);
+   const [closing, setClosing] = useState(false);
++  const [customer, setCustomer] = useState<CustomerAccount | null>(null);
+   const scanRef = useRef<HTMLInputElement>(null);
+ 
+   const total = cartTotal(lines);
+@@ -182,11 +186,22 @@ function Register({ shift, onClosed }: { shift: CurrentShift; onClosed: () => vo
+   async function charge() {
+     setCharging(true);
+     try {
+-      const payload = buildSalePayload(lines, { shiftId: shift.id, paymentMethod: method, newId: () => crypto.randomUUID() });
++      const payload = buildSalePayload(lines, {
++        shiftId: shift.id,
++        paymentMethod: method,
++        ...(method === "credit" && customer ? { customerId: customer.id } : {}),
++        newId: () => crypto.randomUUID()
++      });
+       await enqueueOperation({ kind: "sale", payload });
+       dispatch({ type: "clear" });
+       setMethod("cash");
+-      setFeedback({ tone: "ok", text: `Venta guardada: ${formatMoney(payload.totalAmount)} en ${PAYMENT_LABELS[payload.paymentMethod].toLowerCase()}.` });
++      setCustomer(null);
++      setFeedback({
++        tone: "ok",
++        text: payload.paymentMethod === "credit" && customer
++          ? `Fiado guardado: ${formatMoney(payload.totalAmount)} a la cuenta de ${customer.name}.`
++          : `Venta guardada: ${formatMoney(payload.totalAmount)} en ${PAYMENT_LABELS[payload.paymentMethod].toLowerCase()}.`
++      });
+       void synchronizePendingOperations().catch(() => undefined);
+     } catch (err) {
+       setFeedback({ tone: "error", text: err instanceof Error ? err.message : "No se pudo guardar la venta." });
+@@ -280,7 +295,10 @@ function Register({ shift, onClosed }: { shift: CurrentShift; onClosed: () => vo
+           ))}
+         </fieldset>
+ 
+-        <Button className="pos-charge" onClick={() => void charge()} disabled={lines.length === 0} loading={charging}>
++        {method === "credit" && <CustomerPicker selected={customer} onSelect={setCustomer} saleTotal={total} />}
++
++        <Button className="pos-charge" onClick={() => void charge()}
++          disabled={lines.length === 0 || (method === "credit" && !customer)} loading={charging}>
+           Cobrar {lines.length > 0 ? formatMoney(total) : ""}
+         </Button>
+         <Button variant="fantasma" onClick={() => dispatch({ type: "clear" })} disabled={lines.length === 0}>Vaciar</Button>
+@@ -305,6 +323,50 @@ function Register({ shift, onClosed }: { shift: CurrentShift; onClosed: () => vo
+   );
+ }
+ 
++function CustomerPicker({ selected, onSelect, saleTotal }: {
++  selected: CustomerAccount | null; onSelect: (account: CustomerAccount | null) => void; saleTotal: number;
++}) {
++  const [accounts, setAccounts] = useState<CustomerAccount[] | null>(null);
++  const [error, setError] = useState<string | null>(null);
++  const [text, setText] = useState("");
++
++  useEffect(() => {
++    loadAccounts()
++      .then((result) => setAccounts(result.accounts.filter((a) => a.active)))
++      .catch((err: unknown) => setError(err instanceof Error ? err.message : "No se pudieron cargar los clientes."));
++  }, []);
++
++  if (selected) {
++    const over = exceedsLimit(selected, saleTotal);
++    return (
++      <div className="notice" role="status">
++        <p><strong>{selected.name}</strong> · saldo {formatMoney(selected.balance)}
++          {selected.credit_limit !== null ? ` · tope ${formatMoney(selected.credit_limit)}` : ""}</p>
++        {over && <p className="form-error">Con esta venta supera su tope de fiado. Confirmá con la dueña antes de cobrar.</p>}
++        <Button variant="fantasma" onClick={() => onSelect(null)}>Cambiar cliente</Button>
++      </div>
++    );
++  }
++
++  const matches = accounts ? filterAccounts(accounts, text).slice(0, 6) : [];
++  return (
++    <div>
++      <TextField label="Cliente del fiado" placeholder="Nombre o teléfono" value={text} onChange={(e) => setText(e.target.value)} />
++      {error && <p className="form-error" role="alert">{error}</p>}
++      {text && accounts && matches.length === 0 && <p className="field-help">No aparece. Se da de alta en Clientes.</p>}
++      <ul className="pos-results">
++        {text && matches.map((account) => (
++          <li key={account.id}>
++            <Button variant="fantasma" onClick={() => onSelect(account)}>
++              <span>{account.name}</span><span>{formatMoney(account.balance)}</span>
++            </Button>
++          </li>
++        ))}
++      </ul>
++    </div>
++  );
++}
++
+ function WeightDialog({ entry, onConfirm, onCancel }: { entry: PosEntry; onConfirm: (weight: number) => void; onCancel: () => void }) {
+   const [value, setValue] = useState("");
+   const weight = Number(value.replace(",", "."));
+diff --git a/src/shared/components/AppShell.tsx b/src/shared/components/AppShell.tsx
+index a12776d..d6a230a 100644
+--- a/src/shared/components/AppShell.tsx
++++ b/src/shared/components/AppShell.tsx
+@@ -3,7 +3,7 @@ import { AuthGate, useCurrentProfile } from "../auth/AuthGate";
+ import { signOut } from "../auth/session";
+ import type { AppRole } from "../auth/roles";
+ 
+-export type ShellSection = "catalog" | "pos" | "admin";
++export type ShellSection = "catalog" | "pos" | "customers" | "admin";
+ 
+ type AppShellProps = PropsWithChildren<{
+   active: ShellSection;
+@@ -34,6 +34,7 @@ function ShellLayout({ active, title, children }: PropsWithChildren<{ active: Sh
+         <nav aria-label="Navegación principal">
+           <a className={active === "catalog" ? "active" : ""} href="/catalog.html">Catálogo</a>
+           <a className={active === "pos" ? "active" : ""} href="/pos.html">Caja</a>
++          <a className={active === "customers" ? "active" : ""} href="/customers.html">Clientes</a>
+           {isAdmin && <a className={active === "admin" ? "active" : ""} href="/admin.html">Administración</a>}
+         </nav>
+         <button className="button button-secondary" onClick={() => void signOut().then(() => location.assign("/"))}>
+diff --git a/supabase/migrations/20260923120000_clientes_saldos.sql b/supabase/migrations/20260923120000_clientes_saldos.sql
+new file mode 100644
+index 0000000..26c8ce8
+--- /dev/null
++++ b/supabase/migrations/20260923120000_clientes_saldos.sql
+@@ -0,0 +1,157 @@
++-- ==============================================================================
++-- Alverde · Clientes y fiado (RF-45 a RF-48). Migración incremental.
++-- Tests: supabase/tests/clientes_fiado_test.sql
++-- ==============================================================================
++
++-- RF-48 · "Ajustar o perdonar": un ajuste puede subir la deuda (inflación) o bajarla (perdón).
++-- amount sigue siendo > 0; el sentido lo da adjustment_sign. Los cargos y abonos no lo usan.
++alter table public.credit_movements
++  add column if not exists adjustment_sign smallint check (adjustment_sign in (-1, 1));
++
++update public.credit_movements set adjustment_sign = -1
++where kind = 'adjustment' and adjustment_sign is null;
++
++alter table public.credit_movements
++  drop constraint if exists credit_movements_adjustment_sign_required;
++alter table public.credit_movements
++  add constraint credit_movements_adjustment_sign_required
++  check ((kind = 'adjustment') = (adjustment_sign is not null));
++
++-- RF-46 · El saldo es la suma de los movimientos, nunca un campo que se pisa.
++create or replace function public.credit_movement_delta(
++  p_kind public.credit_movement_kind, p_amount numeric, p_sign smallint
++) returns numeric
++language sql
++immutable
++set search_path = public
++as $$
++  select case p_kind
++    when 'charge' then p_amount
++    when 'payment' then -p_amount
++    else p_amount * coalesce(p_sign, -1)
++  end
++$$;
++
++-- Cuentas de clientes con saldo. Los empleados necesitan ver el saldo y el tope para decidir
++-- un fiado; no hay costos acá (RNF-04). security_invoker = false porque credit_movements solo
++-- deja ver a cada empleado sus propios movimientos.
++create or replace view public.customer_accounts
++with (security_invoker = false)
++as
++select
++  c.id,
++  c.name,
++  c.phone,
++  c.credit_limit,
++  c.active,
++  coalesce(sum(public.credit_movement_delta(m.kind, m.amount, m.adjustment_sign)), 0)::numeric(14, 2) as balance,
++  max(m.occurred_at) as last_movement_at
++from public.customers c
++left join public.credit_movements m on m.customer_id = c.id
++group by c.id;
++
++revoke all on public.customer_accounts from anon, public;
++grant select on public.customer_accounts to authenticated;
++
++-- Historial de una cuenta (lo que el cliente pregunta: "¿de qué es esta deuda?").
++create or replace function public.customer_movements(p_customer_id uuid)
++returns table (
++  id uuid, kind public.credit_movement_kind, amount numeric, delta numeric,
++  note text, sale_id uuid, occurred_at timestamptz, user_name text
++)
++language sql
++stable
++security definer
++set search_path = public
++as $$
++  select m.id, m.kind, m.amount, public.credit_movement_delta(m.kind, m.amount, m.adjustment_sign),
++         m.note, m.sale_id, m.occurred_at, p.display_name
++  from public.credit_movements m
++  left join public.profiles p on p.id = m.user_id
++  where m.customer_id = p_customer_id and auth.uid() is not null
++  order by m.occurred_at desc
++  limit 200
++$$;
++
++revoke execute on function public.customer_movements(uuid) from anon, public;
++grant execute on function public.customer_movements(uuid) to authenticated;
++
++-- apply_offline_operation v3: agrega adjustmentSign. Mantiene las reglas de 20260923100000.
++create or replace function public.apply_offline_operation(p_operation jsonb)
++returns boolean
++language plpgsql
++security definer
++set search_path = public
++as $$
++declare
++  v_local_id uuid := (p_operation ->> 'localId')::uuid;
++  v_device_id uuid := (p_operation ->> 'deviceId')::uuid;
++  v_kind public.offline_operation_kind := (p_operation ->> 'kind')::public.offline_operation_kind;
++  v_occurred_at timestamptz := coalesce((p_operation ->> 'createdAt')::timestamptz, now());
++  v_payload jsonb := p_operation -> 'payload';
++  v_credit_kind public.credit_movement_kind;
++  v_sign smallint;
++begin
++  if auth.uid() is null then
++    raise exception 'Authentication required';
++  end if;
++
++  if v_kind = 'sale' then
++    raise exception 'Las ventas se registran con process_offline_sale.' using errcode = '22023';
++  end if;
++
++  if v_kind = 'stock_movement' and not public.is_administrator() then
++    raise exception 'Solo la administradora registra movimientos de stock.' using errcode = '42501';
++  end if;
++
++  if v_kind = 'credit_movement' then
++    v_credit_kind := (v_payload ->> 'movementKind')::public.credit_movement_kind;
++    if v_credit_kind = 'adjustment' then
++      if not public.is_administrator() then
++        raise exception 'Solo la administradora ajusta o perdona deudas (RF-48).' using errcode = '42501';
++      end if;
++      v_sign := coalesce(nullif(v_payload ->> 'adjustmentSign', '')::smallint, -1);
++    end if;
++  end if;
++
++  insert into public.offline_operations(local_id, device_id, kind, payload, occurred_at, received_by)
++  values (v_local_id, v_device_id, v_kind, v_payload, v_occurred_at, auth.uid())
++  on conflict (device_id, local_id) do nothing;
++
++  if not found then
++    return true;
++  end if;
++
++  if v_kind = 'stock_movement' then
++    insert into public.stock_movements(local_id, kind, product_id, lot_id, quantity, reason, user_id, occurred_at)
++    values (
++      v_local_id,
++      (v_payload ->> 'movementKind')::public.stock_movement_kind,
++      (v_payload ->> 'productId')::uuid,
++      nullif(v_payload ->> 'lotId', '')::uuid,
++      (v_payload ->> 'quantity')::numeric,
++      v_payload ->> 'reason',
++      auth.uid(),
++      v_occurred_at
++    );
++  elsif v_kind = 'credit_movement' then
++    insert into public.credit_movements(local_id, customer_id, sale_id, kind, amount, adjustment_sign, note, user_id, occurred_at)
++    values (
++      v_local_id,
++      (v_payload ->> 'customerId')::uuid,
++      nullif(v_payload ->> 'saleId', '')::uuid,
++      v_credit_kind,
++      (v_payload ->> 'amount')::numeric,
++      v_sign,
++      v_payload ->> 'note',
++      auth.uid(),
++      v_occurred_at
++    );
++  end if;
++
++  return true;
++end;
++$$;
++
++revoke execute on function public.apply_offline_operation(jsonb) from anon, public;
++grant execute on function public.apply_offline_operation(jsonb) to authenticated;
+diff --git a/supabase/tests/clientes_fiado_test.sql b/supabase/tests/clientes_fiado_test.sql
+new file mode 100644
+index 0000000..06ef86e
+--- /dev/null
++++ b/supabase/tests/clientes_fiado_test.sql
+@@ -0,0 +1,56 @@
++-- Tests de 20260923120000_clientes_saldos.sql (RF-45 a RF-48).
++begin;
++select plan(11);
++
++insert into auth.users (id, email) values
++  ('00000000-0000-0000-0000-0000000000a1', 'admin@test'),
++  ('00000000-0000-0000-0000-0000000000e1', 'emp@test'),
++  ('00000000-0000-0000-0000-0000000000e2', 'emp2@test');
++update public.profiles set role = 'administrator' where id = '00000000-0000-0000-0000-0000000000a1';
++insert into public.customers (id, name, phone, credit_limit) values ('00000000-0000-0000-0000-0000000000d1', 'Marta', '1155550000', 20000);
++
++create function pg_temp.op(p_kind text, p_amount numeric, p_sign int default null) returns jsonb language sql as $$
++  select jsonb_build_object('localId', gen_random_uuid(), 'deviceId', gen_random_uuid(), 'kind', 'credit_movement', 'createdAt', now(),
++    'payload', jsonb_build_object('customerId', '00000000-0000-0000-0000-0000000000d1', 'movementKind', p_kind, 'amount', p_amount,
++      'adjustmentSign', p_sign, 'note', 'test'))
++$$;
++-- Desde 20260923100000 las funciones nuevas no son ejecutables por defecto: se concede explícito.
++grant execute on function pg_temp.op(text, numeric, int) to authenticated;
++
++-- Empleado 1 fía 5000; empleado 2 cobra un abono de 2000 (un saldo, dos cajeros).
++set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000e1';
++set role authenticated;
++select ok(public.apply_offline_operation(pg_temp.op('charge', 5000)), 'Empleado registra un fiado');
++reset role;
++set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000e2';
++set role authenticated;
++select ok(public.apply_offline_operation(pg_temp.op('payment', 2000)), 'Otro empleado registra un abono');
++select is((select balance from public.customer_accounts where id = '00000000-0000-0000-0000-0000000000d1'), 3000.00::numeric,
++  'RF-46: el saldo suma cargos y abonos de todos los cajeros, aunque el empleado solo vea sus movimientos');
++select is((select credit_limit from public.customer_accounts where id = '00000000-0000-0000-0000-0000000000d1'), 20000.00::numeric,
++  'RF-47: el empleado ve el tope para decidir el fiado');
++select is((select count(*)::int from public.customer_movements('00000000-0000-0000-0000-0000000000d1')), 2,
++  'El historial muestra los movimientos de todos los cajeros');
++select throws_ok($$select public.apply_offline_operation(pg_temp.op('adjustment', 1000, 1))$$, '42501', null,
++  'RF-48: el empleado no ajusta deudas');
++reset role;
++
++-- Administradora: sube por inflación 1000 y después perdona 500.
++set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000a1';
++set role authenticated;
++select ok(public.apply_offline_operation(pg_temp.op('adjustment', 1000, 1)), 'Administradora ajusta la deuda hacia arriba');
++select ok(public.apply_offline_operation(pg_temp.op('adjustment', 500, -1)), 'Administradora perdona parte de la deuda');
++select is((select balance from public.customer_accounts where id = '00000000-0000-0000-0000-0000000000d1'), 3500.00::numeric,
++  'RF-48: 3000 + 1000 − 500 = 3500');
++reset role;
++
++select throws_ok($$insert into public.credit_movements (local_id, customer_id, kind, amount, user_id, occurred_at)
++  values (gen_random_uuid(), '00000000-0000-0000-0000-0000000000d1', 'adjustment', 10, '00000000-0000-0000-0000-0000000000a1', now())$$,
++  '23514', null, 'Un ajuste sin sentido (+/−) no se acepta');
++
++set role anon;
++select throws_ok('select * from public.customer_accounts', '42501', null, 'anon no ve cuentas de clientes');
++reset role;
++
++select * from finish();
++rollback;
+diff --git a/vite.config.ts b/vite.config.ts
+index 82317f2..2ef14db 100644
+--- a/vite.config.ts
++++ b/vite.config.ts
+@@ -11,7 +11,8 @@ export default defineConfig({
+         login: fileURLToPath(new URL("./index.html", import.meta.url)),
+         catalog: fileURLToPath(new URL("./catalog.html", import.meta.url)),
+         admin: fileURLToPath(new URL("./admin.html", import.meta.url)),
+-        pos: fileURLToPath(new URL("./pos.html", import.meta.url))
++        pos: fileURLToPath(new URL("./pos.html", import.meta.url)),
++        customers: fileURLToPath(new URL("./customers.html", import.meta.url))
+       }
+     }
+   }
+-- 
+2.43.0
+

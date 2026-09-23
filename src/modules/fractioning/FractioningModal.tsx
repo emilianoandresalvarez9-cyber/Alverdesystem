@@ -114,72 +114,17 @@ export function FractioningModal({ originLot, open, onClose, onSuccess }: Fracti
       // Transacción emulada secuencial (o RPC si estuviera, pero no hay RPC en Fase 0 para esto, hacemos insert y update)
       // Asegurar que el lote origen esté abierto si no lo estaba
       const originOpenedAt = originLot.opened_at || new Date().toISOString();
-      const now = new Date().toISOString();
-
-      // 1. Movimiento de salida del lote origen
-      const { error: err1 } = await supabase.from("stock_movements").insert({
-        local_id: crypto.randomUUID(),
-        kind: "portioning",
-        product_id: originLot.product_id,
-        lot_id: originLot.id,
-        quantity: -calc.gramsNeeded,
-        reason: `Fraccionamiento: ${packetsNum} unidades de ${targetPresentation.name}`,
-        user_id: userId,
-        occurred_at: now
+      const { error: rpcErr } = await supabase.rpc('fraction_stock', {
+        p_origin_lot_id: originLot.id,
+        p_target_presentation_id: targetPresentation.id,
+        p_packets_num: packetsNum,
+        p_grams_needed: calc.gramsNeeded,
+        p_merma: calc.merma,
+        p_new_origin_quantity: calc.newOriginQuantity,
+        p_origin_lot_status: calc.originLotStatus
       });
-      if (err1) throw err1;
 
-      // 2. Si hay merma (bolsa terminada y sobraba algo teórico), movimiento de merma
-      if (calc.merma > 0) {
-        const { error: errMerma } = await supabase.from("stock_movements").insert({
-          local_id: crypto.randomUUID(),
-          kind: "waste",
-          product_id: originLot.product_id,
-          lot_id: originLot.id,
-          quantity: -calc.merma,
-          reason: `Merma por cierre de bolsa en fraccionamiento`,
-          user_id: userId,
-          occurred_at: now
-        });
-        if (errMerma) throw errMerma;
-      }
-
-      // 3. Crear nuevo lote para la presentación destino (las bolsitas)
-      const { data: targetLot, error: errLot } = await supabase.from("stock_lots").insert({
-        presentation_id: targetPresentation.id,
-        supplier_id: originLot.supplier_id,
-        initial_quantity: packetsNum,
-        current_quantity: packetsNum,
-        purchase_cost: originLot.purchase_cost, // Opcional, podría prorratearse
-        received_at: originLot.received_at, // Hereda ingreso original
-        manufacturer_expiry_date: originLot.manufacturer_expiry_date,
-        opened_at: now, // Las bolsitas ya nacen "abiertas"/activas para la venta
-        portioned_at: now,
-        status: "open"
-      }).select("id").single();
-      if (errLot) throw errLot;
-
-      // 4. Movimiento de entrada para el lote destino
-      const { error: err2 } = await supabase.from("stock_movements").insert({
-        local_id: crypto.randomUUID(),
-        kind: "portioning",
-        product_id: originLot.product_id,
-        lot_id: targetLot.id,
-        quantity: packetsNum,
-        reason: `Alta por fraccionamiento desde lote origen (Ref: ${originLot.id.split("-")[0]})`,
-        user_id: userId,
-        occurred_at: now
-      });
-      if (err2) throw err2;
-
-      // 5. Actualizar el lote origen con nuevo stock y estado
-      const { error: errUpdate } = await supabase.from("stock_lots").update({
-        current_quantity: calc.newOriginQuantity,
-        status: calc.originLotStatus,
-        opened_at: originOpenedAt
-      }).eq("id", originLot.id);
-      
-      if (errUpdate) throw errUpdate;
+      if (rpcErr) throw rpcErr;
 
       onSuccess();
       onClose();
@@ -306,3 +251,4 @@ export function FractioningModal({ originLot, open, onClose, onSuccess }: Fracti
     </Modal>
   );
 }
+

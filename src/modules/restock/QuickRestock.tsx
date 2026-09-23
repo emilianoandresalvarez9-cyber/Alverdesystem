@@ -121,36 +121,14 @@ export function QuickRestock({ onSuccess }: QuickRestockProps) {
       const userId = userData.user?.id;
       if (!userId) throw new Error("Sesión requerida");
 
-      // Insertar en stock_lots (purchase_cost: 0 por defecto para protección RNF-04)
-      const lotPayload = {
-        presentation_id: foundPresentation.presentation_id,
-        initial_quantity: qty,
-        current_quantity: qty,
-        purchase_cost: 0,
-        status: "open" as const,
-        manufacturer_expiry_date: expiryDate || null,
-        received_at: new Date().toISOString(),
-      };
-
-      const { data: insertedLot, error: lotErr } = await supabase
-        .from("stock_lots")
-        .insert(lotPayload)
-        .select("id")
-        .single();
-
-      if (lotErr) throw lotErr;
-
-      // Registrar movimiento de stock (receipt)
-      await supabase.from("stock_movements").insert({
-        local_id: crypto.randomUUID(),
-        kind: "receipt" as const,
-        product_id: foundPresentation.product_id,
-        lot_id: insertedLot.id,
-        quantity: qty,
-        reason: "Ingreso rápido de mercadería (RF-51)",
-        user_id: userId,
-        occurred_at: new Date().toISOString(),
+      const { error: rpcErr } = await supabase.rpc('quick_restock', {
+        p_presentation_id: foundPresentation.presentation_id,
+        p_product_id: foundPresentation.product_id,
+        p_quantity: qty,
+        p_expiry_date: expiryDate || null
       });
+
+      if (rpcErr) throw rpcErr;
 
       setSuccessMsg(`Lote ingresado exitosamente: ${qty} unidad(es) de ${foundPresentation.product_name} (${foundPresentation.presentation_name})`);
       setFoundPresentation(null);
@@ -218,3 +196,5 @@ export function QuickRestock({ onSuccess }: QuickRestockProps) {
     </GlassCard>
   );
 }
+
+
