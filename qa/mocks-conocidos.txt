@@ -1,4 +1,3 @@
 # Archivos de producción que TODAVÍA contienen datos mock.
 # Esta lista solo puede achicarse: scripts/qa-guard.mjs falla si aparece un mock nuevo
 # o si un archivo de esta lista ya no tiene mocks y no se lo quitó.
-src/modules/customers/CustomersPage.tsx
