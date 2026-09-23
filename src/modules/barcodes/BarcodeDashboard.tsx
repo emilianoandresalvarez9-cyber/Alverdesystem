@@ -23,7 +23,9 @@ export function BarcodeDashboard() {
       .single();
 
     if (presData && presData.product) {
-      const prod = Array.isArray(presData.product) ? presData.product[0] : presData.product;
+      type ProductRelation = { id: string; name: string; base_unit: string; active: boolean };
+      const rawProd = presData.product as unknown as ProductRelation | ProductRelation[];
+      const prod = Array.isArray(rawProd) ? rawProd[0] : rawProd;
       if (!prod) return;
       const isBulk = prod.base_unit === "gram";
       setLookupResult({

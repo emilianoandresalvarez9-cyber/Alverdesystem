@@ -53,8 +53,9 @@ export function FractioningModal({ originLot, open, onClose, onSuccess }: Fracti
             base_unit: (Array.isArray(d.product) ? d.product[0]?.base_unit : d.product?.base_unit) || "gram"
           }));
           setTargetPresentations(options);
-          if (options.length > 0 && options[0]) {
-            setSelectedPresentationId(options[0].id);
+          const firstOpt = options[0];
+          if (firstOpt) {
+            setSelectedPresentationId(firstOpt.id);
           }
         }
       } catch (err) {
