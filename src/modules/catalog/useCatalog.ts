@@ -35,32 +35,46 @@ export function useCatalog(): UseCatalogReturn {
   const fetchFromSupabase = useCallback(async () => {
     const sb = getSupabase();
 
-    const [productsRes, brandsRes, categoriesRes, labelsRes] = await Promise.all([
-      sb.from("products")
-        .select(`
-          id, name, manufacturer_barcode, base_unit, open_shelf_life_days, label_text, active,
-          brand:brands(id, name, archived_at),
-          category:categories(id, name, parent_id, archived_at),
-          labels:product_labels(label:labels(id, name, archived_at)),
-          presentations:product_presentations(id, name, base_quantity, internal_barcode, sale_price, active)
-        `)
-        .eq("active", true)
-        .order("name"),
+    const [catalogRes, brandsRes, categoriesRes, labelsRes] = await Promise.all([
+      sb.from("employee_catalog").select("*").order("product_name"),
       sb.from("brands").select("id, name, archived_at").is("archived_at", null).order("name"),
       sb.from("categories").select("id, name, parent_id, archived_at").is("archived_at", null).order("name"),
       sb.from("labels").select("id, name, archived_at").is("archived_at", null).order("name"),
     ]);
 
-    if (productsRes.error) throw new Error(productsRes.error.message);
+    if (catalogRes.error) throw new Error(catalogRes.error.message);
 
-    // Normalizar la estructura de labels (viene como product_labels > label)
-    const normalized = (productsRes.data ?? []).map((p: any) => ({
-      ...p,
-      labels: (p.labels ?? []).map((pl: any) => pl.label).filter(Boolean),
-    })) as CatalogProduct[];
+    const productMap = new Map<string, CatalogProduct>();
+
+    for (const row of catalogRes.data || []) {
+      if (!productMap.has(row.product_id)) {
+        productMap.set(row.product_id, {
+          id: row.product_id,
+          name: row.product_name,
+          manufacturer_barcode: row.manufacturer_barcode,
+          base_unit: row.base_unit as any,
+          open_shelf_life_days: row.open_shelf_life_days,
+          label_text: row.label_text,
+          active: true, // filtered by view
+          brand: row.brand_id ? { id: row.brand_id, name: row.brand_name, archived_at: null } : null,
+          category: row.category_id ? { id: row.category_id, name: row.category_name, parent_id: null, archived_at: null } : null,
+          labels: row.labels || [],
+          presentations: []
+        });
+      }
+
+      productMap.get(row.product_id)!.presentations.push({
+        id: row.presentation_id,
+        name: row.presentation_name,
+        base_quantity: row.base_quantity,
+        internal_barcode: row.internal_barcode,
+        sale_price: row.sale_price,
+        active: true
+      });
+    }
 
     return {
-      products: normalized,
+      products: Array.from(productMap.values()),
       brands: (brandsRes.data ?? []) as Brand[],
       categories: (categoriesRes.data ?? []) as Category[],
       labels: (labelsRes.data ?? []) as Label[],
