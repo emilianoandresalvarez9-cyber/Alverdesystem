@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Alverde · hoja global (Agente D — RNF-06 a RNF-09)
  * --------------------------------------------------
  * Reemplaza a la global.css de Fase 0 manteniendo TODAS sus clases
@@ -60,16 +60,24 @@ button { cursor: pointer; }
 /* ---------- Superficies glass ---------- */
 
 .glass {
+  background: rgba(244, 255, 240, 0.13);
   background: var(--glass-fondo);
   border: 1px solid var(--glass-borde);
   box-shadow: var(--glass-sombra);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
+}
+
+html.sin-blur .glass {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 /* Variante barata para elementos repetidos (filas, tarjetas de listas):
  * sin blur, para no fundir la notebook de la caja. Máximo una o dos
  * superficies .glass con blur por pantalla; el resto, .glass-lite. */
 .glass-lite {
+  background: rgba(244, 255, 240, 0.09);
   background: var(--glass-fondo-lite);
   border: 1px solid var(--glass-borde);
   box-shadow: none;
