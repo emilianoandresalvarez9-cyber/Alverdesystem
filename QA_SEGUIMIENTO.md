@@ -306,3 +306,50 @@ Si bien el código actual está listo para mergear e iniciar los módulos restan
 ### Declaración Final
 
 El sistema cumple con el 100% de los requisitos estipulados para la **Fase 0**, **Fase 1** y el **Agente E de la Fase 2**. Se autoriza el avance a las siguientes tareas del ciclo de desarrollo.
+
+---
+
+## 🔬 11. Informe de Auditoría Secundaria QA — Agente F (Fraccionamiento) y Agente G (Barras)
+
+**Ficha Técnica de Evaluación:**
+- **Auditor / Evaluador:** Antigravity (Secondary QA).
+- **Fecha de Dictamen:** 23 de Septiembre de 2026.
+- **Ramas Auditadas:** gente-g-barras (que incluye el código no commiteado de ambos agentes).
+- **Dictamen:** ❌ **RECHAZADO (REJECTED) - Se requieren correcciones antes del merge**.
+
+### Hallazgos de Auditoría (Agente F - Fraccionamiento)
+El Agente F implementó correctamente la Regla de Oro mediante el trigger 	rg_stock_lots_single_open en base de datos. La lógica de cálculo de mermas en ractioningLogic.ts es correcta matemáticamente.
+- **Error Crítico de Tipado en UI:** src/modules/fractioning/BulkDashboard.tsx(36,27) falla en el 	ypecheck porque se le está pasando la prop enableFractioning a un componente (probablemente StockLotsTable) que no la define en su interfaz.
+- **Error de Tipado (Posible undefined):** src/modules/fractioning/FractioningModal.tsx(57,39) falla por validación estricta de strictNullChecks / 
+oUncheckedIndexedAccess.
+
+### Hallazgos de Auditoría (Agente G - Códigos de Barra)
+El Agente G cumplió con la arquitectura de EAN-13 vectorial en SVG puro sin dependencias (BarcodeSvg.tsx) y con el listener de teclado cuña (BarcodeScannerTester.tsx). Sin embargo, fallan las pruebas y el tipado:
+- **Error de Tipado en arrays y strings:** src/modules/barcodes/ean13.ts tiene errores TS2538 y TS2345. Acceder a caracteres de un string (code[12]) o a índices de arreglos falla en modo estricto de TypeScript (
+oUncheckedIndexedAccess). Se requiere usar aserciones no nulas (!) o comprobaciones.
+- **Error Lógico en Test EAN-13 Interno (Línea 39):** La prueba alidateEan13("2012345678906") falla. El dígito verificador módulo 10 para 201234567890 es 3, no 6. El código enviado es inválido, haciendo que .valid retorne alse, rompiendo el test.
+- **Error Lógico en Test de Generador EAN-13 (Línea 61):** La prueba espera que generateInternalEan13(5, 21) genere "2100000000054". El cálculo correcto del verificador para 210000000005 es  . El código genera correctamente "2100000000050", pero el test estaba mal calculado.
+
+### Instrucciones para el Desarrollador (Próximos Pasos):
+Se solicita corregir los errores de TypeScript en modo estricto en los archivos indicados y corregir las expectativas matemáticas en las pruebas unitarias de ean13.test.ts. **No realizar merge hasta que 
+pm run typecheck ; npm run test devuelvan código 0.**
+
+---
+
+## 🔬 12. Informe de Auditoría Secundaria QA — Correcciones Agente F (Fraccionamiento)
+
+**Ficha Técnica de Evaluación:**
+- **Auditor / Evaluador:** Antigravity (Secondary QA).
+- **Fecha de Dictamen:** 23 de Septiembre de 2026.
+- **Ramas Auditadas:** agente-f-fraccionamiento
+- **Dictamen:** ✅ **APROBADO (APPROVED)**.
+
+### Hallazgos de Auditoría (Agente F - Fraccionamiento)
+- **Corrección de Regla de Oro UI:** Se integró el helper `hasActiveOpenBag` en la tabla de lotes y el botón "Abrir bolsa" queda bloqueado (con alerta visual) si el producto ya tiene un lote abierto, cumpliendo al 100% con RF-11 y RF-12 tanto a nivel DB como UI.
+- **Cálculo de Merma:** Se verificó el cumplimiento de RF-15 y RF-16 en la prueba unitaria y en el `FractioningModal`.
+- **Vida Útil:** El componente `ShelfLifeManager` asigna masivamente días correctamente (RF-17, RF-17b).
+- **Tipado Fuerte:** Se eliminaron los problemas de typecheck de `BulkDashboard` (agregando la prop `enableFractioning` a `StockLotsTable` de manera opcional) y se cuidaron las dependencias opcionales. El comando `npm run typecheck` retorna 0 errores.
+- **Pruebas:** Los tests unitarios en Vitest pasan correctamente (25/25), incluyéndose correcciones a los falsos negativos de pruebas de EAN-13 pre-existentes en otra rama que bloqueaban `npm test`.
+
+### Conclusión
+Se autoriza el avance e integración de la rama `agente-f-fraccionamiento`.

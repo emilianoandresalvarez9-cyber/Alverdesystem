@@ -6,12 +6,14 @@ import { StockDashboard } from "../modules/stock";
 import { ClassifierManager } from "../modules/admin/ClassifierManager";
 import { QuickRestock } from "../modules/restock/QuickRestock";
 import { RepositionList } from "../modules/restock/RepositionList";
+import { BarcodeDashboard } from "../modules/barcodes";
+import { BulkDashboard } from "../modules/fractioning";
 import { Button, GlassCard } from "../shared/ui";
 
-type AdminTab = "stock" | "classifiers" | "restock" | "settings";
+type AdminTab = "stock" | "fractioning" | "classifiers" | "restock" | "barcodes" | "settings";
 
 export function AdminPage() {
-  const [activeTab, setActiveTab] = useState<AdminTab>("stock");
+  const [activeTab, setActiveTab] = useState<AdminTab>("fractioning");
   const [classifierType, setClassifierType] = useState<"brand" | "category" | "label">("brand");
 
   return (
@@ -27,7 +29,14 @@ export function AdminPage() {
             variant={activeTab === "stock" ? "primario" : "fantasma"}
             onClick={() => setActiveTab("stock")}
           >
-            📦 Lotes y Vencimientos (FEFO)
+            📦 Lotes (FEFO)
+          </Button>
+
+          <Button
+            variant={activeTab === "fractioning" ? "primario" : "fantasma"}
+            onClick={() => setActiveTab("fractioning")}
+          >
+            ⚖️ Fraccionamiento y Granel
           </Button>
 
           <Button
@@ -45,6 +54,13 @@ export function AdminPage() {
           </Button>
 
           <Button
+            variant={activeTab === "barcodes" ? "primario" : "fantasma"}
+            onClick={() => setActiveTab("barcodes")}
+          >
+            🖨️ Códigos y Planilla
+          </Button>
+
+          <Button
             variant={activeTab === "settings" ? "primario" : "fantasma"}
             onClick={() => setActiveTab("settings")}
           >
@@ -54,6 +70,12 @@ export function AdminPage() {
 
         {/* Tab 1: Lotes y Vencimientos (Agente E) */}
         {activeTab === "stock" && <StockDashboard />}
+
+        {/* Tab 1.5: Fraccionamiento (Agente F) */}
+        {activeTab === "fractioning" && <BulkDashboard />}
+
+        {/* Tab 1.8: Códigos de Barra (Agente G) */}
+        {activeTab === "barcodes" && <BarcodeDashboard />}
 
         {/* Tab 2: Faltantes e Ingreso Rápido (Agente C) */}
         {activeTab === "restock" && (

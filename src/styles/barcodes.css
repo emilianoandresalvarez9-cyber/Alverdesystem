@@ -1,0 +1,49 @@
+/* src/styles/barcodes.css */
+
+/* Reglas de impresión exclusivas para la planilla de granel (RF-22) */
+@media print {
+  /* Ocultar la UI del dashboard, navegación y botones */
+  .no-print,
+  .app-sidebar,
+  .page-heading,
+  button,
+  header {
+    display: none !important;
+  }
+
+  /* El contenedor principal debe tomar toda la hoja sin márgenes de app */
+  body, html, .app-shell, .app-content {
+    background: white !important;
+    color: black !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+  }
+
+  /* Asegurarse que el blur de glassmorfismo no ensucie la hoja de impresión */
+  .glass {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Optimizar las tarjetas/celdas de códigos */
+  .bulk-sheet-print-area {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  /* Evitar cortes horribles en el medio de un código de barras */
+  .bulk-sheet-print-area > div {
+    page-break-inside: avoid;
+  }
+  
+  .bulk-sheet-print-area svg {
+    max-width: 100%;
+    /* Asegura el contraste para el láser Nictom */
+    shape-rendering: crispEdges;
+  }
+}

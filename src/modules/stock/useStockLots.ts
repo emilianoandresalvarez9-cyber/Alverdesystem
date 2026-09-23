@@ -93,6 +93,12 @@ export function useStockLots() {
     fetchLots();
   }, [fetchLots]);
 
+  const hasActiveOpenBag = useCallback((productId: string) => {
+    return lots.some(
+      (l) => l.product_id === productId && l.status === "open" && l.opened_at !== null && l.current_quantity > 0
+    );
+  }, [lots]);
+
   // RF-08 / RF-11: Abrir lote (registra opened_at)
   const markLotOpened = async (lotId: string) => {
     try {
@@ -105,8 +111,13 @@ export function useStockLots() {
 
       if (err) throw err;
       await fetchLots();
-    } catch (e) {
-      alert(e instanceof Error ? `Error al abrir lote: ${e.message}` : "Error al abrir lote");
+    } catch (e: any) {
+      const msg = e.message || "";
+      if (msg.includes("Regla de oro")) {
+        alert(msg); // Muestra el error estructurado de la base de datos
+      } else {
+        alert(`Error al abrir lote: ${msg}`);
+      }
     }
   };
 
@@ -206,6 +217,7 @@ export function useStockLots() {
     stats,
     refreshLots: fetchLots,
     markLotOpened,
+    hasActiveOpenBag,
     archiveProduct,
   };
 }

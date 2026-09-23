@@ -1,8 +1,15 @@
+import { useState } from "react";
 import { useStockLots } from "./useStockLots";
 import { StockLotsTable } from "./StockLotsTable";
 import { GlassCard, TextField, SelectField, Button } from "../../shared/ui";
+import { FractioningModal } from "../fractioning/FractioningModal";
+import type { StockLot } from "./types";
 
-export function StockDashboard() {
+interface StockDashboardProps {
+  enableFractioning?: boolean;
+}
+
+export function StockDashboard({ enableFractioning = false }: StockDashboardProps) {
   const {
     lots,
     loading,
@@ -12,7 +19,10 @@ export function StockDashboard() {
     stats,
     refreshLots,
     markLotOpened,
+    hasActiveOpenBag,
   } = useStockLots();
+
+  const [lotToFraction, setLotToFraction] = useState<StockLot | null>(null);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--esp-m)" }}>
@@ -147,6 +157,16 @@ export function StockDashboard() {
         loading={loading}
         onRefresh={refreshLots}
         onOpenLot={markLotOpened}
+        hasActiveOpenBag={hasActiveOpenBag}
+        enableFractioning={enableFractioning}
+        onFraction={(lot) => setLotToFraction(lot)}
+      />
+
+      <FractioningModal 
+        originLot={lotToFraction}
+        open={Boolean(lotToFraction)}
+        onClose={() => setLotToFraction(null)}
+        onSuccess={refreshLots}
       />
     </div>
   );
