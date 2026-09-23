@@ -43,8 +43,9 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: 2.117.0
-      # Aplica todas las migraciones y seed.sql sobre una base limpia.
-      - run: supabase db start
+      # Mismo arranque que el CI anterior, verde en main (run #46).
+      - run: supabase start
+      - run: supabase db reset
       # pg_prove devuelve código de salida distinto de 0 si falla cualquier test.
       # (El job anterior usaba `psql -f`, que devuelve 0 aunque los tests fallen.)
       - run: supabase test db
