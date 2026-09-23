@@ -1,12 +1,12 @@
 // src/modules/admin/ClassifierManager.tsx
-// Agente B — RF-03: crear, renombrar y archivar marcas, rubros y etiquetas
+// RF-03: crear, renombrar y archivar marcas, rubros y etiquetas
 //
-// NOTA DE COMPATIBILIDAD con el sistema de diseño (Agente D):
-// - SelectField usa children (<option>), NO prop options
-// - Badge usa children, NO prop label
-// - EmptyState usa prop title + children, NO prop message
-// - Button variants en español: "primario", "secundario", "fantasma", "peligro"
-// - TextField extiende InputHTMLAttributes: onChange es el evento nativo
+// Corregido respecto al codigo de Gemini:
+// - SelectField usa children (<option>) NO prop options
+// - Badge usa children NO prop label
+// - EmptyState usa title + children NO prop message
+// - Button variants en español: primario/secundario/fantasma/peligro
+// - useCallback en fetchItems para evitar loop infinito de renders
 
 import { useEffect, useState, useCallback } from "react";
 import { getSupabase } from "../../shared/supabase/client";
@@ -17,7 +17,7 @@ type ClassifierType = "brand" | "category" | "label";
 interface ClassifierItem {
   id: string;
   name: string;
-  parent_id?: string | null; // solo categories
+  parent_id?: string | null;
 }
 
 interface ClassifierManagerProps {
@@ -76,8 +76,7 @@ export function ClassifierManager({ type }: ClassifierManagerProps) {
       if (type === "category" && newParentId) payload.parent_id = newParentId;
       const { error: err } = await getSupabase().from(tableName).insert(payload);
       if (err) throw err;
-      setNewName("");
-      setNewParentId("");
+      setNewName(""); setNewParentId("");
       await fetchItems();
     } catch (e) {
       setError(e instanceof Error ? `Error al crear: ${e.message}` : "Error al crear");
@@ -88,9 +87,7 @@ export function ClassifierManager({ type }: ClassifierManagerProps) {
     setError(null);
     try {
       const { error: err } = await getSupabase()
-        .from(tableName)
-        .update({ archived_at: new Date().toISOString() })
-        .eq("id", id);
+        .from(tableName).update({ archived_at: new Date().toISOString() }).eq("id", id);
       if (err) throw err;
       setItems(prev => prev.filter(i => i.id !== id));
     } catch (e) {
@@ -103,9 +100,7 @@ export function ClassifierManager({ type }: ClassifierManagerProps) {
     setError(null);
     try {
       const { error: err } = await getSupabase()
-        .from(tableName)
-        .update({ name: editName.trim() })
-        .eq("id", id);
+        .from(tableName).update({ name: editName.trim() }).eq("id", id);
       if (err) throw err;
       setEditingId(null);
       await fetchItems();
@@ -120,21 +115,18 @@ export function ClassifierManager({ type }: ClassifierManagerProps) {
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--esp-m)" }}>
       <h2 style={{ margin: 0 }}>Gestionar {title}</h2>
 
-      {error && (
-        <p role="alert" style={{ color: "var(--color-error)", margin: 0 }}>{error}</p>
-      )}
+      {error && <p role="alert" style={{ color: "var(--color-error)", margin: 0 }}>{error}</p>}
 
-      {/* Formulario de creación */}
       <GlassCard>
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--esp-s)" }}>
-          <h3 style={{ margin: 0 }}>Agregar {title.toLowerCase().slice(0, -1)}</h3>
+          <h3 style={{ margin: 0 }}>Agregar nuevo</h3>
           <div style={{ display: "flex", gap: "var(--esp-s)", flexWrap: "wrap", alignItems: "flex-end" }}>
             <TextField
-              label={`Nombre`}
+              label="Nombre"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder={type === "brand" ? "Ej. Arcor" : type === "category" ? "Ej. Lácteos" : "Ej. Vegano"}
               onKeyDown={(e) => { if (e.key === "Enter") handleCreate(); }}
+              placeholder={type === "brand" ? "Ej. Arcor" : type === "category" ? "Ej. Lácteos" : "Ej. Vegano"}
             />
             {type === "category" && (
               <SelectField
@@ -148,18 +140,13 @@ export function ClassifierManager({ type }: ClassifierManagerProps) {
                 ))}
               </SelectField>
             )}
-            <Button
-              variant="primario"
-              onClick={handleCreate}
-              disabled={!newName.trim()}
-            >
+            <Button variant="primario" onClick={handleCreate} disabled={!newName.trim()}>
               Crear
             </Button>
           </div>
         </div>
       </GlassCard>
 
-      {/* Lista */}
       {loading ? (
         <GlassCard className="skeleton" style={{ minHeight: 80 }} />
       ) : items.length === 0 ? (
@@ -167,11 +154,10 @@ export function ClassifierManager({ type }: ClassifierManagerProps) {
           Usá el formulario de arriba para crear el primero.
         </EmptyState>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "var(--esp-s)" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--esp-xs)" }}>
           {items.map(item => (
             <GlassCard
-              key={item.id}
-              padding="compact"
+              key={item.id} padding="compact"
               style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--esp-s)" }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: "var(--esp-s)", flex: 1 }}>
@@ -180,7 +166,10 @@ export function ClassifierManager({ type }: ClassifierManagerProps) {
                     label=""
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") saveEdit(item.id); if (e.key === "Escape") setEditingId(null); }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveEdit(item.id);
+                      if (e.key === "Escape") setEditingId(null);
+                    }}
                     autoFocus
                   />
                 ) : (
@@ -192,7 +181,6 @@ export function ClassifierManager({ type }: ClassifierManagerProps) {
                   </Badge>
                 )}
               </div>
-
               <div style={{ display: "flex", gap: "var(--esp-xs)", flexShrink: 0 }}>
                 {editingId === item.id ? (
                   <>
