@@ -100,20 +100,33 @@ export function BarcodeDashboard() {
       return;
     }
 
+    let successCount = 0;
     for (const row of data) {
-      // Utilizamos un substring numérico del UUID de la presentación (truncado a 10 chars)
-      // para asegurar id único, o usamos el timestamp.
-      // Mejor: secuencia segura para la DB, pero como SQLite/Supabase UUID es string:
-      const numericId = row.id.replace(/\D/g, "").substring(0, 10) || Date.now().toString().substring(3, 13);
-      const newBarcode = generateInternalEan13(numericId, 20); // Prefijo 20
+      // 1. Obtenemos el ID único de la secuencia en la base de datos
+      const { data: seq, error: seqError } = await sb.rpc("get_next_internal_code_seq");
+      if (seqError) {
+        alert("Error al obtener la secuencia para el código interno: " + seqError.message);
+        break; // Detenemos la generación
+      }
 
-      await sb
+      // 2. Generamos el EAN-13 interno usando el prefijo 20
+      const newBarcode = generateInternalEan13(seq, 20);
+
+      // 3. Guardamos el código y mostramos el error si falla
+      const { error: updateError } = await sb
         .from("product_presentations")
         .update({ internal_barcode: newBarcode })
         .eq("id", row.id);
+
+      if (updateError) {
+        alert(`Error al guardar el código interno para el producto ${row.id}: ${updateError.message}`);
+        break; // Detenemos la generación
+      }
+      
+      successCount++;
     }
     
-    alert(`Se generaron ${data.length} códigos de barras nuevos (Prefijo 20).`);
+    alert(`Se generaron ${successCount} códigos de barras nuevos (Prefijo 20).`);
     setIsGenerating(false);
   };
 
