@@ -22,13 +22,15 @@ export function Button({
   disabled,
   className,
   children,
+  type = "button",
   ...rest
 }: ButtonProps) {
   const classes = [classByVariant[variant], className].filter(Boolean).join(" ");
+
   return (
     <button
-      type={rest.type ?? "button"}
       {...rest}
+      type={type}
       className={classes}
       disabled={disabled || loading}
       aria-busy={loading || undefined}

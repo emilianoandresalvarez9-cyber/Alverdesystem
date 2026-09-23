@@ -10,10 +10,24 @@ export type TagProps = ButtonHTMLAttributes<HTMLButtonElement> & {
  * Es un <button> con aria-pressed, así funciona con teclado y lector
  * de pantalla sin trabajo extra.
  */
-export function Tag({ active = false, className, children, ...rest }: TagProps) {
-  const classes = ["tag", active ? "tag-activo" : "", className].filter(Boolean).join(" ");
+export function Tag({
+  active = false,
+  className,
+  children,
+  type = "button",
+  ...rest
+}: TagProps) {
+  const classes = ["tag", active ? "tag-activo" : "", className]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <button type="button" aria-pressed={active} {...rest} className={classes}>
+    <button
+      {...rest}
+      type={type}
+      aria-pressed={active}
+      className={classes}
+    >
       {children}
     </button>
   );

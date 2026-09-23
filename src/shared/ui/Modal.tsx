@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 import type { PropsWithChildren, ReactNode } from "react";
 
 export type ModalProps = PropsWithChildren<{
@@ -17,6 +17,7 @@ export type ModalProps = PropsWithChildren<{
  */
 export function Modal({ open, title, onClose, footer, children }: ModalProps) {
   const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
 
   useEffect(() => {
     const dialog = ref.current;
@@ -26,11 +27,11 @@ export function Modal({ open, title, onClose, footer, children }: ModalProps) {
   }, [open]);
 
   return (
-    <dialog ref={ref} className="modal glass" onClose={onClose}>
+    <dialog ref={ref} className="modal glass" aria-labelledby={titleId} onClose={onClose}>
       <div className="modal-head">
-        <h2>{title}</h2>
+        <h2 id={titleId}>{title}</h2>
         <button type="button" className="button button-ghost" onClick={onClose} aria-label="Cerrar">
-          ✕
+          &times;
         </button>
       </div>
       <div className="modal-body">{children}</div>
