@@ -400,3 +400,67 @@ Se ha llevado a cabo el QA de Integración sobre la Fase 3, cruzando los módulo
 4. **Clientes y Fiados:** CustomersPage y CustomerCreditModal operan de forma atómica sobre la tabla customer_credits, calculando el saldo por sumatoria y no por mutación (RF-46).
 
 Todos los tests compilan y pasan en verde (25/25). Se procede a la recomendación de **Merge de la Fase 3 a main** e inicio de la Fase 4.
+
+---
+
+## 🗺️ 13. Hoja de Ruta para el QA Principal (Validación Final - Fase 3 y 4)
+
+**Ficha Técnica de Ruta:**
+- **Preparado por:** Agente 2 (QA Secundario / Auditor Interno).
+- **Destinatario:** QA Principal (Dueño del Proyecto / Emiliano).
+- **Objetivo:** Guía paso a paso para validar la Versión 1.0.0 final de Alverde System tanto en local como en GitHub, garantizando el funcionamiento de flujos cruzados.
+
+### 📋 A. Resumen Exhaustivo de Cambios
+Durante las Fases 3 y 4, el equipo de agentes implementó y fusionó los siguientes módulos críticos a la rama main:
+1. **Caja y Punto de Venta (Agente 4 y 5):** 
+   - Pantalla PosPage.tsx con lector de código de barras tipo cuña, soporte manual de peso, carrito (usePosCart.ts) y panel de cobro mixto.
+2. **Clientes y Fiados (Agente 6):** 
+   - Gestión de base de clientes (CustomersPage.tsx) y modal de créditos/fiados (CustomerCreditModal.tsx) para registrar saldos adeudados y pagos.
+3. **Resiliencia y Sincronización Offline (Agente 7 y Agente I):**
+   - Nueva función RPC process_offline_sale que deduce stock mediante algoritmo FEFO.
+   - Guardado local offline y encolado.
+4. **Cierre de Turno y Backups (Agente 3, Agente J y Agente I):** 
+   - shiftService.ts implementa el closeShift (Cierre de Caja). 
+   - Envía operaciones pendientes a Supabase y dispara automáticamente el backup JSON (ackupService.ts).
+   - Exportación manual a Excel (CSV) desde BackupSettings.tsx.
+5. **Dashboard de Reportes (Agente 4 / Agente M):**
+   - Tablero de ventas usando Recharts para análisis de información de negocio (Fase 4).
+
+### 🧪 B. Guía de Pruebas Cruzadas (Flujo de Integración)
+
+Para validar la robustez de los flujos cruzados, el QA Principal debe ejecutar las siguientes pruebas en entorno local (
+pm run dev):
+
+#### 1. Prueba de Flujo Cruzado: Venta en Caja -> Descuento FEFO (Stock)
+- **Acción:** Ir al Punto de Venta (Caja) y simular una venta escaneando un producto a granel o un EAN-13, asegurando usar más cantidad que la que posee el lote actual.
+- **Validación Local:** 
+  1. Completar la venta.
+  2. Ir a la pestaña de Stock / Lotes y verificar que el sistema consumió todo el primer lote abierto (Status cerrado) y descontó el remanente del segundo lote de acuerdo con la fecha de caducidad (FEFO).
+  3. Si se agotó el stock total, verificar que la Base de Datos registra la alerta en la tabla stock_warnings sin interrumpir la venta (RF-38).
+
+#### 2. Prueba de Cierre de Caja y Sincronización (shiftService)
+- **Acción:** Apagar la conexión a internet de la PC (modo avión). Registrar 2 o 3 ventas. Encender internet. 
+- **Validación Local:** 
+  1. Pulsar el botón **"Cerrar Caja / Turno"** en el POS.
+  2. Validar que la aplicación invoca synchronizePendingOperations (se vacía la cola local y se envía a Supabase).
+  3. Comprobar que en la tabla offline_operations los registros cambian su estado a synced.
+
+#### 3. Prueba de Backup Automático y Manual (ackupService)
+- **Validación Automática:** Inmediatamente al finalizar el Cierre de Caja anterior, el navegador debe solicitar guardar un archivo .json de respaldo en el disco (gracias al trigger que conecta shiftService con ackupService.downloadBackup).
+- **Validación Manual:** Ir a **Configuración -> Backups**. Pulsar **"Exportar Base de Datos a JSON"** y **"Exportar a Excel (CSV)"**. Abrir el archivo descargado y comprobar que contenga las tablas operativas completas y legibles.
+
+#### 4. Prueba de Clientes y Fiados (Cuentas Corrientes)
+- **Acción:** Ir a la pestaña **Clientes**. Crear un cliente de prueba.
+- **Validación Local:** 
+  1. Abrir el modal de cuenta corriente (CustomerCreditModal).
+  2. Registrar una venta "A Fiado" y luego ingresar un "Pago parcial".
+  3. Validar que el saldo adeudado del cliente refleje la suma/resta correcta de los movimientos sin mutar directamente un campo de balance estático (cumpliendo RF-46).
+
+### 💻 C. Validación en GitHub (Código)
+Para confirmar la calidad del código, revise en GitHub (rama main):
+- [ ] src/modules/pos/shiftService.ts: Verificar el método closeShift.
+- [ ] src/shared/backup/backupService.ts: Verificar la lógica de volcado a JSON de IndexedDB.
+- [ ] src/integration.test.ts: Verificar que las pruebas de integración (cross-flow POS-FEFO) están presentes.
+- [ ] supabase/migrations/20260923021000_fase3_rpc_offline_sales.sql: Verificar el consumo estricto de FEFO en PL/pgSQL.
+
+✅ **Criterio de Éxito:** Una vez que todas estas verificaciones se aprueben manualmente, el sistema **Alverde System V1.0.0** quedará plenamente certificado y habilitado para el despliegue final en la sucursal de la dietética.
