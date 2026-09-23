@@ -1,4 +1,4 @@
-name: Verificación de Fase 0
+name: Verificación
 
 on:
   pull_request:
@@ -16,39 +16,36 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm install
+      - run: npm ci
+      - name: Compuerta de calidad (tests vacíos, .only, mocks nuevos)
+        run: npm run qa:guard
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
 
+  migrations:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Las migraciones existentes no se editan
+        run: bash scripts/check-migrations-immutable.sh "origin/${{ github.base_ref }}"
+
   database:
     runs-on: ubuntu-latest
-    services:
-      supabase:
-        image: supabase/postgres:15.6.1.143
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
-      - name: Iniciar Supabase local
-        run: supabase start
-      - name: Aplicar migraciones
-        run: supabase db reset
-      - name: Correr tests SQL
-        run: |
-          for f in supabase/tests/*.sql; do
-            echo "=== Corriendo $f ==="
-            psql postgresql://postgres:postgres@localhost:54322/postgres -f "$f"
-          done
+          version: 2.117.0
+      # Mismo arranque que el CI anterior, verde en main (run #46).
+      - run: supabase start
+      - run: supabase db reset
+      # pg_prove devuelve código de salida distinto de 0 si falla cualquier test.
+      # (El job anterior usaba `psql -f`, que devuelve 0 aunque los tests fallen.)
+      - run: supabase test db
