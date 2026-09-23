@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { GlassCard, Button, Badge } from "../../shared/ui";
-import { generateFullBackup, downloadBackupFile, exportToCsv, restoreFullBackup, FullBackupData } from "../../shared/offline/fullBackup";
+import { generateFullBackup, downloadBackupFile, exportToCsv, restoreFullBackup, type FullBackupData } from "../../shared/offline/fullBackup";
 
 export function BackupManager() {
   const [loading, setLoading] = useState(false);
