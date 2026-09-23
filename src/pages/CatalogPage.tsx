@@ -5,6 +5,7 @@ import { CatalogFiltersBar } from "../modules/catalog/CatalogFiltersBar";
 import { exportCatalogToExcel } from "../modules/catalog/exportCatalog";
 import { EmptyState, GlassCard } from "../shared/ui";
 import { AppShell } from "../shared/components/AppShell";
+import { MissingReportButton } from "../modules/catalog/MissingReportButton";
 
 export function CatalogPage() {
   const { products, brands, categories, labels, filters, setFilters, isOffline, isLoading, error } = useCatalog();
@@ -64,7 +65,9 @@ export function CatalogPage() {
                 <ProductCard
                   key={p.id}
                   product={p}
-                  onClick={() => setSelected(p.id === selected ? null : p.id)}
+                  expanded={p.id === selected}
+                  onToggle={() => setSelected(p.id === selected ? null : p.id)}
+                  actions={<MissingReportButton productId={p.id} productName={p.name} />}
                 />
               ))}
             </div>

@@ -175,6 +175,17 @@ export async function markOperationSynced(localId: string): Promise<void> {
   pendingMirror = mirrorPendingQueue();
 }
 
+/**
+ * Reemplaza una operación que todavía no se envió, conservando su localId (la idempotencia en
+ * la nube depende de él). Solo para migrar formatos viejos de la cola; nunca para editar ventas.
+ */
+export async function rewritePendingOperation(operation: QueuedOperation): Promise<void> {
+  const current = await readRecord<QueuedOperation>(OPERATION_STORE, operation.localId);
+  if (!current || current.syncedAt) return;
+  await putRecord(OPERATION_STORE, operation);
+  emitQueueChange();
+}
+
 export async function markOperationFailed(localId: string, reason: string): Promise<void> {
   const operation = await readRecord<QueuedOperation>(OPERATION_STORE, localId);
   if (!operation) return;
