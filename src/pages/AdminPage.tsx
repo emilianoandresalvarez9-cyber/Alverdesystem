@@ -20,7 +20,7 @@ export function AdminPage() {
   const [classifierType, setClassifierType] = useState<"brand" | "category" | "label">("brand");
 
   return (
-    <AppShell active="admin" title="Administración">
+    <AppShell active="admin" title="Administración" requiredRole="administrator">
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--esp-m)" }}>
         <header className="page-heading">
           <h1 style={{ margin: 0 }}>Panel de Administración</h1>
