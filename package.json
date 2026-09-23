@@ -9,7 +9,10 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "test:watch": "vitest",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "qa:guard": "node scripts/qa-guard.mjs",
+    "test:db:nodocker": "bash qa/pg-harness/run.sh .",
+    "verify": "npm run qa:guard && npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
