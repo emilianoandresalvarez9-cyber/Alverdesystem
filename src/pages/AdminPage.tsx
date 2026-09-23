@@ -10,11 +10,12 @@ import { RepositionList } from "../modules/restock/RepositionList";
 import { BarcodeDashboard } from "../modules/barcodes";
 import { BulkDashboard } from "../modules/fractioning";
 import { Button, GlassCard } from "../shared/ui";
+import { ReportsDashboard } from "../modules/admin/ReportsDashboard";
 
-type AdminTab = "stock" | "fractioning" | "classifiers" | "restock" | "barcodes" | "settings";
+type AdminTab = "reports" | "stock" | "fractioning" | "classifiers" | "restock" | "barcodes" | "settings";
 
 export function AdminPage() {
-  const [activeTab, setActiveTab] = useState<AdminTab>("fractioning");
+  const [activeTab, setActiveTab] = useState<AdminTab>("reports");
   const [classifierType, setClassifierType] = useState<"brand" | "category" | "label">("brand");
 
   return (
@@ -26,6 +27,12 @@ export function AdminPage() {
 
         {/* Barra de pestañas */}
         <div style={{ display: "flex", gap: "var(--esp-s)", flexWrap: "wrap", borderBottom: "1px solid var(--glass-borde)", paddingBottom: "var(--esp-s)" }}>
+          <Button
+            variant={activeTab === "reports" ? "primario" : "fantasma"}
+            onClick={() => setActiveTab("reports")}
+          >
+            📊 Reportes (Fase 4)
+          </Button>
           <Button
             variant={activeTab === "stock" ? "primario" : "fantasma"}
             onClick={() => setActiveTab("stock")}
@@ -68,6 +75,9 @@ export function AdminPage() {
             ⚙️ Configuración y Respaldos
           </Button>
         </div>
+
+        {/* Tab 0: Reportes */}
+        {activeTab === "reports" && <ReportsDashboard />}
 
         {/* Tab 1: Lotes y Vencimientos (Agente E) */}
         {activeTab === "stock" && <StockDashboard />}
