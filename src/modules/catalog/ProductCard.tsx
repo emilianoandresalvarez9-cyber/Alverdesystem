@@ -1,6 +1,9 @@
 import type { ReactNode } from "react";
 import { GlassCard, Badge, Tag } from "../../shared/ui";
 import type { CatalogProduct } from "./types";
+import { presentationPriceLabel } from "./scalePricing";
+
+const ars = (value: number) => `$${value.toLocaleString("es-AR")}`;
 
 interface ProductCardProps {
   product: CatalogProduct;
@@ -18,7 +21,7 @@ const BASE_UNIT_LABEL: Record<string, string> = {
 
 export function ProductCard({ product, onToggle, expanded = false, actions }: ProductCardProps) {
   const lowestPrice = product.presentations
-    .filter(p => p.active)
+    .filter(p => p.active && !p.sold_by_weight)
     .map(p => p.sale_price)
     .filter(p => p > 0)
     .sort((a, b) => a - b)[0];
@@ -57,7 +60,7 @@ export function ProductCard({ product, onToggle, expanded = false, actions }: Pr
         <span className="product-card__presentations">
           {product.presentations.filter(p => p.active).map(pr => (
             <span key={pr.id} className="product-card__presentation">
-              {pr.name} — ${pr.sale_price.toLocaleString("es-AR")}
+              {pr.name} — {presentationPriceLabel(pr, ars)}{pr.sold_by_weight ? " · Balanza" : ""}
             </span>
           ))}
         </span>

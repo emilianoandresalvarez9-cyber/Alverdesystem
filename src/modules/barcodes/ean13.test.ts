@@ -99,4 +99,9 @@ describe("EAN-13 GS1 Algorithm Tests", () => {
       expect(modules[49]).toBe(false);
     });
   });
+
+  it("reserva el prefijo 29 para etiquetas de balanza (ADR-001)", () => {
+    expect(() => generateInternalEan13(5, 29)).toThrow(/reservado/);
+    expect(generateInternalEan13(5, 28)).toMatch(/^28/);
+  });
 });

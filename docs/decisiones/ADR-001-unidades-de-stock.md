@@ -1,42 +1,45 @@
 # ADR-001 · Unidades de stock, venta por peso y granel
 
-**Estado:** propuesta — requiere decisión de la dueña antes de cargar el stock inicial (RF-52).
-**Contexto:** QA, PR-04 (`20260923110000_contrato_venta.sql`).
+**Estado:** aceptada (23/09/2026, definida con el dueño). Implementada en PR-10.
 
-## Problema
+## Regla
 
-El esquema no dice en qué unidad está `stock_lots.current_quantity`. El código existente usa dos
-convenciones a la vez:
+Cada **presentación** se vende de una de dos formas. Se decide por presentación, no por producto,
+porque un mismo producto puede tener las dos (palitos salados a granel y en bolsitas).
 
-- `QuickRestock` y `FractioningModal` (lote destino) cargan **unidades de la presentación**
-  (bolsas, bolsitas).
-- `fractioningLogic` trata el lote de origen a granel como **gramos**.
+| Ejemplo | Cómo se vende | `base_quantity` | `sale_price` | Stock del lote |
+|---|---|---|---|---|
+| Palitos salados 150 g | Por unidad: escanear suma 1 | 150 | precio de la bolsita | bolsitas |
+| Palitos salados 250 g | Por unidad (otra presentación) | 250 | precio de la bolsita | bolsitas |
+| Lentejas, arroz a granel | **Balanza**: la caja pide los gramos | **1** | precio **por gramo** | gramos (bolsa de 25 kg = lote de 25.000) |
 
-`process_offline_sale` descuenta `sale_items.quantity` de los lotes de esa misma presentación. Si las
-dos cosas no usan la misma unidad, el stock queda mal por un factor de 1000.
+- `sale_items.quantity` y `stock_lots.current_quantity` están siempre en unidades de la
+  presentación. En una presentación "Balanza" esa unidad es el gramo (o mililitro).
+- La dueña carga y ve **precio por kilo**; el sistema guarda precio por gramo. Como RF-29 redondea
+  a múltiplos de $100 por kilo, la conversión es exacta. Se exige múltiplo de $10 por kilo.
+- Fraccionar descuenta gramos de la bolsa a granel y suma unidades a la bolsita: misma unidad que
+  la venta, sin conversiones.
 
-## Regla adoptada en el PR-04
+## Esperar el peso o no
 
-1. `sale_items.quantity` y `stock_lots.current_quantity` están **en unidades de la presentación**.
-2. Una presentación con `sold_by_weight = true` se vende pesando: la caja pide gramos (o ml) y envía
-   `quantity = peso / base_quantity`, con `unit_price = sale_price` (precio de la presentación).
-   Ejemplo: "Lentejas granel por kg" (`base_quantity = 1000`, `sale_price = 3000`); 350 g →
-   `quantity = 0.35`, subtotal `1050`.
-3. Para que el granel funcione con el fraccionamiento actual (que trabaja en gramos), la presentación
-   a granel se crea con **`base_quantity = 1`** ("granel por gramo") y precio por gramo; la caja
-   muestra el precio por kilo multiplicando por 1000. Con esa carga, la regla 1 y el fraccionamiento
-   usan la misma unidad (gramos).
+- Presentación con "Balanza": al escanear, la caja espera los gramos. Hoy los tipea quien atiende
+  (RF-33). Con una balanza conectable, la interfaz de RF-33b los leerá sola.
+- Sin "Balanza": la caja suma una unidad y no espera nada.
+- Futuro opcional: balanzas que imprimen etiquetas con el peso dentro del código. El prefijo
+  **29** queda reservado para eso; el generador de códigos internos no lo usa.
 
-## Qué tiene que decidir la dueña
+## Cómo se hace cumplir
 
-- Confirmar la opción 3 (granel por gramo). La alternativa es cambiar el fraccionamiento para que
-  convierta entre gramos y la presentación; es más código y más riesgo.
-- Revisar qué presentaciones quedaron marcadas `sold_by_weight` por el relleno automático (nombre
-  que contiene "granel") y corregir las que falten o sobren.
+- Base: `check (not sold_by_weight or base_quantity = 1)` y un trigger que solo permite "Balanza"
+  en productos en gramos o mililitros.
+- `set_presentation_scale()` (solo administradora): convertir una presentación de tamaño fijo exige
+  confirmación explícita, para que una bolsita no se transforme en granel por error.
+- Pantalla: Administración → Balanza.
+- Tests: `supabase/tests/balanza_granel_test.sql`, `cart.test.ts`, `scalePricing.test.ts`.
 
-## Consecuencias
+## Alternativas descartadas
 
-- Hasta que exista una pantalla para marcar `sold_by_weight`, se edita desde Supabase Studio.
-  Queda como tarea en `PR_PENDIENTES`.
-- El test `venta_contrato_test.sql` fija la regla 1; cualquier cambio de convención tiene que
-  cambiar ese test primero.
+- **Usar una etiqueta del catálogo ("balanza")**: las etiquetas son por producto y se renombran
+  para ordenar el catálogo; renombrarla desactivaría la balanza en silencio.
+- **Guardar el precio por kilo y la cantidad en gramos**: cada suma de ventas tendría que saber si
+  dividir por 1000; un reporte que lo olvide multiplica por mil.
