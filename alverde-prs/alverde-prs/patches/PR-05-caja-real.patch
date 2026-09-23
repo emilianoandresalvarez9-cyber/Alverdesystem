@@ -1,0 +1,2202 @@
+From 99b992468b902b70ec056adf5bf39148655606e9 Mon Sep 17 00:00:00 2001
+From: Alverde QA Lead <qa-lead@alverde.invalid>
+Date: Wed, 23 Sep 2026 18:02:57 +0000
+Subject: [PATCH 05/10] =?UTF-8?q?feat(caja):=20punto=20de=20venta=20real?=
+ =?UTF-8?q?=20con=20cat=C3=A1logo,=20cola=20offline=20y=20cierre=20por=20m?=
+ =?UTF-8?q?edio=20de=20pago=20(RF-18,=20RF-31=20a=20RF-36,=20RF-41)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Nueva página /pos.html (CRÍTICO-05), enlazada en la navegación y precacheada por el
+  Service Worker (caché v2).
+- El código escaneado se busca en el catálogo real (online o copia local): código interno
+  identifica la presentación; código de fabricante con varias presentaciones pide elegir.
+  Ya no se inventan nombre ni precio (CRÍTICO-03).
+- Productos con sold_by_weight piden el peso y calculan el importe por kilo (RF-33).
+  Aritmética entera que coincide con round(qty*price, 2) de Postgres.
+- Cobrar encola la venta en IndexedDB y dispara la sincronización (RF-35). Antes era
+  console.log + alert y no se guardaba nada.
+- Medios de pago = enum de la base (efectivo, transferencia, QR). El fiado entra en PR-06.
+- Turnos: la caja se asigna una vez por equipo; el turno se abre aunque no haya conexión y
+  se crea en la nube antes de enviar la cola; si la cajera dejó uno abierto, se retoma.
+- Cierre (RF-32): totales por medio de pago desde la cola local; no cierra con ventas sin
+  enviar; descarga el respaldo (RF-41).
+- Lector tipo teclado detectado por velocidad, también con el foco en otro campo (GRAVE-06).
+- P11 (nuevo): el respaldo de cierre abría la base 'canti_db', que no existe, y salía vacío.
+  Ahora respalda 'alverde-offline'.
+- La sincronización ya no corre dos veces en paralelo; OfflineIndicator libera sus listeners.
+- Se quita refreshEmployeeCatalog (sin uso; escribía filas crudas en la misma clave que el
+  catálogo local con otro formato).
+
+Tests: money (5), catalogLookup (6), cart (7), scanDetector (4), shiftSummary (1),
+saleContract (2, contrato con la migración), backupService (1).
+---
+ pos.html                                   |  13 +
+ public/sw.js                               |   4 +-
+ qa/mocks-conocidos.txt                     |   1 -
+ src/entries/pos.tsx                        |  14 +
+ src/modules/catalog/types.ts               |   2 +
+ src/modules/catalog/useCatalog.ts          |   3 +-
+ src/modules/pos/PosPage.tsx                | 548 +++++++++++++--------
+ src/modules/pos/cart.test.ts               |  66 +++
+ src/modules/pos/cart.ts                    |  75 +++
+ src/modules/pos/catalogLookup.test.ts      |  49 ++
+ src/modules/pos/catalogLookup.ts           |  63 +++
+ src/modules/pos/money.test.ts              |  30 ++
+ src/modules/pos/money.ts                   |  31 ++
+ src/modules/pos/saleContract.test.ts       |  53 ++
+ src/modules/pos/scanDetector.test.ts       |  31 ++
+ src/modules/pos/scanDetector.ts            |  39 ++
+ src/modules/pos/shift.ts                   | 164 ++++++
+ src/modules/pos/shiftService.ts            |  46 --
+ src/modules/pos/shiftSummary.test.ts       |  30 ++
+ src/modules/pos/shiftSummary.ts            |  41 ++
+ src/modules/pos/types.ts                   |  67 ++-
+ src/modules/pos/usePosCart.ts              |  84 ----
+ src/modules/pos/useScanner.ts              |  40 ++
+ src/shared/backup/backupService.test.ts    |  19 +
+ src/shared/backup/backupService.ts         | 106 ++--
+ src/shared/components/AppShell.tsx         |   3 +-
+ src/shared/components/OfflineIndicator.tsx |   9 +-
+ src/shared/offline/queue.ts                |  31 +-
+ src/shared/offline/sync.ts                 |  54 +-
+ src/styles/pos.css                         |  80 +++
+ vite.config.ts                             |   3 +-
+ 31 files changed, 1368 insertions(+), 431 deletions(-)
+ create mode 100644 pos.html
+ create mode 100644 src/entries/pos.tsx
+ create mode 100644 src/modules/pos/cart.test.ts
+ create mode 100644 src/modules/pos/cart.ts
+ create mode 100644 src/modules/pos/catalogLookup.test.ts
+ create mode 100644 src/modules/pos/catalogLookup.ts
+ create mode 100644 src/modules/pos/money.test.ts
+ create mode 100644 src/modules/pos/money.ts
+ create mode 100644 src/modules/pos/saleContract.test.ts
+ create mode 100644 src/modules/pos/scanDetector.test.ts
+ create mode 100644 src/modules/pos/scanDetector.ts
+ create mode 100644 src/modules/pos/shift.ts
+ delete mode 100644 src/modules/pos/shiftService.ts
+ create mode 100644 src/modules/pos/shiftSummary.test.ts
+ create mode 100644 src/modules/pos/shiftSummary.ts
+ delete mode 100644 src/modules/pos/usePosCart.ts
+ create mode 100644 src/modules/pos/useScanner.ts
+ create mode 100644 src/shared/backup/backupService.test.ts
+ create mode 100644 src/styles/pos.css
+
+diff --git a/pos.html b/pos.html
+new file mode 100644
+index 0000000..9cbe09e
+--- /dev/null
++++ b/pos.html
+@@ -0,0 +1,13 @@
++<!doctype html>
++<html lang="es">
++  <head>
++    <meta charset="UTF-8" />
++    <meta name="viewport" content="width=device-width, initial-scale=1" />
++    <meta name="theme-color" content="#11221b" />
++    <title>Alverde · Caja</title>
++  </head>
++  <body>
++    <div id="root"></div>
++    <script type="module" src="/src/entries/pos.tsx"></script>
++  </body>
++</html>
+diff --git a/public/sw.js b/public/sw.js
+index 50d1fb0..067ee81 100644
+--- a/public/sw.js
++++ b/public/sw.js
+@@ -1,5 +1,5 @@
+-const CACHE_NAME = "alverde-shell-v1";
+-const APP_SHELL = ["/", "/index.html", "/catalog.html", "/admin.html"];
++const CACHE_NAME = "alverde-shell-v2";
++const APP_SHELL = ["/", "/index.html", "/catalog.html", "/admin.html", "/pos.html"];
+ 
+ self.addEventListener("install", (event) => {
+   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
+diff --git a/qa/mocks-conocidos.txt b/qa/mocks-conocidos.txt
+index 8edb4ea..695ed72 100644
+--- a/qa/mocks-conocidos.txt
++++ b/qa/mocks-conocidos.txt
+@@ -2,4 +2,3 @@
+ # Esta lista solo puede achicarse: scripts/qa-guard.mjs falla si aparece un mock nuevo
+ # o si un archivo de esta lista ya no tiene mocks y no se lo quitó.
+ src/modules/customers/CustomersPage.tsx
+-src/modules/pos/usePosCart.ts
+diff --git a/src/entries/pos.tsx b/src/entries/pos.tsx
+new file mode 100644
+index 0000000..95eae62
+--- /dev/null
++++ b/src/entries/pos.tsx
+@@ -0,0 +1,14 @@
++import { createRoot } from "react-dom/client";
++import "../styles/tokens.css";
++import "../styles/global.css";
++import "../styles/pos.css";
++import { registerServiceWorker } from "../shared/offline/registerServiceWorker";
++import { AppShell } from "../shared/components/AppShell";
++import { PosPage } from "../modules/pos/PosPage";
++
++registerServiceWorker();
++createRoot(document.getElementById("root")!).render(
++  <AppShell active="pos" title="Caja">
++    <PosPage />
++  </AppShell>
++);
+diff --git a/src/modules/catalog/types.ts b/src/modules/catalog/types.ts
+index ed3e949..9a9bcec 100644
+--- a/src/modules/catalog/types.ts
++++ b/src/modules/catalog/types.ts
+@@ -25,6 +25,8 @@ export interface ProductPresentation {
+   base_quantity: number;
+   internal_barcode: string | null;
+   sale_price: number;
++  /** Se vende pesando: la caja pide el peso (RF-22, RF-33). Ver docs/decisiones/ADR-001. */
++  sold_by_weight: boolean;
+   active: boolean;
+ }
+ 
+diff --git a/src/modules/catalog/useCatalog.ts b/src/modules/catalog/useCatalog.ts
+index 62f1770..b94d27c 100644
+--- a/src/modules/catalog/useCatalog.ts
++++ b/src/modules/catalog/useCatalog.ts
+@@ -68,7 +68,8 @@ export function useCatalog(): UseCatalogReturn {
+         name: row.presentation_name,
+         base_quantity: row.base_quantity,
+         internal_barcode: row.internal_barcode,
+-        sale_price: row.sale_price,
++        sale_price: Number(row.sale_price),
++        sold_by_weight: Boolean(row.sold_by_weight),
+         active: true
+       });
+     }
+diff --git a/src/modules/pos/PosPage.tsx b/src/modules/pos/PosPage.tsx
+index 4af2042..f5d332c 100644
+--- a/src/modules/pos/PosPage.tsx
++++ b/src/modules/pos/PosPage.tsx
+@@ -1,220 +1,378 @@
+-import { useState, useEffect, useRef } from 'react';
+-import { GlassCard, Button, TextField, SelectField, Badge, Tag, EmptyState } from '../../shared/ui';
+-import { usePosCart } from './usePosCart';
+-import type { SalePayload } from './types';
++import { type FormEvent, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
++import { Button, EmptyState, GlassCard, Modal, SelectField, TextField } from "../../shared/ui";
++import { OfflineIndicator } from "../../shared/components/OfflineIndicator";
++import { enqueueOperation } from "../../shared/offline/queue";
++import { synchronizePendingOperations } from "../../shared/offline/sync";
++import { useCatalog } from "../catalog/useCatalog";
++import { lookupBarcode, pricePerKilo, searchEntries, toPosEntries } from "./catalogLookup";
++import { buildSalePayload, cartReducer, cartTotal, lineTotal } from "./cart";
++import { formatMoney, lineSubtotal, roundQuantity } from "./money";
++import {
++  assignRegister, assignedRegister, closeShift, currentShift, listRegisters, openShift, shiftSummary,
++  type CloseResult, type RegisterOption
++} from "./shift";
++import type { ShiftSummary } from "./shiftSummary";
++import { PAYMENT_LABELS, type CurrentShift, type PaymentMethod, type PosEntry } from "./types";
++import { useScanner } from "./useScanner";
++
++type Stage = { kind: "loading" } | { kind: "register" } | { kind: "open"; register: RegisterOption } | { kind: "selling"; shift: CurrentShift };
+ 
+ export function PosPage() {
+-  const { items, removeItem, updateQuantity, addByBarcode, total, clearCart, generatePayload } = usePosCart();
+-  const [barcodeInput, setBarcodeInput] = useState('');
+-  const [paymentMethod, setPaymentMethod] = useState<SalePayload['paymentMethod']>('cash');
+-  const [cashAmount, setCashAmount] = useState('');
+-  const [cardAmount, setCardAmount] = useState('');
+-  const [manualWeightInput, setManualWeightInput] = useState<{ [id: string]: string }>({});
++  const [stage, setStage] = useState<Stage>({ kind: "loading" });
++
++  const resolveStage = useCallback(async () => {
++    const shift = await currentShift();
++    if (shift) return setStage({ kind: "selling", shift });
++    const register = await assignedRegister();
++    setStage(register ? { kind: "open", register } : { kind: "register" });
++  }, []);
++
++  useEffect(() => { void resolveStage(); }, [resolveStage]);
++
++  switch (stage.kind) {
++    case "loading":
++      return <p className="glass loading-card">Preparando la caja…</p>;
++    case "register":
++      return <RegisterSetup onAssigned={(register) => setStage({ kind: "open", register })} />;
++    case "open":
++      return (
++        <OpenShiftForm
++          register={stage.register}
++          onOpened={(shift) => setStage({ kind: "selling", shift })}
++          onChangeRegister={() => setStage({ kind: "register" })}
++        />
++      );
++    case "selling":
++      return <Register shift={stage.shift} onClosed={() => void resolveStage()} />;
++  }
++}
+ 
+-  const barcodeBuffer = useRef<string>('');
+-  const timeoutRef = useRef<number | null>(null);
++function RegisterSetup({ onAssigned }: { onAssigned: (register: RegisterOption) => void }) {
++  const [registers, setRegisters] = useState<RegisterOption[] | null>(null);
++  const [selected, setSelected] = useState("");
++  const [error, setError] = useState<string | null>(null);
+ 
+-  // RF-18: Manejo de teclado cuña para lector de barras
+   useEffect(() => {
+-    const handleKeyDown = (e: KeyboardEvent) => {
+-      const target = e.target as HTMLElement;
+-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') {
+-        return;
+-      }
+-
+-      if (e.key === 'Enter') {
+-        if (barcodeBuffer.current.length > 3) {
+-          addByBarcode(barcodeBuffer.current);
+-          barcodeBuffer.current = '';
+-        }
+-        return;
+-      }
+-
+-      if (e.key.length === 1) {
+-        barcodeBuffer.current += e.key;
+-
+-        if (timeoutRef.current) {
+-          clearTimeout(timeoutRef.current);
+-        }
+-        
+-        timeoutRef.current = window.setTimeout(() => {
+-          barcodeBuffer.current = '';
+-        }, 100);
+-      }
+-    };
+-
+-    window.addEventListener('keydown', handleKeyDown);
+-    return () => {
+-      window.removeEventListener('keydown', handleKeyDown);
+-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+-    };
+-  }, [addByBarcode]);
+-
+-  const handleManualBarcodeSubmit = (e: React.FormEvent) => {
+-    e.preventDefault();
+-    if (barcodeInput.trim()) {
+-      addByBarcode(barcodeInput.trim());
+-      setBarcodeInput('');
+-    }
+-  };
+-
+-  const handleCheckout = () => {
+-    if (items.length === 0) return;
+-    
+-    const payload = generatePayload(
+-      paymentMethod,
+-      parseFloat(cashAmount) || 0,
+-      parseFloat(cardAmount) || 0
+-    );
+-    
+-    console.log('Procesando venta:', payload);
+-    alert('Venta procesada con éxito');
+-    clearCart();
+-    setCashAmount('');
+-    setCardAmount('');
+-    setPaymentMethod('cash');
+-  };
+-
+-  const handleWeightChange = (id: string, weightStr: string) => {
+-    setManualWeightInput(prev => ({ ...prev, [id]: weightStr }));
+-    const weight = parseFloat(weightStr);
+-    if (!isNaN(weight) && weight > 0) {
+-      updateQuantity(id, weight);
++    listRegisters()
++      .then((list) => {
++        setRegisters(list);
++        setSelected(list[0]?.id ?? "");
++      })
++      .catch((err: unknown) => setError(err instanceof Error ? err.message : "No se pudieron cargar las cajas."));
++  }, []);
++
++  async function confirm() {
++    const register = registers?.find((r) => r.id === selected);
++    if (!register) return;
++    await assignRegister(register);
++    onAssigned(register);
++  }
++
++  return (
++    <GlassCard className="pos-panel pos-setup">
++      <h2>¿Qué caja es este equipo?</h2>
++      <p className="field-help">Se elige una sola vez por equipo. Hace falta conexión para ver la lista.</p>
++      {error && <p className="form-error" role="alert">{error}</p>}
++      {registers && registers.length === 0 && (
++        <EmptyState title="No hay cajas cargadas">La administradora las crea en Administración → Sucursales.</EmptyState>
++      )}
++      {registers && registers.length > 0 && (
++        <>
++          <SelectField label="Caja" value={selected} onChange={(e) => setSelected(e.target.value)}>
++            {registers.map((r) => (
++              <option key={r.id} value={r.id}>{r.name}{r.branchName ? ` (${r.branchName})` : ""}</option>
++            ))}
++          </SelectField>
++          <Button onClick={() => void confirm()} disabled={!selected}>Usar esta caja</Button>
++        </>
++      )}
++    </GlassCard>
++  );
++}
++
++function OpenShiftForm({ register, onOpened, onChangeRegister }: {
++  register: RegisterOption; onOpened: (shift: CurrentShift) => void; onChangeRegister: () => void;
++}) {
++  const [initial, setInitial] = useState("0");
++  const [error, setError] = useState<string | null>(null);
++  const [busy, setBusy] = useState(false);
++
++  async function submit(event: FormEvent) {
++    event.preventDefault();
++    const amount = Number(initial.replace(",", "."));
++    if (!(amount >= 0)) return setError("Ingresá el efectivo inicial (puede ser 0).");
++    setBusy(true);
++    setError(null);
++    try {
++      onOpened(await openShift(register, amount));
++    } catch (err) {
++      setError(err instanceof Error ? err.message : "No se pudo abrir el turno.");
++    } finally {
++      setBusy(false);
+     }
+-  };
++  }
+ 
+   return (
+-    <div style={{ display: 'flex', gap: '1rem', padding: '1rem', height: '100%', maxHeight: '100vh' }}>
+-      <GlassCard style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem', overflow: 'hidden' }}>
+-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+-          <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>Punto de Venta (Caja)</h2>
+-          <Badge tone="exito">Caja Abierta</Badge>
+-        </div>
++    <GlassCard className="pos-panel pos-setup">
++      <h2>Abrir turno en {register.name}</h2>
++      <form onSubmit={submit} className="pos-setup">
++        <TextField label="Efectivo en la caja al empezar" inputMode="decimal" value={initial}
++          onChange={(e) => setInitial(e.target.value)} help="Sin conexión el turno se abre igual y se registra al volver internet." />
++        {error && <p className="form-error" role="alert">{error}</p>}
++        <Button type="submit" loading={busy}>Abrir turno</Button>
++        <Button variant="fantasma" onClick={onChangeRegister}>Este equipo es otra caja</Button>
++      </form>
++    </GlassCard>
++  );
++}
+ 
+-        <form onSubmit={handleManualBarcodeSubmit} style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
+-          <div style={{ flex: 1 }}>
+-            <TextField
+-              label="Código de barras manual"
+-              value={barcodeInput}
+-              onChange={(e) => setBarcodeInput(e.target.value)}
+-              placeholder="Escanear o ingresar código..."
+-            />
+-          </div>
++const SELLING_METHODS: PaymentMethod[] = ["cash", "transfer", "qr"];
++
++function Register({ shift, onClosed }: { shift: CurrentShift; onClosed: () => void }) {
++  const { products, isLoading, isOffline } = useCatalog();
++  const entries = useMemo(() => toPosEntries(products), [products]);
++  const [lines, dispatch] = useReducer(cartReducer, []);
++  const [query, setQuery] = useState("");
++  const [choices, setChoices] = useState<PosEntry[] | null>(null);
++  const [weighing, setWeighing] = useState<PosEntry | null>(null);
++  const [method, setMethod] = useState<PaymentMethod>("cash");
++  const [feedback, setFeedback] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
++  const [charging, setCharging] = useState(false);
++  const [closing, setClosing] = useState(false);
++  const scanRef = useRef<HTMLInputElement>(null);
++
++  const total = cartTotal(lines);
++  const results = /^\d+$/.test(query.trim()) ? [] : searchEntries(entries, query);
++
++  const focusScan = () => requestAnimationFrame(() => scanRef.current?.focus());
++
++  const addEntry = useCallback((entry: PosEntry) => {
++    setChoices(null);
++    setQuery("");
++    if (entry.soldByWeight) {
++      setWeighing(entry);
++      return;
++    }
++    dispatch({ type: "add", entry, lineId: crypto.randomUUID() });
++    setFeedback(null);
++    focusScan();
++  }, []);
++
++  const handleCode = useCallback((code: string) => {
++    const result = lookupBarcode(entries, code);
++    if (result.kind === "found") return addEntry(result.entry);
++    if (result.kind === "choose") return setChoices(result.entries);
++    setFeedback({ tone: "error", text: `El código ${result.code} no está en el catálogo${isOffline ? " guardado en este equipo" : ""}.` });
++  }, [entries, addEntry, isOffline]);
++
++  useScanner(handleCode, useCallback(() => scanRef.current, []));
++
++  function submitQuery(event: FormEvent) {
++    event.preventDefault();
++    const text = query.trim();
++    if (!text) return;
++    if (/^\d+$/.test(text)) {
++      setQuery("");
++      handleCode(text);
++    } else if (results.length === 1 && results[0]) {
++      addEntry(results[0]);
++    }
++  }
++
++  async function charge() {
++    setCharging(true);
++    try {
++      const payload = buildSalePayload(lines, { shiftId: shift.id, paymentMethod: method, newId: () => crypto.randomUUID() });
++      await enqueueOperation({ kind: "sale", payload });
++      dispatch({ type: "clear" });
++      setMethod("cash");
++      setFeedback({ tone: "ok", text: `Venta guardada: ${formatMoney(payload.totalAmount)} en ${PAYMENT_LABELS[payload.paymentMethod].toLowerCase()}.` });
++      void synchronizePendingOperations().catch(() => undefined);
++    } catch (err) {
++      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "No se pudo guardar la venta." });
++    } finally {
++      setCharging(false);
++      focusScan();
++    }
++  }
++
++  return (
++    <div className="pos-layout">
++      <GlassCard className="pos-panel">
++        <form className="pos-scan" onSubmit={submitQuery}>
++          <TextField ref={scanRef} label="Código o nombre del producto" autoFocus autoComplete="off" value={query}
++            onChange={(e) => setQuery(e.target.value)} placeholder="Escaneá o escribí" />
+           <Button type="submit" variant="secundario">Agregar</Button>
+         </form>
+-        <p style={{ fontSize: '0.75rem', color: '#666' }}>
+-          * El escáner de cuña está activo en segundo plano (RF-18).
+-        </p>
++        {isLoading && entries.length === 0 && <p className="field-help">Cargando catálogo…</p>}
+ 
+-        <div style={{ flex: 1, overflowY: 'auto', marginTop: '1rem' }}>
+-          {items.length === 0 ? (
+-            <EmptyState title="Carrito vacío">
+-              Pase un producto por el lector o ingrese su código manualmente.
+-            </EmptyState>
+-          ) : (
+-            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+-              {items.map((item) => (
+-                <li key={item.id} style={{ padding: '1rem 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #eee' }}>
+-                  <div style={{ flex: 1 }}>
+-                    <p style={{ fontWeight: 'bold', margin: '0 0 0.25rem' }}>{item.name}</p>
+-                    <p style={{ fontSize: '0.875rem', color: '#666', margin: '0 0 0.5rem' }}>
+-                      ${item.price.toFixed(2)} {item.weightManual ? '/ kg' : 'c/u'}
+-                    </p>
+-                    {item.barcode && <Tag>EAN: {item.barcode}</Tag>}
+-                  </div>
+-                  
+-                  <div style={{ width: '120px', margin: '0 1rem' }}>
+-                    {/* RF-33: Peso manual */}
+-                    {item.weightManual ? (
+-                      <TextField
+-                        type="number"
+-                        label="Peso (kg)"
+-                        step="0.001"
+-                        value={manualWeightInput[item.id] ?? item.quantity}
+-                        onChange={(e) => handleWeightChange(item.id, e.target.value)}
+-                      />
+-                    ) : (
+-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+-                        <Button
+-                          variant="secundario"
+-                          onClick={() => updateQuantity(item.id, item.quantity - 1)}
+-                          disabled={item.quantity <= 1}
+-                        >
+-                          -
+-                        </Button>
+-                        <span style={{ width: '2rem', textAlign: 'center' }}>{item.quantity}</span>
+-                        <Button
+-                          variant="secundario"
+-                          onClick={() => updateQuantity(item.id, item.quantity + 1)}
+-                        >
+-                          +
+-                        </Button>
+-                      </div>
+-                    )}
+-                  </div>
++        {results.length > 0 && (
++          <ul className="pos-results" aria-label="Resultados">
++            {results.map((entry) => (
++              <li key={entry.presentationId}>
++                <Button variant="fantasma" onClick={() => addEntry(entry)}>
++                  <span>{entry.productName} · {entry.presentationName}</span>
++                  <span>{entry.soldByWeight ? `${formatMoney(pricePerKilo(entry))}/kg` : formatMoney(entry.salePrice)}</span>
++                </Button>
++              </li>
++            ))}
++          </ul>
++        )}
+ 
+-                  <div style={{ width: '80px', textAlign: 'right', fontWeight: 'bold', margin: '0 1rem' }}>
+-                    ${(item.price * item.quantity).toFixed(2)}
+-                  </div>
+-                  
+-                  <Button variant="peligro" onClick={() => removeItem(item.id)}>X</Button>
++        {choices && (
++          <div role="group" aria-label="Elegí la presentación">
++            <p className="field-help">Ese código es de un producto con varias presentaciones. ¿Cuál es?</p>
++            <ul className="pos-results">
++              {choices.map((entry) => (
++                <li key={entry.presentationId}>
++                  <Button variant="secundario" onClick={() => addEntry(entry)}>
++                    <span>{entry.presentationName}</span><span>{formatMoney(entry.salePrice)}</span>
++                  </Button>
+                 </li>
+               ))}
+             </ul>
+-          )}
+-        </div>
++          </div>
++        )}
++
++        {lines.length === 0 ? (
++          <EmptyState title="Todavía no hay productos">Pasá un producto por el lector o buscalo por nombre.</EmptyState>
++        ) : (
++          <ul className="pos-lines">
++            {lines.map((line) => (
++              <li key={line.lineId} className="pos-line">
++                <div>
++                  <p className="pos-line-name">{line.entry.productName} · {line.entry.presentationName}</p>
++                  <p className="pos-line-detail">
++                    {line.weight !== undefined
++                      ? `${line.weight} ${line.entry.baseUnit === "millilitre" ? "ml" : "g"} a ${formatMoney(pricePerKilo(line.entry))}/kg`
++                      : `${formatMoney(line.entry.salePrice)} c/u`}
++                  </p>
++                </div>
++                {line.weight === undefined ? (
++                  <div className="pos-qty">
++                    <Button variant="secundario" aria-label="Quitar uno"
++                      onClick={() => dispatch({ type: "setQuantity", lineId: line.lineId, quantity: line.quantity - 1 })}>−</Button>
++                    <output aria-label="Cantidad">{line.quantity}</output>
++                    <Button variant="secundario" aria-label="Agregar uno"
++                      onClick={() => dispatch({ type: "setQuantity", lineId: line.lineId, quantity: line.quantity + 1 })}>+</Button>
++                  </div>
++                ) : <span />}
++                <span className="pos-amount">{formatMoney(lineTotal(line))}</span>
++                <Button variant="fantasma" aria-label={`Quitar ${line.entry.productName}`}
++                  onClick={() => dispatch({ type: "remove", lineId: line.lineId })}>Quitar</Button>
++              </li>
++            ))}
++          </ul>
++        )}
+       </GlassCard>
+ 
+-      <GlassCard style={{ width: '24rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+-        <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', margin: 0 }}>Resumen de Venta</h3>
+-        
+-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '1.5rem', fontWeight: 'bold', padding: '1rem 0', borderBottom: '1px solid #eee' }}>
+-          <span>Total:</span>
+-          <span>${total.toFixed(2)}</span>
+-        </div>
++      <GlassCard className="pos-panel">
++        <p className="pos-total-label">Total</p>
++        <p className="pos-total" aria-live="polite">{formatMoney(total)}</p>
+ 
+-        <SelectField
+-          label="Método de Pago"
+-          value={paymentMethod}
+-          onChange={(e) => setPaymentMethod(e.target.value as SalePayload['paymentMethod'])}
+-        >
+-          <option value="cash">Efectivo</option>
+-          <option value="card">Tarjeta / Transferencia</option>
+-          <option value="mixed">Cobro Mixto</option>
+-          <option value="fiado">Fiado (Cuenta Corriente)</option>
+-        </SelectField>
+-
+-        {paymentMethod === 'mixed' && (
+-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', padding: '0.75rem', backgroundColor: '#f9f9f9', borderRadius: '0.5rem' }}>
+-            <TextField
+-              label="Monto en Efectivo"
+-              type="number"
+-              value={cashAmount}
+-              onChange={(e) => setCashAmount(e.target.value)}
+-            />
+-            <TextField
+-              label="Monto en Tarjeta"
+-              type="number"
+-              value={cardAmount}
+-              onChange={(e) => setCardAmount(e.target.value)}
+-            />
+-          </div>
+-        )}
++        <fieldset className="pos-methods">
++          <legend>Medio de pago</legend>
++          {SELLING_METHODS.map((m) => (
++            <label key={m} className="pos-method">
++              <input type="radio" name="metodo" value={m} checked={method === m} onChange={() => setMethod(m)} />
++              <span>{PAYMENT_LABELS[m]}</span>
++            </label>
++          ))}
++        </fieldset>
++
++        <Button className="pos-charge" onClick={() => void charge()} disabled={lines.length === 0} loading={charging}>
++          Cobrar {lines.length > 0 ? formatMoney(total) : ""}
++        </Button>
++        <Button variant="fantasma" onClick={() => dispatch({ type: "clear" })} disabled={lines.length === 0}>Vaciar</Button>
++        <p className="pos-feedback" data-tone={feedback?.tone} role="status">{feedback?.text}</p>
+ 
+-        <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+-          <Button
+-            variant="primario"
+-            onClick={handleCheckout}
+-            disabled={items.length === 0}
+-            style={{ padding: '1rem', fontSize: '1.125rem' }}
+-          >
+-            Cobrar e Imprimir
+-          </Button>
+-          <Button variant="fantasma" onClick={clearCart} disabled={items.length === 0}>
+-            Cancelar Venta
+-          </Button>
++        <div className="pos-shift">
++          <OfflineIndicator />
++          <Button variant="secundario" onClick={() => setClosing(true)}>Cerrar turno</Button>
+         </div>
+       </GlassCard>
++
++      {weighing && (
++        <WeightDialog entry={weighing} onCancel={() => { setWeighing(null); focusScan(); }}
++          onConfirm={(weight) => {
++            dispatch({ type: "addWeighed", entry: weighing, weight, lineId: crypto.randomUUID() });
++            setWeighing(null);
++            focusScan();
++          }} />
++      )}
++      {closing && <CloseShiftDialog shift={shift} onCancel={() => setClosing(false)} onClosed={onClosed} />}
+     </div>
+   );
+ }
++
++function WeightDialog({ entry, onConfirm, onCancel }: { entry: PosEntry; onConfirm: (weight: number) => void; onCancel: () => void }) {
++  const [value, setValue] = useState("");
++  const weight = Number(value.replace(",", "."));
++  const valid = weight > 0;
++  const unit = entry.baseUnit === "millilitre" ? "ml" : "g";
++  const amount = valid ? lineSubtotal(roundQuantity(weight / entry.baseQuantity), entry.salePrice) : 0;
++
++  return (
++    <Modal open title={`Peso de ${entry.productName}`} onClose={onCancel}
++      footer={<>
++        <Button variant="fantasma" onClick={onCancel}>Cancelar</Button>
++        <Button onClick={() => onConfirm(weight)} disabled={!valid}>Agregar {valid ? formatMoney(amount) : ""}</Button>
++      </>}>
++      <form onSubmit={(e) => { e.preventDefault(); if (valid) onConfirm(weight); }}>
++        <TextField label={`Peso leído en la balanza (${unit})`} inputMode="decimal" autoFocus value={value}
++          onChange={(e) => setValue(e.target.value)} help={`${formatMoney(pricePerKilo(entry))} por ${unit === "ml" ? "litro" : "kilo"}`} />
++      </form>
++    </Modal>
++  );
++}
++
++function CloseShiftDialog({ shift, onCancel, onClosed }: { shift: CurrentShift; onCancel: () => void; onClosed: () => void }) {
++  const [summary, setSummary] = useState<ShiftSummary | null>(null);
++  const [result, setResult] = useState<CloseResult | null>(null);
++  const [busy, setBusy] = useState(false);
++
++  useEffect(() => { void shiftSummary(shift).then(setSummary); }, [shift]);
++
++  async function confirm() {
++    setBusy(true);
++    try {
++      const outcome = await closeShift();
++      setResult(outcome);
++      setSummary(outcome.summary);
++    } catch (err) {
++      setResult({ closed: false, summary: summary!, reason: err instanceof Error ? err.message : "No se pudo cerrar el turno." });
++    } finally {
++      setBusy(false);
++    }
++  }
++
++  const shown = summary;
++  return (
++    <Modal open title={`Cierre de ${shift.registerName}`} onClose={result?.closed ? onClosed : onCancel}
++      footer={result?.closed
++        ? <Button onClick={onClosed}>Listo</Button>
++        : <>
++            <Button variant="fantasma" onClick={onCancel}>Seguir vendiendo</Button>
++            <Button onClick={() => void confirm()} loading={busy} disabled={!shown}>Cerrar turno</Button>
++          </>}>
++      {!shown ? <p>Calculando…</p> : (
++        <table className="pos-summary">
++          <thead><tr><th>Medio de pago</th><th>Ventas</th><th>Total</th></tr></thead>
++          <tbody>
++            {(Object.keys(PAYMENT_LABELS) as PaymentMethod[]).map((m) => (
++              <tr key={m}><td>{PAYMENT_LABELS[m]}</td><td>{shown.byMethod[m].count}</td><td>{formatMoney(shown.byMethod[m].total)}</td></tr>
++            ))}
++          </tbody>
++          <tfoot><tr><td>Total</td><td>{shown.salesCount}</td><td>{formatMoney(shown.total)}</td></tr></tfoot>
++        </table>
++      )}
++      {shown && <p className="field-help">Efectivo esperado en la caja: {formatMoney(shift.initialBalance + shown.byMethod.cash.total)} (incluye {formatMoney(shift.initialBalance)} inicial).</p>}
++      {result && !result.closed && <p className="form-error" role="alert">{result.reason}</p>}
++      {result?.closed && (
++        <p className="notice" role="status">
++          Turno cerrado.{result.backupError ? ` El respaldo no se pudo descargar: ${result.backupError}` : " Se descargó el respaldo del cierre."}
++        </p>
++      )}
++    </Modal>
++  );
++}
+diff --git a/src/modules/pos/cart.test.ts b/src/modules/pos/cart.test.ts
+new file mode 100644
+index 0000000..cc6213c
+--- /dev/null
++++ b/src/modules/pos/cart.test.ts
+@@ -0,0 +1,66 @@
++import { describe, expect, it } from "vitest";
++import { buildSalePayload, cartReducer, cartTotal } from "./cart";
++import type { CartLine, PosEntry } from "./types";
++
++const unit: PosEntry = {
++  presentationId: "bolsa", productId: "n", productName: "Nueces", presentationName: "250 g",
++  baseUnit: "gram", baseQuantity: 250, salePrice: 1500, soldByWeight: false, internalBarcode: "1", manufacturerBarcode: null
++};
++const bulkPerKg: PosEntry = {
++  ...unit, presentationId: "granel-kg", presentationName: "granel por kg", baseQuantity: 1000, salePrice: 3000, soldByWeight: true
++};
++
++let n = 0;
++const id = () => `id-${++n}`;
++
++describe("carrito", () => {
++  it("agrupa productos por unidad en una línea", () => {
++    let lines: CartLine[] = [];
++    lines = cartReducer(lines, { type: "add", entry: unit, lineId: id() });
++    lines = cartReducer(lines, { type: "add", entry: unit, lineId: id() });
++    expect(lines).toHaveLength(1);
++    expect(lines[0]?.quantity).toBe(2);
++    expect(cartTotal(lines)).toBe(3000);
++  });
++
++  it("RF-33: 350 g de un granel a $3000/kg suman $1050", () => {
++    const lines = cartReducer([], { type: "addWeighed", entry: bulkPerKg, weight: 350, lineId: id() });
++    expect(lines[0]?.quantity).toBe(0.35);
++    expect(cartTotal(lines)).toBe(1050);
++  });
++
++  it("un producto por peso no se agrega sin peso", () => {
++    expect(cartReducer([], { type: "add", entry: bulkPerKg, lineId: id() })).toEqual([]);
++    expect(cartReducer([], { type: "addWeighed", entry: bulkPerKg, weight: 0, lineId: id() })).toEqual([]);
++  });
++
++  it("cantidad 0 quita la línea", () => {
++    const lines = cartReducer([], { type: "add", entry: unit, lineId: "x" });
++    expect(cartReducer(lines, { type: "setQuantity", lineId: "x", quantity: 0 })).toEqual([]);
++  });
++});
++
++describe("buildSalePayload (contrato con process_offline_sale)", () => {
++  const lines: CartLine[] = [
++    { lineId: "a", entry: unit, quantity: 3 },
++    { lineId: "b", entry: bulkPerKg, quantity: 0.35, weight: 350 }
++  ];
++
++  it("envía cantidades en unidades de presentación y el total que se mostró", () => {
++    const payload = buildSalePayload(lines, { shiftId: "turno", paymentMethod: "qr", newId: id });
++    expect(payload.totalAmount).toBe(5550);
++    expect(payload.items.map((i) => [i.presentationId, i.quantity, i.unitPrice])).toEqual([
++      ["bolsa", 3, 1500],
++      ["granel-kg", 0.35, 3000]
++    ]);
++    expect(payload).not.toHaveProperty("customerId");
++  });
++
++  it("un fiado sin cliente no se arma", () => {
++    expect(() => buildSalePayload(lines, { shiftId: "turno", paymentMethod: "credit", newId: id })).toThrow(/cliente/);
++  });
++
++  it("una venta vacía no se arma", () => {
++    expect(() => buildSalePayload([], { shiftId: "turno", paymentMethod: "cash", newId: id })).toThrow();
++  });
++});
+diff --git a/src/modules/pos/cart.ts b/src/modules/pos/cart.ts
+new file mode 100644
+index 0000000..5cadeee
+--- /dev/null
++++ b/src/modules/pos/cart.ts
+@@ -0,0 +1,75 @@
++import { lineSubtotal, roundQuantity, sumMoney } from "./money";
++import type { CartLine, PaymentMethod, PosEntry, SalePayload } from "./types";
++
++export type CartAction =
++  | { type: "add"; entry: PosEntry; lineId: string }
++  | { type: "addWeighed"; entry: PosEntry; weight: number; lineId: string }
++  | { type: "setQuantity"; lineId: string; quantity: number }
++  | { type: "remove"; lineId: string }
++  | { type: "clear" };
++
++/**
++ * Carrito de caja. Los productos por unidad se agrupan en una línea; cada pesada es una línea
++ * propia (se pesan por separado y el importe depende del peso).
++ */
++export function cartReducer(lines: CartLine[], action: CartAction): CartLine[] {
++  switch (action.type) {
++    case "add": {
++      if (action.entry.soldByWeight) return lines;
++      const existing = lines.find((line) => line.entry.presentationId === action.entry.presentationId && line.weight === undefined);
++      if (existing) {
++        return lines.map((line) => (line === existing ? { ...line, quantity: line.quantity + 1 } : line));
++      }
++      return [...lines, { lineId: action.lineId, entry: action.entry, quantity: 1 }];
++    }
++    case "addWeighed": {
++      if (!(action.weight > 0)) return lines;
++      const quantity = roundQuantity(action.weight / action.entry.baseQuantity);
++      if (quantity <= 0) return lines;
++      return [...lines, { lineId: action.lineId, entry: action.entry, quantity, weight: action.weight }];
++    }
++    case "setQuantity": {
++      if (!(action.quantity > 0)) return lines.filter((line) => line.lineId !== action.lineId);
++      return lines.map((line) =>
++        line.lineId === action.lineId && line.weight === undefined
++          ? { ...line, quantity: Math.floor(action.quantity) }
++          : line
++      );
++    }
++    case "remove":
++      return lines.filter((line) => line.lineId !== action.lineId);
++    case "clear":
++      return [];
++  }
++}
++
++export function lineTotal(line: CartLine): number {
++  return lineSubtotal(line.quantity, line.entry.salePrice);
++}
++
++export function cartTotal(lines: CartLine[]): number {
++  return sumMoney(lines.map(lineTotal));
++}
++
++/** Arma el cuerpo de la venta con la misma cantidad y precio que se mostraron en pantalla. */
++export function buildSalePayload(
++  lines: CartLine[],
++  options: { shiftId: string; paymentMethod: PaymentMethod; customerId?: string; newId: () => string }
++): SalePayload {
++  if (lines.length === 0) throw new Error("La venta no tiene productos.");
++  if (options.paymentMethod === "credit" && !options.customerId) {
++    throw new Error("Elegí el cliente para registrar el fiado.");
++  }
++  return {
++    shiftId: options.shiftId,
++    paymentMethod: options.paymentMethod,
++    ...(options.customerId ? { customerId: options.customerId } : {}),
++    totalAmount: cartTotal(lines),
++    items: lines.map((line) => ({
++      localId: options.newId(),
++      presentationId: line.entry.presentationId,
++      quantity: roundQuantity(line.quantity),
++      unitPrice: line.entry.salePrice
++    }))
++  };
++}
+diff --git a/src/modules/pos/catalogLookup.test.ts b/src/modules/pos/catalogLookup.test.ts
+new file mode 100644
+index 0000000..391094e
+--- /dev/null
++++ b/src/modules/pos/catalogLookup.test.ts
+@@ -0,0 +1,49 @@
++import { describe, expect, it } from "vitest";
++import { lookupBarcode, pricePerKilo, searchEntries } from "./catalogLookup";
++import type { PosEntry } from "./types";
++
++const entry = (over: Partial<PosEntry>): PosEntry => ({
++  presentationId: "p", productId: "prod", productName: "Producto", presentationName: "Unidad",
++  baseUnit: "unit", baseQuantity: 1, salePrice: 100, soldByWeight: false,
++  internalBarcode: null, manufacturerBarcode: null, ...over
++});
++
++const entries = [
++  entry({ presentationId: "garrapinada-150", productId: "g", productName: "Garrapiñada", presentationName: "150 g", internalBarcode: "2000000000015" }),
++  entry({ presentationId: "yerba-1kg", productId: "y", productName: "Yerba", presentationName: "1 kg", manufacturerBarcode: "7790001000017" }),
++  entry({ presentationId: "aceite-500", productId: "a", productName: "Aceite de oliva", presentationName: "500 ml", manufacturerBarcode: "7790002000014" }),
++  entry({ presentationId: "aceite-1l", productId: "a", productName: "Aceite de oliva", presentationName: "1 l", manufacturerBarcode: "7790002000014" }),
++  entry({ presentationId: "lentejas-granel", productId: "l", productName: "Lentejas", presentationName: "granel", baseUnit: "gram", baseQuantity: 1, salePrice: 3, soldByWeight: true, internalBarcode: "2100000000012" })
++];
++
++describe("lookupBarcode (RF-18 a RF-21)", () => {
++  it("el código interno identifica la presentación", () => {
++    expect(lookupBarcode(entries, "2000000000015")).toEqual({ kind: "found", entry: entries[0] });
++  });
++
++  it("el código del fabricante con una sola presentación la encuentra", () => {
++    const result = lookupBarcode(entries, " 7790001000017 ");
++    expect(result.kind === "found" && result.entry.presentationId).toBe("yerba-1kg");
++  });
++
++  it("el código del fabricante con varias presentaciones pide elegir", () => {
++    const result = lookupBarcode(entries, "7790002000014");
++    expect(result.kind).toBe("choose");
++    expect(result.kind === "choose" && result.entries.map((e) => e.presentationId)).toEqual(["aceite-500", "aceite-1l"]);
++  });
++
++  it("un código desconocido no inventa un producto", () => {
++    expect(lookupBarcode(entries, "123")).toEqual({ kind: "not_found", code: "123" });
++  });
++});
++
++describe("búsqueda y precios", () => {
++  it("busca sin distinguir tildes ni mayúsculas", () => {
++    expect(searchEntries(entries, "garrapinada").map((e) => e.presentationId)).toEqual(["garrapinada-150"]);
++    expect(searchEntries(entries, "a")).toEqual([]);
++  });
++
++  it("muestra el precio por kilo de un granel cargado por gramo", () => {
++    expect(pricePerKilo(entries[4]!)).toBe(3000);
++  });
++});
+diff --git a/src/modules/pos/catalogLookup.ts b/src/modules/pos/catalogLookup.ts
+new file mode 100644
+index 0000000..66781b1
+--- /dev/null
++++ b/src/modules/pos/catalogLookup.ts
+@@ -0,0 +1,63 @@
++import type { CatalogProduct } from "../catalog/types";
++import type { PosEntry } from "./types";
++
++export type LookupResult =
++  | { kind: "found"; entry: PosEntry }
++  | { kind: "choose"; entries: PosEntry[] }
++  | { kind: "not_found"; code: string };
++
++export function toPosEntries(products: CatalogProduct[]): PosEntry[] {
++  return products.flatMap((product) =>
++    product.presentations
++      .filter((presentation) => presentation.active)
++      .map((presentation) => ({
++        presentationId: presentation.id,
++        productId: product.id,
++        productName: product.name,
++        presentationName: presentation.name,
++        baseUnit: product.base_unit,
++        baseQuantity: Number(presentation.base_quantity),
++        salePrice: Number(presentation.sale_price),
++        soldByWeight: Boolean(presentation.sold_by_weight),
++        internalBarcode: presentation.internal_barcode,
++        manufacturerBarcode: product.manufacturer_barcode
++      }))
++  );
++}
++
++/**
++ * Busca un código escaneado (RF-18). Primero el código interno de la presentación (RF-20, RF-21:
++ * identifica producto y presentación); después el del fabricante (RF-19), que identifica solo el
++ * producto: si ese producto tiene varias presentaciones, la caja tiene que preguntar cuál.
++ */
++export function lookupBarcode(entries: PosEntry[], rawCode: string): LookupResult {
++  const code = rawCode.trim();
++  if (!code) return { kind: "not_found", code };
++
++  const byInternal = entries.find((entry) => entry.internalBarcode === code);
++  if (byInternal) return { kind: "found", entry: byInternal };
++
++  const byManufacturer = entries.filter((entry) => entry.manufacturerBarcode === code);
++  if (byManufacturer.length === 1 && byManufacturer[0]) return { kind: "found", entry: byManufacturer[0] };
++  if (byManufacturer.length > 1) return { kind: "choose", entries: byManufacturer };
++
++  return { kind: "not_found", code };
++}
++
++/** Búsqueda por nombre para productos sin código a mano. */
++export function searchEntries(entries: PosEntry[], text: string, limit = 8): PosEntry[] {
++  const needle = normalize(text);
++  if (needle.length < 2) return [];
++  return entries
++    .filter((entry) => normalize(`${entry.productName} ${entry.presentationName}`).includes(needle))
++    .slice(0, limit);
++}
++
++function normalize(value: string): string {
++  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
++}
++
++/** Precio por kilo o litro para mostrar en productos que se venden por peso. */
++export function pricePerKilo(entry: PosEntry): number {
++  return (entry.salePrice / entry.baseQuantity) * 1000;
++}
+diff --git a/src/modules/pos/money.test.ts b/src/modules/pos/money.test.ts
+new file mode 100644
+index 0000000..10b5646
+--- /dev/null
++++ b/src/modules/pos/money.test.ts
+@@ -0,0 +1,30 @@
++import { describe, expect, it } from "vitest";
++import { lineSubtotal, roundQuantity, sumMoney } from "./money";
++
++describe("money: coincide con round(qty * price, 2) de Postgres", () => {
++  it("350 g de granel por kg a $3000 cuestan $1050", () => {
++    expect(lineSubtotal(0.35, 3000)).toBe(1050);
++  });
++
++  it("no arrastra el error de coma flotante (Postgres: round(1.005, 2) = 1.01)", () => {
++    const naive = (qty: number, price: number) => Math.round(qty * price * 100) / 100;
++    expect(naive(1.005, 1)).toBe(1); // el cálculo ingenuo cobra un centavo menos que el servidor
++    expect(lineSubtotal(1.005, 1)).toBe(1.01);
++    expect(lineSubtotal(0.145, 1)).toBe(0.15);
++  });
++
++  it("redondea mitad hacia arriba como numeric", () => {
++    expect(lineSubtotal(0.125, 0.1)).toBe(0.01); // 0.0125 → 0.01
++    expect(lineSubtotal(0.005, 1)).toBe(0.01); // 0.005 → 0.01
++    expect(lineSubtotal(3, 1500)).toBe(4500);
++  });
++
++  it("las cantidades se guardan con 3 decimales", () => {
++    expect(roundQuantity(333 / 1000)).toBe(0.333);
++    expect(roundQuantity(1 / 3)).toBe(0.333);
++  });
++
++  it("suma importes sin error acumulado", () => {
++    expect(sumMoney([0.1, 0.2])).toBe(0.3);
++  });
++});
+diff --git a/src/modules/pos/money.ts b/src/modules/pos/money.ts
+new file mode 100644
+index 0000000..750b389
+--- /dev/null
++++ b/src/modules/pos/money.ts
+@@ -0,0 +1,31 @@
++// Aritmética de dinero con enteros para coincidir exactamente con `round(qty * price, 2)`
++// de Postgres (numeric). Cantidades con hasta 3 decimales; precios con hasta 2.
++
++/** Redondea una cantidad a 3 decimales, como numeric(14, 3). */
++export function roundQuantity(value: number): number {
++  return Math.round((value + Number.EPSILON) * 1000) / 1000;
++}
++
++/** Redondea un importe a 2 decimales, mitad hacia arriba. */
++export function roundMoney(value: number): number {
++  return Math.round((value + Number.EPSILON) * 100) / 100;
++}
++
++/** Subtotal exacto de una línea: evita que 0.35 × 3000 dé 1050.0000000000002. */
++export function lineSubtotal(quantity: number, unitPrice: number): number {
++  const milli = Math.round(roundQuantity(quantity) * 1000);
++  const cents = Math.round(roundMoney(unitPrice) * 100);
++  const product = milli * cents; // en cienmilésimos de peso
++  const roundedCents = Math.sign(product) * Math.floor((Math.abs(product) + 500) / 1000);
++  return roundedCents / 100;
++}
++
++export function sumMoney(values: number[]): number {
++  return values.reduce((acc, value) => acc + Math.round(value * 100), 0) / 100;
++}
++
++const formatter = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 2 });
++
++export function formatMoney(value: number): string {
++  return formatter.format(value);
++}
+diff --git a/src/modules/pos/saleContract.test.ts b/src/modules/pos/saleContract.test.ts
+new file mode 100644
+index 0000000..396d41e
+--- /dev/null
++++ b/src/modules/pos/saleContract.test.ts
+@@ -0,0 +1,53 @@
++import "fake-indexeddb/auto";
++import { readFileSync } from "node:fs";
++import { afterEach, describe, expect, it } from "vitest";
++import { enqueueOperation, pendingOperations, resetOfflineStorageForTests } from "../../shared/offline/queue";
++import { buildSalePayload } from "./cart";
++import { PAYMENT_METHODS, type CartLine } from "./types";
++
++const migration = readFileSync("supabase/migrations/20260923110000_contrato_venta.sql", "utf8");
++
++const line: CartLine = {
++  lineId: "l1",
++  quantity: 2,
++  entry: {
++    presentationId: "00000000-0000-0000-0000-0000000000c1", productId: "p", productName: "Nueces", presentationName: "250 g",
++    baseUnit: "gram", baseQuantity: 250, salePrice: 1500, soldByWeight: false, internalBarcode: null, manufacturerBarcode: null
++  }
++};
++
++describe("contrato caja ↔ process_offline_sale", () => {
++  afterEach(async () => {
++    await resetOfflineStorageForTests();
++  });
++
++  it("la operación encolada tiene cada campo que lee la RPC", async () => {
++    const payload = buildSalePayload([line], { shiftId: "turno-1", paymentMethod: "transfer", newId: () => crypto.randomUUID() });
++    await enqueueOperation({ kind: "sale", payload });
++    const [operation] = await pendingOperations();
++
++    // Campos de la operación: payload ->> 'localId' | 'deviceId' | 'kind' | 'createdAt'
++    for (const key of ["localId", "deviceId", "kind", "createdAt"] as const) {
++      expect(migration).toContain(`payload ->> '${key}'`);
++      expect(operation?.[key]).toBeTruthy();
++    }
++    // Campos de la venta: v_sale ->> 'paymentMethod' | 'customerId' | 'shiftId' | 'totalAmount'
++    for (const key of ["paymentMethod", "shiftId", "totalAmount"]) {
++      expect(migration).toContain(`v_sale ->> '${key}'`);
++      expect(operation?.payload).toHaveProperty(key);
++    }
++    // Campos de cada ítem: v_item ->> 'presentationId' | 'quantity' | 'unitPrice' | 'localId'
++    const item = (operation?.payload as { items: Record<string, unknown>[] }).items[0];
++    for (const key of ["presentationId", "quantity", "unitPrice", "localId"]) {
++      expect(migration).toContain(`v_item ->> '${key}'`);
++      expect(item).toHaveProperty(key);
++    }
++  });
++
++  it("los medios de pago del frontend son exactamente los del enum de la base", () => {
++    const enumDef = readFileSync("supabase/migrations/20260922060000_phase_0_foundation.sql", "utf8")
++      .match(/create type public\.payment_method as enum \(([^)]+)\)/)?.[1] ?? "";
++    const dbValues = [...enumDef.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
++    expect([...PAYMENT_METHODS].sort()).toEqual(dbValues.sort());
++  });
++});
+diff --git a/src/modules/pos/scanDetector.test.ts b/src/modules/pos/scanDetector.test.ts
+new file mode 100644
+index 0000000..a98839f
+--- /dev/null
++++ b/src/modules/pos/scanDetector.test.ts
+@@ -0,0 +1,31 @@
++import { describe, expect, it } from "vitest";
++import { ScanDetector } from "./scanDetector";
++
++function feed(detector: ScanDetector, text: string, start: number, gap: number): string | null {
++  let result: string | null = null;
++  [...text, "Enter"].forEach((key, index) => {
++    result = detector.push(key, start + index * gap);
++  });
++  return result;
++}
++
++describe("ScanDetector (RF-18, GRAVE-06)", () => {
++  it("reconoce un lector: 13 dígitos a 10 ms y Enter", () => {
++    expect(feed(new ScanDetector(), "7790001000017", 0, 10)).toBe("7790001000017");
++  });
++
++  it("ignora a una persona tipeando despacio", () => {
++    expect(feed(new ScanDetector(), "7790001000017", 0, 150)).toBeNull();
++  });
++
++  it("ignora un Enter con pocos dígitos (por ejemplo, un peso)", () => {
++    expect(feed(new ScanDetector(), "350", 0, 10)).toBeNull();
++  });
++
++  it("un escaneo después de tipear despacio no arrastra los dígitos anteriores", () => {
++    const detector = new ScanDetector();
++    detector.push("3", 0);
++    detector.push("5", 500);
++    expect(feed(detector, "2000000000015", 1000, 8)).toBe("2000000000015");
++  });
++});
+diff --git a/src/modules/pos/scanDetector.ts b/src/modules/pos/scanDetector.ts
+new file mode 100644
+index 0000000..b4357f9
+--- /dev/null
++++ b/src/modules/pos/scanDetector.ts
+@@ -0,0 +1,39 @@
++/**
++ * Distingue un lector de códigos "tipo teclado" (RF-18) de una persona tipeando: el lector
++ * escribe muchos dígitos muy rápido y termina con Enter. Sirve también cuando el foco está en
++ * otro campo (GRAVE-06): quien lo usa descarta el Enter y retira del campo lo que tipeó el lector.
++ */
++export class ScanDetector {
++  private buffer = "";
++  private lastAt = -Infinity;
++
++  constructor(
++    private readonly maxGapMs = 40,
++    private readonly minLength = 8
++  ) {}
++
++  /** Devuelve el código si la tecla completó un escaneo; si no, null. */
++  push(key: string, at: number): string | null {
++    const gap = at - this.lastAt;
++    this.lastAt = at;
++
++    if (key === "Enter") {
++      const code = this.buffer;
++      this.buffer = "";
++      return code.length >= this.minLength ? code : null;
++    }
++
++    if (/^\d$/.test(key)) {
++      this.buffer = gap <= this.maxGapMs ? this.buffer + key : key;
++      return null;
++    }
++
++    this.buffer = "";
++    return null;
++  }
++
++  /** Cantidad de caracteres acumulados como posible escaneo (para retirarlos de un campo). */
++  get pending(): number {
++    return this.buffer.length;
++  }
++}
+diff --git a/src/modules/pos/shift.ts b/src/modules/pos/shift.ts
+new file mode 100644
+index 0000000..1e4eeb5
+--- /dev/null
++++ b/src/modules/pos/shift.ts
+@@ -0,0 +1,164 @@
++import { getSupabase } from "../../shared/supabase/client";
++import { allOperations, readSetting, writeSetting } from "../../shared/offline/queue";
++import { registerPreSyncStep, synchronizePendingOperations } from "../../shared/offline/sync";
++import { backupService } from "../../shared/backup/backupService";
++import { summarizeShift, type ShiftSummary } from "./shiftSummary";
++import type { CurrentShift } from "./types";
++
++const REGISTER_KEY = "pos-register";
++const SHIFT_KEY = "pos-current-shift";
++
++export type RegisterOption = { id: string; name: string; branchName: string };
++
++/** Caja asignada a este dispositivo (se elige una vez por equipo). */
++export async function assignedRegister(): Promise<RegisterOption | undefined> {
++  return readSetting<RegisterOption>(REGISTER_KEY);
++}
++
++export async function assignRegister(register: RegisterOption): Promise<void> {
++  await writeSetting(REGISTER_KEY, register);
++}
++
++export async function listRegisters(): Promise<RegisterOption[]> {
++  const { data, error } = await getSupabase()
++    .from("registers")
++    .select("id, name, archived_at, branch:branches(name)")
++    .is("archived_at", null)
++    .order("name");
++  if (error) throw new Error(`No se pudieron cargar las cajas: ${error.message}`);
++  return (data ?? []).map((row) => {
++    const branch = row.branch as unknown as { name: string } | { name: string }[] | null;
++    const branchName = Array.isArray(branch) ? branch[0]?.name ?? "" : branch?.name ?? "";
++    return { id: row.id as string, name: row.name as string, branchName };
++  });
++}
++
++export async function currentShift(): Promise<CurrentShift | undefined> {
++  return readSetting<CurrentShift>(SHIFT_KEY);
++}
++
++/**
++ * Abre el turno. Se guarda primero en el dispositivo (así se puede vender sin conexión) y se
++ * crea en la nube apenas haya red; las ventas lo referencian, por eso la sincronización lo
++ * persiste antes de enviar la cola.
++ */
++export async function openShift(register: RegisterOption, initialBalance: number): Promise<CurrentShift> {
++  const existing = await currentShift();
++  if (existing) return existing;
++
++  const resumed = await findOwnOpenShift(register);
++  const shift: CurrentShift = resumed ?? {
++    id: crypto.randomUUID(),
++    registerId: register.id,
++    registerName: register.name,
++    openedAt: new Date().toISOString(),
++    initialBalance,
++    persisted: false
++  };
++  await writeSetting(SHIFT_KEY, shift);
++  if (!shift.persisted) await persistShift();
++  return (await currentShift()) ?? shift;
++}
++
++/** Si la cajera dejó un turno abierto en esta caja (por ejemplo, se cortó la luz), lo retoma. */
++async function findOwnOpenShift(register: RegisterOption): Promise<CurrentShift | undefined> {
++  if (!navigator.onLine) return undefined;
++  const { data: auth } = await getSupabase().auth.getUser();
++  if (!auth.user) return undefined;
++  const { data } = await getSupabase()
++    .from("cash_shifts")
++    .select("id, opened_at, initial_balance")
++    .eq("register_id", register.id)
++    .eq("user_id", auth.user.id)
++    .eq("status", "open")
++    .maybeSingle();
++  if (!data) return undefined;
++  return {
++    id: data.id as string,
++    registerId: register.id,
++    registerName: register.name,
++    openedAt: data.opened_at as string,
++    initialBalance: Number(data.initial_balance),
++    persisted: true
++  };
++}
++
++/** Crea en la nube el turno abierto sin conexión. Idempotente. */
++export async function persistShift(): Promise<void> {
++  const shift = await currentShift();
++  if (!shift || shift.persisted || !navigator.onLine) return;
++
++  const { data: auth } = await getSupabase().auth.getUser();
++  if (!auth.user) return;
++
++  const { error } = await getSupabase().from("cash_shifts").upsert(
++    {
++      id: shift.id,
++      register_id: shift.registerId,
++      user_id: auth.user.id,
++      opened_at: shift.openedAt,
++      initial_balance: shift.initialBalance
++    },
++    { onConflict: "id", ignoreDuplicates: true }
++  );
++  if (error) {
++    if (error.code === "23505") {
++      throw new Error(`La ${shift.registerName} ya tiene un turno abierto de otra persona. Pedile que lo cierre o avisale a la administradora.`);
++    }
++    throw new Error(`No se pudo registrar el turno: ${error.message}`);
++  }
++  await writeSetting(SHIFT_KEY, { ...shift, persisted: true });
++}
++
++registerPreSyncStep(persistShift);
++
++export async function shiftSummary(shift: CurrentShift): Promise<ShiftSummary> {
++  return summarizeShift(await allOperations(), shift.id);
++}
++
++export type CloseResult =
++  | { closed: true; summary: ShiftSummary; expectedCash: number; backupError?: string }
++  | { closed: false; summary: ShiftSummary; reason: string };
++
++/**
++ * Cierre de caja (RF-32, RF-41): envía la cola, calcula totales por medio de pago, cierra el
++ * turno en la nube y descarga el respaldo. Sin conexión no se cierra: las ventas siguen a salvo
++ * en el dispositivo y el turno queda abierto hasta poder enviarlas.
++ */
++export async function closeShift(): Promise<CloseResult> {
++  const shift = await currentShift();
++  if (!shift) throw new Error("No hay un turno abierto en este equipo.");
++
++  await synchronizePendingOperations();
++  const summary = await shiftSummary(shift);
++  const refreshed = await currentShift();
++
++  if (!navigator.onLine || !refreshed?.persisted) {
++    return { closed: false, summary, reason: "Para cerrar el turno hace falta conexión. Las ventas siguen guardadas en este equipo." };
++  }
++  if (summary.pendingSync > 0) {
++    return {
++      closed: false,
++      summary,
++      reason: `Quedan ${summary.pendingSync} venta(s) sin enviar. Revisá la conexión y probá de nuevo; no se perdió nada.`
++    };
++  }
++
++  const expectedCash = shift.initialBalance + summary.byMethod.cash.total;
++  const { error } = await getSupabase()
++    .from("cash_shifts")
++    .update({ status: "closed", closed_at: new Date().toISOString(), final_balance: expectedCash })
++    .eq("id", shift.id);
++  if (error) return { closed: false, summary, reason: `No se pudo cerrar el turno: ${error.message}` };
++
++  let backupError: string | undefined;
++  try {
++    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
++    await backupService.downloadBackup(`cierre_${shift.registerName}_${stamp}.json`);
++  } catch (error) {
++    backupError = error instanceof Error ? error.message : "No se pudo generar el respaldo.";
++  }
++
++  await writeSetting(SHIFT_KEY, undefined);
++  return { closed: true, summary, expectedCash, ...(backupError ? { backupError } : {}) };
++}
+diff --git a/src/modules/pos/shiftService.ts b/src/modules/pos/shiftService.ts
+deleted file mode 100644
+index b4d0165..0000000
+--- a/src/modules/pos/shiftService.ts
++++ /dev/null
+@@ -1,46 +0,0 @@
+-import { backupService } from '../../shared/backup/backupService';
+-import { synchronizePendingOperations } from '../../shared/offline/sync';
+-
+-export interface ShiftCloseResult {
+-  syncSuccess: boolean;
+-  synchronizedCount: number;
+-  failedCount: number;
+-}
+-
+-export class ShiftService {
+-  /**
+-   * Cierre de caja (closeShift).
+-   * 1. Fuerza la sincronización de la cola offline hacia Supabase de forma definitiva.
+-   * 2. Desencadena el backup local en JSON utilizando el servicio de backup (Agente J).
+-   */
+-  public async closeShift(): Promise<ShiftCloseResult> {
+-    console.log('[ShiftService] Iniciando cierre de caja...');
+-    
+-    // 1. Vaciar la cola offline
+-    let syncResult = { synchronized: 0, failed: 0 };
+-    try {
+-      syncResult = await synchronizePendingOperations();
+-      console.log(`[ShiftService] Sincronización completada. Éxitos: ${syncResult.synchronized}, Fallos: ${syncResult.failed}`);
+-    } catch (error) {
+-      console.error('[ShiftService] Error crítico al sincronizar operaciones pendientes:', error);
+-    }
+-
+-    // 2. Generar el backup local
+-    try {
+-      console.log('[ShiftService] Disparando backup local automático...');
+-      const dateString = new Date().toISOString().replace(/[:.]/g, '-');
+-      await backupService.downloadBackup(`cierre_caja_${dateString}.json`);
+-      console.log('[ShiftService] Backup local desencadenado.');
+-    } catch (error) {
+-      console.error('[ShiftService] Error al generar el backup local durante el cierre:', error);
+-    }
+-
+-    return {
+-      syncSuccess: syncResult.failed === 0,
+-      synchronizedCount: syncResult.synchronized,
+-      failedCount: syncResult.failed,
+-    };
+-  }
+-}
+-
+-export const shiftService = new ShiftService();
+diff --git a/src/modules/pos/shiftSummary.test.ts b/src/modules/pos/shiftSummary.test.ts
+new file mode 100644
+index 0000000..4934f07
+--- /dev/null
++++ b/src/modules/pos/shiftSummary.test.ts
+@@ -0,0 +1,30 @@
++import { describe, expect, it } from "vitest";
++import type { QueuedOperation } from "../../shared/offline/types";
++import { summarizeShift } from "./shiftSummary";
++
++const sale = (shiftId: string, paymentMethod: string, totalAmount: number, synced = true): QueuedOperation => ({
++  localId: crypto.randomUUID(), deviceId: "d", kind: "sale", createdAt: new Date().toISOString(),
++  payload: { shiftId, paymentMethod, totalAmount, items: [] },
++  ...(synced ? { syncedAt: new Date().toISOString() } : {})
++});
++
++describe("summarizeShift (RF-32)", () => {
++  it("separa el total por medio de pago y cuenta lo pendiente", () => {
++    const summary = summarizeShift([
++      sale("t1", "cash", 1000.1),
++      sale("t1", "cash", 0.2, false),
++      sale("t1", "transfer", 2500),
++      sale("t1", "credit", 700),
++      sale("otro-turno", "cash", 99999),
++      { localId: "x", deviceId: "d", kind: "credit_movement", createdAt: "", payload: { amount: 5 } }
++    ], "t1");
++
++    expect(summary.byMethod.cash).toEqual({ count: 2, total: 1000.3 });
++    expect(summary.byMethod.transfer.total).toBe(2500);
++    expect(summary.byMethod.qr.count).toBe(0);
++    expect(summary.byMethod.credit.total).toBe(700);
++    expect(summary.total).toBe(4200.3);
++    expect(summary.salesCount).toBe(4);
++    expect(summary.pendingSync).toBe(1);
++  });
++});
+diff --git a/src/modules/pos/shiftSummary.ts b/src/modules/pos/shiftSummary.ts
+new file mode 100644
+index 0000000..2937010
+--- /dev/null
++++ b/src/modules/pos/shiftSummary.ts
+@@ -0,0 +1,41 @@
++import type { QueuedOperation } from "../../shared/offline/types";
++import { sumMoney } from "./money";
++import { PAYMENT_METHODS, type PaymentMethod, type SalePayload } from "./types";
++
++export type ShiftSummary = {
++  byMethod: Record<PaymentMethod, { count: number; total: number }>;
++  total: number;
++  salesCount: number;
++  pendingSync: number;
++};
++
++/**
++ * RF-32 · Totales del turno por medio de pago, calculados desde la cola local del dispositivo.
++ * Funciona sin conexión: toda venta de este puesto pasa primero por la cola (RF-35).
++ */
++export function summarizeShift(operations: QueuedOperation[], shiftId: string): ShiftSummary {
++  const byMethod = Object.fromEntries(
++    PAYMENT_METHODS.map((method) => [method, { count: 0, total: 0 }])
++  ) as ShiftSummary["byMethod"];
++  let pendingSync = 0;
++  let salesCount = 0;
++
++  for (const operation of operations) {
++    if (operation.kind !== "sale") continue;
++    const payload = operation.payload as unknown as Partial<SalePayload>;
++    if (payload.shiftId !== shiftId || !payload.paymentMethod || !(payload.paymentMethod in byMethod)) continue;
++
++    const bucket = byMethod[payload.paymentMethod];
++    bucket.count += 1;
++    bucket.total = sumMoney([bucket.total, Number(payload.totalAmount ?? 0)]);
++    salesCount += 1;
++    if (!operation.syncedAt) pendingSync += 1;
++  }
++
++  return {
++    byMethod,
++    total: sumMoney(PAYMENT_METHODS.map((method) => byMethod[method].total)),
++    salesCount,
++    pendingSync
++  };
++}
+diff --git a/src/modules/pos/types.ts b/src/modules/pos/types.ts
+index 62f571d..ee3c984 100644
+--- a/src/modules/pos/types.ts
++++ b/src/modules/pos/types.ts
+@@ -1,17 +1,60 @@
+-export interface CartItem {
+-  id: string; // product id or barcode
+-  barcode?: string;
+-  name: string;
+-  price: number;
++/** Medios de pago: exactamente los valores del enum `payment_method` de la base. */
++export type PaymentMethod = "cash" | "transfer" | "qr" | "credit";
++
++export const PAYMENT_METHODS: readonly PaymentMethod[] = ["cash", "transfer", "qr", "credit"];
++
++export const PAYMENT_LABELS: Record<PaymentMethod, string> = {
++  cash: "Efectivo",
++  transfer: "Transferencia",
++  qr: "QR",
++  credit: "Fiado"
++};
++
++/** Una presentación vendible, tal como la ve la caja (sin costos: RNF-04). */
++export interface PosEntry {
++  presentationId: string;
++  productId: string;
++  productName: string;
++  presentationName: string;
++  baseUnit: "gram" | "millilitre" | "unit";
++  baseQuantity: number;
++  salePrice: number;
++  soldByWeight: boolean;
++  internalBarcode: string | null;
++  manufacturerBarcode: string | null;
++}
++
++export interface CartLine {
++  lineId: string;
++  entry: PosEntry;
++  /** En unidades de la presentación (ADR-001). Para venta por peso: peso / baseQuantity. */
+   quantity: number;
+-  weightManual?: boolean;
++  /** Peso ingresado en la unidad base (g o ml), solo para ventas por peso. */
++  weight?: number;
+ }
+ 
++export interface SaleItemPayload {
++  localId: string;
++  presentationId: string;
++  quantity: number;
++  unitPrice: number;
++}
++
++/** Cuerpo de la operación `sale` de la cola offline; lo consume process_offline_sale. */
+ export interface SalePayload {
+-  items: CartItem[];
+-  total: number;
+-  paymentMethod: 'cash' | 'card' | 'mixed' | 'fiado';
+-  cashAmount?: number;
+-  cardAmount?: number;
+-  clientId?: string;
++  shiftId: string;
++  paymentMethod: PaymentMethod;
++  customerId?: string;
++  totalAmount: number;
++  items: SaleItemPayload[];
++}
++
++export interface CurrentShift {
++  id: string;
++  registerId: string;
++  registerName: string;
++  openedAt: string;
++  initialBalance: number;
++  /** false mientras el turno se abrió sin conexión y todavía no existe en la nube. */
++  persisted: boolean;
+ }
+diff --git a/src/modules/pos/usePosCart.ts b/src/modules/pos/usePosCart.ts
+deleted file mode 100644
+index 1a16a11..0000000
+--- a/src/modules/pos/usePosCart.ts
++++ /dev/null
+@@ -1,84 +0,0 @@
+-import { useState, useCallback } from 'react';
+-import type { CartItem, SalePayload } from './types';
+-
+-export function usePosCart() {
+-  const [items, setItems] = useState<CartItem[]>([]);
+-
+-  const addItem = useCallback((newItem: CartItem) => {
+-    setItems((prev) => {
+-      const existing = prev.find((i) => i.id === newItem.id);
+-      if (existing) {
+-        return prev.map((i) =>
+-          i.id === newItem.id
+-            ? { ...i, quantity: i.quantity + newItem.quantity }
+-            : i
+-        );
+-      }
+-      return [...prev, newItem];
+-    });
+-  }, []);
+-
+-  const removeItem = useCallback((id: string) => {
+-    setItems((prev) => prev.filter((i) => i.id !== id));
+-  }, []);
+-
+-  const updateQuantity = useCallback((id: string, qty: number) => {
+-    if (qty <= 0) {
+-      removeItem(id);
+-      return;
+-    }
+-    setItems((prev) =>
+-      prev.map((i) => (i.id === id ? { ...i, quantity: qty } : i))
+-    );
+-  }, [removeItem]);
+-
+-  const addByBarcode = useCallback((barcode: string) => {
+-    // Mock product resolution based on barcode
+-    // RF-33: Support for weighted items. Conventionally barcodes starting with 20 are weighted
+-    const isWeighted = barcode.startsWith('20');
+-    
+-    const newItem: CartItem = {
+-      id: barcode,
+-      barcode: barcode,
+-      name: `Producto ${barcode}`,
+-      price: isWeighted ? 1500.0 : 100.0,
+-      quantity: 1,
+-      weightManual: isWeighted
+-    };
+-    addItem(newItem);
+-  }, [addItem]);
+-
+-  const total = items.reduce(
+-    (acc, item) => acc + item.price * item.quantity,
+-    0
+-  );
+-
+-  const clearCart = useCallback(() => {
+-    setItems([]);
+-  }, []);
+-
+-  const generatePayload = useCallback(
+-    (paymentMethod: SalePayload['paymentMethod'], cashAmount?: number, cardAmount?: number, clientId?: string): SalePayload => {
+-      return {
+-        items,
+-        total,
+-        paymentMethod,
+-        cashAmount,
+-        cardAmount,
+-        clientId,
+-      };
+-    },
+-    [items, total]
+-  );
+-
+-  return {
+-    items,
+-    addItem,
+-    removeItem,
+-    updateQuantity,
+-    addByBarcode,
+-    total,
+-    clearCart,
+-    generatePayload,
+-  };
+-}
+diff --git a/src/modules/pos/useScanner.ts b/src/modules/pos/useScanner.ts
+new file mode 100644
+index 0000000..b8bc1d7
+--- /dev/null
++++ b/src/modules/pos/useScanner.ts
+@@ -0,0 +1,40 @@
++import { useEffect, useRef } from "react";
++import { ScanDetector } from "./scanDetector";
++
++const nativeValueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
++
++/**
++ * Escucha el lector de códigos en toda la página (RF-18). Si el foco está en otro campo (por
++ * ejemplo, el peso), el Enter del lector no se propaga y los dígitos que escribió se retiran de
++ * ese campo (GRAVE-06). El campo de escaneo propio se ignora: lo procesa su formulario.
++ */
++export function useScanner(onScan: (code: string) => void, ignoreTarget: () => HTMLElement | null): void {
++  const handler = useRef(onScan);
++  handler.current = onScan;
++
++  useEffect(() => {
++    const detector = new ScanDetector();
++
++    const onKeyDown = (event: KeyboardEvent) => {
++      const typedChars = detector.pending;
++      const code = detector.push(event.key, event.timeStamp || performance.now());
++      if (!code) return;
++
++      const target = event.target;
++      if (target instanceof HTMLElement && target === ignoreTarget()) return;
++
++      event.preventDefault();
++      event.stopPropagation();
++
++      if (target instanceof HTMLInputElement && nativeValueSetter) {
++        const cleaned = target.value.slice(0, Math.max(0, target.value.length - typedChars));
++        nativeValueSetter.call(target, cleaned);
++        target.dispatchEvent(new Event("input", { bubbles: true }));
++      }
++      handler.current(code);
++    };
++
++    window.addEventListener("keydown", onKeyDown, { capture: true });
++    return () => window.removeEventListener("keydown", onKeyDown, { capture: true });
++  }, [ignoreTarget]);
++}
+diff --git a/src/shared/backup/backupService.test.ts b/src/shared/backup/backupService.test.ts
+new file mode 100644
+index 0000000..b707810
+--- /dev/null
++++ b/src/shared/backup/backupService.test.ts
+@@ -0,0 +1,19 @@
++import "fake-indexeddb/auto";
++import { afterEach, describe, expect, it } from "vitest";
++import { BackupService } from "./backupService";
++import { enqueueOperation, resetOfflineStorageForTests } from "../offline/queue";
++
++describe("BackupService (RF-41)", () => {
++  afterEach(async () => {
++    await resetOfflineStorageForTests();
++  });
++
++  it("el respaldo por defecto incluye las operaciones pendientes reales", async () => {
++    const operation = await enqueueOperation({ kind: "sale", payload: { total: 1500 } });
++
++    const backup = await new BackupService().extractData();
++    const operations = backup.data["operations"] as Array<{ localId: string }> | undefined;
++
++    expect(operations?.map((o) => o.localId)).toContain(operation.localId);
++  });
++});
+diff --git a/src/shared/backup/backupService.ts b/src/shared/backup/backupService.ts
+index ba2db42..2ec3895 100644
+--- a/src/shared/backup/backupService.ts
++++ b/src/shared/backup/backupService.ts
+@@ -1,100 +1,76 @@
++import { OFFLINE_DB_NAME } from "../offline/queue";
++
+ export interface BackupData {
+   timestamp: string;
+   version: number;
+-  data: Record<string, any[]>;
++  data: Record<string, unknown[]>;
+ }
+ 
+ export class BackupService {
+   private dbName: string;
+ 
+-  constructor(dbName: string = 'canti_db') {
++  /**
++   * Por defecto respalda la base real de la app. Antes el valor por defecto era 'canti_db',
++   * una base que no existe: el navegador la creaba vacía y cada respaldo de cierre salía sin datos.
++   */
++  constructor(dbName: string = OFFLINE_DB_NAME) {
+     this.dbName = dbName;
+   }
+ 
+-  /**
+-   * Extrae todos los datos de IndexedDB (ventas, stock local, etc.) y retorna el JSON.
+-   */
+-  public async extractData(): Promise<BackupData> {
++  /** Extrae todos los almacenes de IndexedDB (cola de operaciones, catálogo local, preferencias). */
++  public extractData(): Promise<BackupData> {
+     return new Promise((resolve, reject) => {
+       const request = indexedDB.open(this.dbName);
+ 
+-      request.onerror = (event) => {
+-        reject(new Error('Error al abrir IndexedDB para el backup.'));
+-      };
++      request.onerror = () => reject(new Error("No se pudo abrir el almacenamiento local para el respaldo."));
+ 
+-      request.onsuccess = async (event: any) => {
+-        const db: IDBDatabase = event.target.result;
+-        const objectStoreNames = Array.from(db.objectStoreNames);
+-        const backup: BackupData = {
+-          timestamp: new Date().toISOString(),
+-          version: db.version,
+-          data: {}
+-        };
++      request.onsuccess = () => {
++        const db = request.result;
++        const storeNames = Array.from(db.objectStoreNames);
++        const backup: BackupData = { timestamp: new Date().toISOString(), version: db.version, data: {} };
+ 
+-        if (objectStoreNames.length === 0) {
++        if (storeNames.length === 0) {
+           db.close();
+-          return resolve(backup);
++          resolve(backup);
++          return;
+         }
+ 
+-        try {
+-          const transaction = db.transaction(objectStoreNames, 'readonly');
+-
+-          for (const storeName of objectStoreNames) {
+-            const store = transaction.objectStore(storeName);
+-            const allRecords = await this.getAllRecords(store);
+-            backup.data[storeName] = allRecords;
+-          }
+-
+-          transaction.oncomplete = () => {
+-            db.close();
+-            resolve(backup);
++        // Todas las lecturas se lanzan en la misma transacción y se resuelve al completarla.
++        const transaction = db.transaction(storeNames, "readonly");
++        for (const storeName of storeNames) {
++          const read = transaction.objectStore(storeName).getAll();
++          read.onsuccess = () => {
++            backup.data[storeName] = read.result as unknown[];
+           };
+-
+-          transaction.onerror = (e) => {
+-            db.close();
+-            reject(new Error('Error al leer datos durante el backup: ' + (e.target as any).error));
+-          };
+-        } catch (error) {
+-          db.close();
+-          reject(error);
+         }
++        transaction.oncomplete = () => {
++          db.close();
++          resolve(backup);
++        };
++        transaction.onerror = () => {
++          db.close();
++          reject(new Error("Error al leer datos durante el respaldo: " + String(transaction.error)));
++        };
+       };
+     });
+   }
+ 
+-  private getAllRecords(store: IDBObjectStore): Promise<any[]> {
+-    return new Promise((resolve, reject) => {
+-      const request = store.getAll();
+-      request.onsuccess = () => resolve(request.result);
+-      request.onerror = () => reject(request.error);
+-    });
+-  }
+-
+-  /**
+-   * Genera el backup de la base de datos y lo devuelve en formato Blob.
+-   */
+   public async generateBackupBlob(): Promise<Blob> {
+     const data = await this.extractData();
+-    const jsonString = JSON.stringify(data, null, 2);
+-    return new Blob([jsonString], { type: 'application/json' });
++    return new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+   }
+ 
+-  /**
+-   * Descarga el backup manualmente generando un enlace temporal.
+-   */
++  /** Descarga el respaldo como archivo JSON. */
+   public async downloadBackup(filename?: string): Promise<void> {
+-    const defaultFilename = `backup_canti_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+-    const finalFilename = filename || defaultFilename;
+-    
++    const finalFilename = filename ?? `respaldo_alverde_${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+     const blob = await this.generateBackupBlob();
+     const url = URL.createObjectURL(blob);
+-    
+-    const a = document.createElement('a');
+-    a.href = url;
+-    a.download = finalFilename;
+-    document.body.appendChild(a);
+-    a.click();
+-    document.body.removeChild(a);
++    const link = document.createElement("a");
++    link.href = url;
++    link.download = finalFilename;
++    document.body.appendChild(link);
++    link.click();
++    document.body.removeChild(link);
+     URL.revokeObjectURL(url);
+   }
+ }
+diff --git a/src/shared/components/AppShell.tsx b/src/shared/components/AppShell.tsx
+index 054609f..a12776d 100644
+--- a/src/shared/components/AppShell.tsx
++++ b/src/shared/components/AppShell.tsx
+@@ -3,7 +3,7 @@ import { AuthGate, useCurrentProfile } from "../auth/AuthGate";
+ import { signOut } from "../auth/session";
+ import type { AppRole } from "../auth/roles";
+ 
+-export type ShellSection = "catalog" | "admin";
++export type ShellSection = "catalog" | "pos" | "admin";
+ 
+ type AppShellProps = PropsWithChildren<{
+   active: ShellSection;
+@@ -33,6 +33,7 @@ function ShellLayout({ active, title, children }: PropsWithChildren<{ active: Sh
+         </a>
+         <nav aria-label="Navegación principal">
+           <a className={active === "catalog" ? "active" : ""} href="/catalog.html">Catálogo</a>
++          <a className={active === "pos" ? "active" : ""} href="/pos.html">Caja</a>
+           {isAdmin && <a className={active === "admin" ? "active" : ""} href="/admin.html">Administración</a>}
+         </nav>
+         <button className="button button-secondary" onClick={() => void signOut().then(() => location.assign("/"))}>
+diff --git a/src/shared/components/OfflineIndicator.tsx b/src/shared/components/OfflineIndicator.tsx
+index 5f8eafa..3c7e0c2 100644
+--- a/src/shared/components/OfflineIndicator.tsx
++++ b/src/shared/components/OfflineIndicator.tsx
+@@ -12,9 +12,12 @@ export function OfflineIndicator() {
+ 
+     addEventListener("online", updateNetwork);
+     addEventListener("offline", updateNetwork);
+-    return subscribeToQueueChanges(() => {
+-      updatePending();
+-    });
++    const unsubscribe = subscribeToQueueChanges(updatePending);
++    return () => {
++      removeEventListener("online", updateNetwork);
++      removeEventListener("offline", updateNetwork);
++      unsubscribe();
++    };
+   }, []);
+ 
+   return (
+diff --git a/src/shared/offline/queue.ts b/src/shared/offline/queue.ts
+index 9ff9f50..5e7f45b 100644
+--- a/src/shared/offline/queue.ts
++++ b/src/shared/offline/queue.ts
+@@ -1,7 +1,9 @@
+ import { tryWritePendingOperationsBackup } from "./backup";
+ import type { CatalogSnapshot, NewQueuedOperation, QueuedOperation } from "./types";
+ 
+-const DB_NAME = "alverde-offline";
++/** Nombre de la base IndexedDB de la app. Lo comparten la cola, el catálogo local y los respaldos. */
++export const OFFLINE_DB_NAME = "alverde-offline";
++const DB_NAME = OFFLINE_DB_NAME;
+ const DB_VERSION = 1;
+ const OPERATION_STORE = "operations";
+ const CATALOG_STORE = "catalog";
+@@ -96,6 +98,33 @@ async function mirrorPendingQueue(): Promise<void> {
+   }
+ }
+ 
++/** Lee una preferencia local del dispositivo (caja asignada, turno en curso, etc.). */
++export async function readSetting<T>(key: string): Promise<T | undefined> {
++  const record = await readRecord<{ key: string; value: T }>(SETTING_STORE, key);
++  return record?.value;
++}
++
++/** Guarda una preferencia local del dispositivo. `undefined` la borra. */
++export async function writeSetting<T>(key: string, value: T | undefined): Promise<void> {
++  if (value === undefined) {
++    const db = await openDatabase();
++    await new Promise<void>((resolve, reject) => {
++      const transaction = db.transaction(SETTING_STORE, "readwrite");
++      transaction.objectStore(SETTING_STORE).delete(key);
++      transaction.oncomplete = () => resolve();
++      transaction.onerror = () => reject(transaction.error ?? new Error("No se pudo borrar la preferencia local."));
++    });
++    return;
++  }
++  await putRecord(SETTING_STORE, { key, value });
++}
++
++/** Todas las operaciones, sincronizadas o no (para resúmenes de turno y respaldos). */
++export async function allOperations(): Promise<QueuedOperation[]> {
++  const values = await readAll<QueuedOperation>(OPERATION_STORE);
++  return values.sort((left, right) => left.createdAt.localeCompare(right.createdAt));
++}
++
+ export async function deviceId(): Promise<string> {
+   const saved = await readRecord<{ key: string; value: string }>(SETTING_STORE, "device-id");
+   if (saved?.value) return saved.value;
+diff --git a/src/shared/offline/sync.ts b/src/shared/offline/sync.ts
+index 78ef7a2..60c3076 100644
+--- a/src/shared/offline/sync.ts
++++ b/src/shared/offline/sync.ts
+@@ -1,19 +1,47 @@
+ import { getSupabase } from "../supabase/client";
+-import {
+-  markOperationFailed,
+-  markOperationSynced,
+-  pendingOperations,
+-  saveCatalogSnapshot
+-} from "./queue";
++import { markOperationFailed, markOperationSynced, pendingOperations } from "./queue";
+ 
+ export type SyncResult = {
+   synchronized: number;
+   failed: number;
+ };
+ 
+-export async function synchronizePendingOperations(): Promise<SyncResult> {
++type PreSyncStep = () => Promise<void>;
++const preSyncSteps = new Set<PreSyncStep>();
++
++/**
++ * Pasos que deben correr antes de enviar la cola (por ejemplo, crear en la nube el turno de caja
++ * que se abrió sin conexión, porque las ventas lo referencian). Devuelve la función para quitarlo.
++ */
++export function registerPreSyncStep(step: PreSyncStep): () => void {
++  preSyncSteps.add(step);
++  return () => preSyncSteps.delete(step);
++}
++
++let inFlight: Promise<SyncResult> | undefined;
++
++/**
++ * Envía la cola en orden. Si ya hay una sincronización en curso, devuelve esa misma promesa en
++ * lugar de mandar las operaciones dos veces en paralelo.
++ */
++export function synchronizePendingOperations(): Promise<SyncResult> {
++  inFlight ??= runSynchronization().finally(() => {
++    inFlight = undefined;
++  });
++  return inFlight;
++}
++
++async function runSynchronization(): Promise<SyncResult> {
+   if (!navigator.onLine) return { synchronized: 0, failed: 0 };
+ 
++  for (const step of preSyncSteps) {
++    try {
++      await step();
++    } catch (error) {
++      console.warn("Un paso previo a la sincronización falló; se reintentará.", error);
++    }
++  }
++
+   const operations = await pendingOperations();
+   let synchronized = 0;
+   let failed = 0;
+@@ -37,18 +65,6 @@ export async function synchronizePendingOperations(): Promise<SyncResult> {
+   return { synchronized, failed };
+ }
+ 
+-export async function refreshEmployeeCatalog(): Promise<unknown[]> {
+-  const { data, error } = await getSupabase()
+-    .from("employee_catalog")
+-    .select("*")
+-    .order("product_name", { ascending: true });
+-
+-  if (error) throw error;
+-  const rows = data ?? [];
+-  await saveCatalogSnapshot(rows);
+-  return rows;
+-}
+-
+ export function startOfflineSynchronization(): () => void {
+   const sync = () => void synchronizePendingOperations().catch((error: unknown) => {
+     console.warn("La sincronización quedará para el próximo reintento.", error);
+diff --git a/src/styles/pos.css b/src/styles/pos.css
+new file mode 100644
+index 0000000..7a24ae7
+--- /dev/null
++++ b/src/styles/pos.css
+@@ -0,0 +1,80 @@
++/* Caja (PR-05). Solo tokens de tokens.css; ningún color suelto. */
++.pos-layout {
++  display: grid;
++  grid-template-columns: minmax(0, 1fr) minmax(18rem, 24rem);
++  gap: var(--esp-m);
++  align-items: start;
++}
++.pos-panel { padding: var(--esp-l); border-radius: var(--radio-carta); }
++.pos-scan { display: flex; gap: var(--esp-s); align-items: end; }
++.pos-scan label { flex: 1; }
++.pos-scan input { font-size: var(--texto-l); letter-spacing: .02em; }
++
++.pos-results { list-style: none; margin: var(--esp-s) 0 0; padding: 0; display: grid; gap: var(--esp-xs); }
++.pos-results button {
++  width: 100%;
++  display: flex;
++  justify-content: space-between;
++  gap: var(--esp-m);
++  text-align: left;
++}
++
++.pos-lines { list-style: none; margin: var(--esp-l) 0 0; padding: 0; }
++.pos-line {
++  display: grid;
++  grid-template-columns: minmax(0, 1fr) auto auto auto;
++  gap: var(--esp-m);
++  align-items: center;
++  padding: var(--esp-s) 0;
++  border-bottom: 1px solid var(--glass-borde);
++}
++.pos-line:last-child { border-bottom: 0; }
++.pos-line-name { margin: 0; font-weight: 700; }
++.pos-line-detail { margin: .15rem 0 0; color: var(--color-tinta-apagada); font-size: var(--texto-s); }
++.pos-qty { display: flex; align-items: center; gap: var(--esp-xs); }
++.pos-qty output { min-width: 2ch; text-align: center; font-variant-numeric: tabular-nums; }
++.pos-amount { font-variant-numeric: tabular-nums; font-weight: 700; min-width: 7ch; text-align: right; }
++
++.pos-total {
++  margin: 0;
++  color: var(--color-acento);
++  font-size: clamp(2.4rem, 5vw, 3.4rem);
++  font-weight: 800;
++  line-height: 1;
++  font-variant-numeric: tabular-nums;
++  letter-spacing: -.02em;
++}
++.pos-total-label { margin: 0 0 var(--esp-xs); color: var(--color-tinta-suave); font-size: var(--texto-s); font-weight: 700; }
++
++.pos-methods { display: grid; grid-template-columns: repeat(auto-fit, minmax(6rem, 1fr)); gap: var(--esp-xs); margin: var(--esp-l) 0; border: 0; padding: 0; }
++.pos-methods legend { margin-bottom: var(--esp-xs); font-size: var(--texto-s); font-weight: 700; }
++.pos-method { position: relative; }
++.pos-method input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
++.pos-method span {
++  display: block;
++  padding: .7rem .5rem;
++  text-align: center;
++  border: 1px solid var(--glass-borde);
++  border-radius: var(--radio-control);
++  font-weight: 700;
++}
++.pos-method input:checked + span { color: var(--color-acento-tinta); background: var(--color-acento); border-color: var(--color-acento); }
++.pos-method input:focus-visible + span { outline: 2px solid var(--color-acento); outline-offset: 2px; }
++
++.pos-charge { width: 100%; padding: 1rem; font-size: var(--texto-l); }
++.pos-feedback { margin: var(--esp-s) 0 0; min-height: 1.4em; font-size: var(--texto-s); }
++.pos-feedback[data-tone="ok"] { color: var(--color-exito); }
++.pos-feedback[data-tone="error"] { color: var(--color-error); }
++
++.pos-shift { display: flex; justify-content: space-between; align-items: center; gap: var(--esp-m); flex-wrap: wrap; margin-top: var(--esp-l); }
++.pos-summary { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
++.pos-summary th, .pos-summary td { padding: .4rem 0; text-align: left; border-bottom: 1px solid var(--glass-borde); }
++.pos-summary td:last-child, .pos-summary th:last-child { text-align: right; }
++.pos-summary tfoot td { font-weight: 800; border-bottom: 0; }
++
++.pos-setup { max-width: 32rem; display: grid; gap: var(--esp-m); }
++
++@media (max-width: 820px) {
++  .pos-layout { grid-template-columns: 1fr; }
++  .pos-line { grid-template-columns: minmax(0, 1fr) auto; }
++}
+diff --git a/vite.config.ts b/vite.config.ts
+index ff0aea3..82317f2 100644
+--- a/vite.config.ts
++++ b/vite.config.ts
+@@ -10,7 +10,8 @@ export default defineConfig({
+       input: {
+         login: fileURLToPath(new URL("./index.html", import.meta.url)),
+         catalog: fileURLToPath(new URL("./catalog.html", import.meta.url)),
+-        admin: fileURLToPath(new URL("./admin.html", import.meta.url))
++        admin: fileURLToPath(new URL("./admin.html", import.meta.url)),
++        pos: fileURLToPath(new URL("./pos.html", import.meta.url))
+       }
+     }
+   }
+-- 
+2.43.0
+

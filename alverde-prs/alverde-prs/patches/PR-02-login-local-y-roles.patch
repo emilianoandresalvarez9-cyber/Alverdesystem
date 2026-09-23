@@ -1,0 +1,410 @@
+From b905f3570f557286122126d9a46fc6a8aa73ed3f Mon Sep 17 00:00:00 2001
+From: Alverde QA Lead <qa-lead@alverde.invalid>
+Date: Wed, 23 Sep 2026 17:42:06 +0000
+Subject: [PATCH 02/10] =?UTF-8?q?fix(auth):=20login=20con=20Supabase=20loc?=
+ =?UTF-8?q?al=20y=20redirecci=C3=B3n=20correcta=20por=20rol=20(RF-59,=20RN?=
+ =?UTF-8?q?F-04)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- env: `hasSupabaseConfig` exigía https://, así que con `supabase start`
+  (http://127.0.0.1:54321) el login nunca aparecía. Ahora acepta HTTP solo hacia
+  localhost/127.0.0.1/[::1] y HTTPS hacia cualquier host. Cierra CRÍTICO-01.
+- login: la consulta `profiles.select("role").single()` no filtraba por usuario.
+  Como el administrador ve todos los perfiles por RLS, con 2+ usuarios `.single()`
+  fallaba en silencio y el administrador terminaba en el catálogo. Ahora filtra por id.
+- AuthGate acepta `requiredRole`: un empleado que abre /admin.html vuelve a su inicio.
+  El enlace "Administración" solo se muestra a administradores.
+- Sin conexión, el perfil sale de la última copia conocida; si no hay copia se asume
+  Empleado (menor privilegio). El permiso real lo sigue aplicando RLS.
+- Usuarios desactivados no pueden ingresar.
+
+Tests: validation.test.ts (4), roles.test.ts (3).
+---
+ src/pages/AdminPage.tsx              |  2 +-
+ src/pages/LoginPage.tsx              | 20 ++++-----
+ src/shared/auth/AuthGate.tsx         | 35 +++++++++++-----
+ src/shared/auth/roles.test.ts        | 21 ++++++++++
+ src/shared/auth/roles.ts             | 19 +++++++++
+ src/shared/auth/session.ts           | 40 ++++++++++++++++++
+ src/shared/components/AppShell.tsx   | 62 +++++++++++++++++-----------
+ src/shared/config/env.ts             |  5 ++-
+ src/shared/config/validation.test.ts | 27 ++++++++++++
+ src/shared/config/validation.ts      | 17 ++++++++
+ 10 files changed, 201 insertions(+), 47 deletions(-)
+ create mode 100644 src/shared/auth/roles.test.ts
+ create mode 100644 src/shared/auth/roles.ts
+ create mode 100644 src/shared/config/validation.test.ts
+ create mode 100644 src/shared/config/validation.ts
+
+diff --git a/src/pages/AdminPage.tsx b/src/pages/AdminPage.tsx
+index a723fe2..c5694ce 100644
+--- a/src/pages/AdminPage.tsx
++++ b/src/pages/AdminPage.tsx
+@@ -20,7 +20,7 @@ export function AdminPage() {
+   const [classifierType, setClassifierType] = useState<"brand" | "category" | "label">("brand");
+ 
+   return (
+-    <AppShell active="admin" title="Administración">
++    <AppShell active="admin" title="Administración" requiredRole="administrator">
+       <div style={{ display: "flex", flexDirection: "column", gap: "var(--esp-m)" }}>
+         <header className="page-heading">
+           <h1 style={{ margin: 0 }}>Panel de Administración</h1>
+diff --git a/src/pages/LoginPage.tsx b/src/pages/LoginPage.tsx
+index 72b7ad5..5a9b611 100644
+--- a/src/pages/LoginPage.tsx
++++ b/src/pages/LoginPage.tsx
+@@ -1,7 +1,7 @@
+ import { type FormEvent, useState } from "react";
+ import { hasSupabaseConfig } from "../shared/config/env";
+-import { signIn, currentSession } from "../shared/auth/session";
+-import { getSupabase } from "../shared/supabase/client";
++import { signIn, signOut, currentSession, currentProfile } from "../shared/auth/session";
++import { homeFor } from "../shared/auth/roles";
+ 
+ export function LoginPage() {
+   const [email, setEmail] = useState("");
+@@ -16,15 +16,15 @@ export function LoginPage() {
+ 
+     try {
+       await signIn(email, password);
++      const session = await currentSession();
++      if (!session) throw new Error("No se pudo iniciar la sesión. Probá de nuevo.");
+ 
+-      // Redirigir según el rol: administrador va a /admin.html, empleado a /catalog.html
+-      const { data } = await getSupabase()
+-        .from("profiles")
+-        .select("role")
+-        .single();
+-
+-      const destination = data?.role === "administrator" ? "/admin.html" : "/catalog.html";
+-      location.assign(destination);
++      const profile = await currentProfile(session);
++      if (!profile.active) {
++        await signOut();
++        throw new Error("Tu usuario está desactivado. Pedile a la administradora que lo reactive.");
++      }
++      location.assign(homeFor(profile.role));
+     } catch (error) {
+       setMessage(error instanceof Error ? error.message : "No se pudo iniciar sesión.");
+     } finally {
+diff --git a/src/shared/auth/AuthGate.tsx b/src/shared/auth/AuthGate.tsx
+index 722c26d..3f75b8a 100644
+--- a/src/shared/auth/AuthGate.tsx
++++ b/src/shared/auth/AuthGate.tsx
+@@ -1,9 +1,21 @@
+-import { type PropsWithChildren, useEffect, useState } from "react";
++import { createContext, type PropsWithChildren, useContext, useEffect, useState } from "react";
+ import { hasSupabaseConfig } from "../config/env";
+-import { currentSession } from "./session";
++import { currentProfile, currentSession } from "./session";
++import { canAccess, homeFor, type AppRole, type Profile } from "./roles";
+ 
+-export function AuthGate({ children }: PropsWithChildren) {
+-  const [ready, setReady] = useState(false);
++const ProfileContext = createContext<Profile | null>(null);
++
++/** Perfil del usuario dentro de una página protegida por AuthGate. */
++export function useCurrentProfile(): Profile {
++  const profile = useContext(ProfileContext);
++  if (!profile) throw new Error("useCurrentProfile se usa dentro de <AuthGate>.");
++  return profile;
++}
++
++type AuthGateProps = PropsWithChildren<{ requiredRole?: AppRole }>;
++
++export function AuthGate({ requiredRole, children }: AuthGateProps) {
++  const [profile, setProfile] = useState<Profile | null>(null);
+ 
+   useEffect(() => {
+     if (!hasSupabaseConfig) {
+@@ -12,16 +24,19 @@ export function AuthGate({ children }: PropsWithChildren) {
+     }
+ 
+     void currentSession()
+-      .then((session) => {
+-        if (!session) location.replace("/");
+-        else setReady(true);
++      .then(async (session) => {
++        if (!session) return location.replace("/");
++        const found = await currentProfile(session);
++        if (!found.active) return location.replace("/");
++        if (!canAccess(found.role, requiredRole)) return location.replace(homeFor(found.role));
++        setProfile(found);
+       })
+       .catch(() => location.replace("/"));
+-  }, []);
++  }, [requiredRole]);
+ 
+-  if (!ready) {
++  if (!profile) {
+     return <main className="login-page"><p className="glass loading-card">Comprobando acceso…</p></main>;
+   }
+ 
+-  return <>{children}</>;
++  return <ProfileContext.Provider value={profile}>{children}</ProfileContext.Provider>;
+ }
+diff --git a/src/shared/auth/roles.test.ts b/src/shared/auth/roles.test.ts
+new file mode 100644
+index 0000000..b75fe8b
+--- /dev/null
++++ b/src/shared/auth/roles.test.ts
+@@ -0,0 +1,21 @@
++import { describe, expect, it } from "vitest";
++import { canAccess, homeFor, parseRole } from "./roles";
++
++describe("roles", () => {
++  it("envía a cada rol a su inicio", () => {
++    expect(homeFor("administrator")).toBe("/admin.html");
++    expect(homeFor("employee")).toBe("/catalog.html");
++  });
++
++  it("un empleado no accede a páginas de administrador", () => {
++    expect(canAccess("employee", "administrator")).toBe(false);
++    expect(canAccess("administrator", "administrator")).toBe(true);
++    expect(canAccess("employee")).toBe(true);
++  });
++
++  it("ante un valor desconocido asume el rol de menor privilegio", () => {
++    expect(parseRole("administrator")).toBe("administrator");
++    expect(parseRole("admin")).toBe("employee");
++    expect(parseRole(undefined)).toBe("employee");
++  });
++});
+diff --git a/src/shared/auth/roles.ts b/src/shared/auth/roles.ts
+new file mode 100644
+index 0000000..1c75da5
+--- /dev/null
++++ b/src/shared/auth/roles.ts
+@@ -0,0 +1,19 @@
++export type AppRole = "administrator" | "employee";
++
++export type Profile = { id: string; role: AppRole; active: boolean };
++
++/** Página de inicio de cada rol después de ingresar. */
++export function homeFor(role: AppRole): string {
++  return role === "administrator" ? "/admin.html" : "/catalog.html";
++}
++
++/** Un administrador accede a todo; un empleado solo a páginas sin rol requerido. */
++export function canAccess(role: AppRole, required?: AppRole): boolean {
++  if (!required) return true;
++  return role === required || role === "administrator";
++}
++
++/** Normaliza lo que venga de la base o del caché local; ante duda, el rol de menor privilegio. */
++export function parseRole(value: unknown): AppRole {
++  return value === "administrator" ? "administrator" : "employee";
++}
+diff --git a/src/shared/auth/session.ts b/src/shared/auth/session.ts
+index 2545331..70e3cff 100644
+--- a/src/shared/auth/session.ts
++++ b/src/shared/auth/session.ts
+@@ -1,5 +1,8 @@
+ import type { Session } from "@supabase/supabase-js";
+ import { getSupabase } from "../supabase/client";
++import { parseRole, type Profile } from "./roles";
++
++const PROFILE_CACHE_PREFIX = "alverde.profile.";
+ 
+ export async function currentSession(): Promise<Session | null> {
+   const { data, error } = await getSupabase().auth.getSession();
+@@ -13,6 +16,43 @@ export async function signIn(email: string, password: string): Promise<void> {
+ }
+ 
+ export async function signOut(): Promise<void> {
++  const session = await currentSession().catch(() => null);
++  if (session) localStorage.removeItem(PROFILE_CACHE_PREFIX + session.user.id);
+   const { error } = await getSupabase().auth.signOut();
+   if (error) throw error;
+ }
++
++/**
++ * Perfil del usuario logueado. Filtra por id: un administrador puede leer todos los perfiles
++ * por RLS, así que `.single()` sin filtro fallaba en cuanto había dos usuarios.
++ * Sin conexión usa la última copia conocida; el control real de permisos sigue siendo RLS.
++ */
++export async function currentProfile(session: Session): Promise<Profile> {
++  const cacheKey = PROFILE_CACHE_PREFIX + session.user.id;
++  try {
++    const { data, error } = await getSupabase()
++      .from("profiles")
++      .select("id, role, active")
++      .eq("id", session.user.id)
++      .maybeSingle();
++    if (error) throw error;
++    if (!data) throw new ProfileMissingError();
++    const profile: Profile = { id: data.id, role: parseRole(data.role), active: Boolean(data.active) };
++    localStorage.setItem(cacheKey, JSON.stringify(profile));
++    return profile;
++  } catch (error) {
++    if (error instanceof ProfileMissingError) throw error;
++    const cached = localStorage.getItem(cacheKey);
++    if (cached) {
++      const parsed = JSON.parse(cached) as Partial<Profile>;
++      return { id: session.user.id, role: parseRole(parsed.role), active: parsed.active !== false };
++    }
++    return { id: session.user.id, role: "employee", active: true };
++  }
++}
++
++export class ProfileMissingError extends Error {
++  constructor() {
++    super("Tu usuario no tiene perfil en Alverde. Pedile a la administradora que lo cree.");
++  }
++}
+diff --git a/src/shared/components/AppShell.tsx b/src/shared/components/AppShell.tsx
+index cf41207..054609f 100644
+--- a/src/shared/components/AppShell.tsx
++++ b/src/shared/components/AppShell.tsx
+@@ -1,35 +1,49 @@
+ import type { PropsWithChildren } from "react";
+-import { AuthGate } from "../auth/AuthGate";
++import { AuthGate, useCurrentProfile } from "../auth/AuthGate";
+ import { signOut } from "../auth/session";
++import type { AppRole } from "../auth/roles";
++
++export type ShellSection = "catalog" | "admin";
+ 
+ type AppShellProps = PropsWithChildren<{
+-  active: "catalog" | "admin";
++  active: ShellSection;
+   title: string;
++  /** Rol mínimo para ver la página. Sin valor: cualquier usuario logueado. */
++  requiredRole?: AppRole;
+ }>;
+ 
+-export function AppShell({ active, title, children }: AppShellProps) {
++export function AppShell({ active, title, requiredRole, children }: AppShellProps) {
+   return (
+-    <AuthGate>
+-      <main className="app-shell">
+-        <header className="topbar glass">
+-          <a className="brand" href="/catalog.html" aria-label="Alverde, catálogo">
+-            <span className="brand-mark">A</span>
+-            <span>Alverde</span>
+-          </a>
+-          <nav aria-label="Navegación principal">
+-            <a className={active === "catalog" ? "active" : ""} href="/catalog.html">Catálogo</a>
+-            <a className={active === "admin" ? "active" : ""} href="/admin.html">Administración</a>
+-          </nav>
+-          <button className="button button-secondary" onClick={() => void signOut().then(() => location.assign("/"))}>
+-            Salir
+-          </button>
+-        </header>
+-        <section className="page-heading">
+-          <p className="eyebrow">Alverde · sistema de gestión</p>
+-          <h1>{title}</h1>
+-        </section>
+-        {children}
+-      </main>
++    <AuthGate requiredRole={requiredRole}>
++      <ShellLayout active={active} title={title}>{children}</ShellLayout>
+     </AuthGate>
+   );
+ }
++
++function ShellLayout({ active, title, children }: PropsWithChildren<{ active: ShellSection; title: string }>) {
++  const profile = useCurrentProfile();
++  const isAdmin = profile.role === "administrator";
++
++  return (
++    <main className="app-shell">
++      <header className="topbar glass">
++        <a className="brand" href="/catalog.html" aria-label="Alverde, catálogo">
++          <span className="brand-mark">A</span>
++          <span>Alverde</span>
++        </a>
++        <nav aria-label="Navegación principal">
++          <a className={active === "catalog" ? "active" : ""} href="/catalog.html">Catálogo</a>
++          {isAdmin && <a className={active === "admin" ? "active" : ""} href="/admin.html">Administración</a>}
++        </nav>
++        <button className="button button-secondary" onClick={() => void signOut().then(() => location.assign("/"))}>
++          Salir
++        </button>
++      </header>
++      <section className="page-heading">
++        <p className="eyebrow">Alverde · sistema de gestión</p>
++        <h1>{title}</h1>
++      </section>
++      {children}
++    </main>
++  );
++}
+diff --git a/src/shared/config/env.ts b/src/shared/config/env.ts
+index 405bd70..c12035e 100644
+--- a/src/shared/config/env.ts
++++ b/src/shared/config/env.ts
+@@ -1,3 +1,5 @@
++import { isSupabaseConfigValid } from "./validation";
++
+ const value = (key: "VITE_SUPABASE_URL" | "VITE_SUPABASE_ANON_KEY") =>
+   import.meta.env[key]?.trim() ?? "";
+ 
+@@ -6,5 +8,4 @@ export const env = {
+   supabaseAnonKey: value("VITE_SUPABASE_ANON_KEY")
+ } as const;
+ 
+-export const hasSupabaseConfig =
+-  env.supabaseUrl.startsWith("https://") && env.supabaseAnonKey.length > 20;
++export const hasSupabaseConfig = isSupabaseConfigValid(env.supabaseUrl, env.supabaseAnonKey);
+diff --git a/src/shared/config/validation.test.ts b/src/shared/config/validation.test.ts
+new file mode 100644
+index 0000000..b9c6922
+--- /dev/null
++++ b/src/shared/config/validation.test.ts
+@@ -0,0 +1,27 @@
++import { describe, expect, it } from "vitest";
++import { isSupabaseConfigValid } from "./validation";
++
++const KEY = "x".repeat(40);
++
++describe("isSupabaseConfigValid (CRÍTICO-01)", () => {
++  it("acepta Supabase local por HTTP (supabase start)", () => {
++    expect(isSupabaseConfigValid("http://127.0.0.1:54321", KEY)).toBe(true);
++    expect(isSupabaseConfigValid("http://localhost:54321", KEY)).toBe(true);
++  });
++
++  it("acepta cualquier host por HTTPS", () => {
++    expect(isSupabaseConfigValid("https://abc.supabase.co", KEY)).toBe(true);
++  });
++
++  it("rechaza HTTP hacia un host remoto", () => {
++    expect(isSupabaseConfigValid("http://abc.supabase.co", KEY)).toBe(false);
++    expect(isSupabaseConfigValid("http://192.168.0.10:54321", KEY)).toBe(false);
++  });
++
++  it("rechaza URL inválida, vacía o la clave de ejemplo", () => {
++    expect(isSupabaseConfigValid("", KEY)).toBe(false);
++    expect(isSupabaseConfigValid("no-es-url", KEY)).toBe(false);
++    expect(isSupabaseConfigValid("https://abc.supabase.co", "")).toBe(false);
++    expect(isSupabaseConfigValid("https://abc.supabase.co", "replace-with-key")).toBe(false);
++  });
++});
+diff --git a/src/shared/config/validation.ts b/src/shared/config/validation.ts
+new file mode 100644
+index 0000000..fa711cd
+--- /dev/null
++++ b/src/shared/config/validation.ts
+@@ -0,0 +1,17 @@
++const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
++
++/**
++ * Una configuración de Supabase es válida si la URL es HTTPS, o HTTP apuntando a la
++ * máquina local (Supabase CLI expone http://127.0.0.1:54321). Nunca HTTP a un host remoto.
++ */
++export function isSupabaseConfigValid(url: string, anonKey: string): boolean {
++  if (anonKey.trim().length <= 20) return false;
++  let parsed: URL;
++  try {
++    parsed = new URL(url.trim());
++  } catch {
++    return false;
++  }
++  if (parsed.protocol === "https:") return true;
++  return parsed.protocol === "http:" && LOCAL_HOSTS.has(parsed.hostname);
++}
+-- 
+2.43.0
+

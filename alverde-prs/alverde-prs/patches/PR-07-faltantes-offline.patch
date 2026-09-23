@@ -1,0 +1,596 @@
+From 2168dc60e903a1e30e01f52661f314f042e5ebd9 Mon Sep 17 00:00:00 2001
+From: Alverde QA Lead <qa-lead@alverde.invalid>
+Date: Wed, 23 Sep 2026 18:09:24 +0000
+Subject: [PATCH 07/10] =?UTF-8?q?feat(faltantes):=20avisar=20faltantes=20d?=
+ =?UTF-8?q?esde=20el=20cat=C3=A1logo,=20con=20o=20sin=20conexi=C3=B3n=20(R?=
+ =?UTF-8?q?F-49)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- P12 (nuevo): RF-49 figuraba como cumplido pero no existía. FaltantesPage no se montaba en
+  ninguna página y su único botón marcaba un producto de demo con UUID fijo. Se elimina.
+- Cada producto del catálogo, al tocarlo, muestra "Avisar que falta" (2 toques; el criterio
+  de aceptación pide menos de 3). La tarjeta pasa de <button> a <article> con un área tocable,
+  porque un botón no puede contener otro.
+- El aviso va por la cola offline con el tipo nuevo `missing_item`. Antes, sin conexión, se
+  encolaba un "ajuste de stock" sin cantidad que la nube nunca podía aplicar.
+- Dos avisos del mismo producto mientras nadie repuso cuentan como un solo faltante.
+- Los avisos viejos trabados en la cola de cada equipo se convierten solos al tipo nuevo,
+  conservando su localId (se envían una vez).
+
+Migraciones nuevas: 20260923130000 (valor de enum, en su propio archivo) y 20260923131000.
+Tests: supabase/tests/faltantes_offline_test.sql (6), legacy.test.ts (1).
+---
+ src/modules/catalog/MissingReportButton.tsx   | 32 ++++++
+ src/modules/catalog/ProductCard.tsx           | 34 ++++---
+ src/modules/restock/FaltantesPage.tsx         | 77 ---------------
+ src/pages/CatalogPage.tsx                     |  5 +-
+ src/shared/offline/legacy.test.ts             | 32 ++++++
+ src/shared/offline/legacy.ts                  | 35 +++++++
+ src/shared/offline/queue.ts                   | 11 +++
+ src/shared/offline/sync.ts                    |  3 +-
+ src/shared/offline/types.ts                   |  2 +-
+ src/styles/catalog.css                        | 16 +++
+ .../20260923130000_enum_faltante_offline.sql  |  3 +
+ .../20260923131000_faltantes_offline.sql      | 99 +++++++++++++++++++
+ supabase/tests/faltantes_offline_test.sql     | 39 ++++++++
+ 13 files changed, 292 insertions(+), 96 deletions(-)
+ create mode 100644 src/modules/catalog/MissingReportButton.tsx
+ delete mode 100644 src/modules/restock/FaltantesPage.tsx
+ create mode 100644 src/shared/offline/legacy.test.ts
+ create mode 100644 src/shared/offline/legacy.ts
+ create mode 100644 supabase/migrations/20260923130000_enum_faltante_offline.sql
+ create mode 100644 supabase/migrations/20260923131000_faltantes_offline.sql
+ create mode 100644 supabase/tests/faltantes_offline_test.sql
+
+diff --git a/src/modules/catalog/MissingReportButton.tsx b/src/modules/catalog/MissingReportButton.tsx
+new file mode 100644
+index 0000000..2863771
+--- /dev/null
++++ b/src/modules/catalog/MissingReportButton.tsx
+@@ -0,0 +1,32 @@
++import { useState } from "react";
++import { Button } from "../../shared/ui";
++import { enqueueOperation } from "../../shared/offline/queue";
++import { synchronizePendingOperations } from "../../shared/offline/sync";
++
++type State = "idle" | "saving" | "done" | "error";
++
++/** RF-49: cualquier empleado avisa que un producto falta o se está acabando. Funciona sin conexión. */
++export function MissingReportButton({ productId, productName }: { productId: string; productName: string }) {
++  const [state, setState] = useState<State>("idle");
++
++  async function report() {
++    setState("saving");
++    try {
++      await enqueueOperation({ kind: "missing_item", payload: { productId } });
++      setState("done");
++      void synchronizePendingOperations().catch(() => undefined);
++    } catch {
++      setState("error");
++    }
++  }
++
++  if (state === "done") {
++    return <p className="pos-feedback" data-tone="ok" role="status">Listo: {productName} quedó en la lista de reposición.</p>;
++  }
++  return (
++    <>
++      <Button variant="secundario" onClick={() => void report()} loading={state === "saving"}>Avisar que falta</Button>
++      {state === "error" && <p className="pos-feedback" data-tone="error" role="alert">No se pudo guardar el aviso en este equipo. Probá de nuevo.</p>}
++    </>
++  );
++}
+diff --git a/src/modules/catalog/ProductCard.tsx b/src/modules/catalog/ProductCard.tsx
+index b49dc97..32e1c2a 100644
+--- a/src/modules/catalog/ProductCard.tsx
++++ b/src/modules/catalog/ProductCard.tsx
+@@ -1,9 +1,13 @@
++import type { ReactNode } from "react";
+ import { GlassCard, Badge, Tag } from "../../shared/ui";
+ import type { CatalogProduct } from "./types";
+ 
+ interface ProductCardProps {
+   product: CatalogProduct;
+-  onClick?: () => void;
++  /** Al tocar la tarjeta se expande y muestra `actions` (un botón no puede ir dentro de otro). */
++  onToggle?: () => void;
++  expanded?: boolean;
++  actions?: ReactNode;
+ }
+ 
+ const BASE_UNIT_LABEL: Record<string, string> = {
+@@ -12,7 +16,7 @@ const BASE_UNIT_LABEL: Record<string, string> = {
+   unit: "unidad",
+ };
+ 
+-export function ProductCard({ product, onClick }: ProductCardProps) {
++export function ProductCard({ product, onToggle, expanded = false, actions }: ProductCardProps) {
+   const lowestPrice = product.presentations
+     .filter(p => p.active)
+     .map(p => p.sale_price)
+@@ -20,22 +24,18 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
+     .sort((a, b) => a - b)[0];
+ 
+   return (
+-    <GlassCard
+-      as={onClick ? "button" : "article"}
+-      onClick={onClick}
+-      className="product-card"
+-      style={{ cursor: onClick ? "pointer" : undefined, textAlign: "left", width: "100%" }}
+-    >
+-      <div className="product-card__header">
++    <GlassCard as="article" className="product-card">
++      <button type="button" className="product-card__toggle" onClick={onToggle} aria-expanded={onToggle ? expanded : undefined} disabled={!onToggle}>
++      <span className="product-card__header">
+         <span className="product-card__name">{product.name}</span>
+         {lowestPrice != null && (
+           <span className="product-card__price">
+             desde <strong>${lowestPrice.toLocaleString("es-AR")}</strong>
+           </span>
+         )}
+-      </div>
++      </span>
+ 
+-      <div className="product-card__meta">
++      <span className="product-card__meta">
+         {product.brand && (
+           <Badge tone="neutro">{product.brand.name}</Badge>
+         )}
+@@ -43,25 +43,27 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
+           <Badge tone="neutro" style={{ opacity: 0.75 }}>{product.category.name}</Badge>
+         )}
+         <Badge tone="neutro" style={{ opacity: 0.55 }}>{BASE_UNIT_LABEL[product.base_unit] ?? product.base_unit}</Badge>
+-      </div>
++      </span>
+ 
+       {product.labels.length > 0 && (
+-        <div className="product-card__labels">
++        <span className="product-card__labels">
+           {product.labels.map(l => (
+             <Tag key={l.id}>{l.name}</Tag>
+           ))}
+-        </div>
++        </span>
+       )}
+ 
+       {product.presentations.filter(p => p.active).length > 0 && (
+-        <div className="product-card__presentations">
++        <span className="product-card__presentations">
+           {product.presentations.filter(p => p.active).map(pr => (
+             <span key={pr.id} className="product-card__presentation">
+               {pr.name} — ${pr.sale_price.toLocaleString("es-AR")}
+             </span>
+           ))}
+-        </div>
++        </span>
+       )}
++      </button>
++      {expanded && actions ? <div className="product-card__actions">{actions}</div> : null}
+     </GlassCard>
+   );
+ }
+diff --git a/src/modules/restock/FaltantesPage.tsx b/src/modules/restock/FaltantesPage.tsx
+deleted file mode 100644
+index 83ead6a..0000000
+--- a/src/modules/restock/FaltantesPage.tsx
++++ /dev/null
+@@ -1,77 +0,0 @@
+-import { useState } from "react";
+-import { getSupabase } from "../../shared/supabase/client";
+-import { enqueueOperation } from "../../shared/offline/queue";
+-import { AppShell } from "../../shared/components/AppShell";
+-import { Button, GlassCard } from "../../shared/ui";
+-import { QuickRestock } from "./QuickRestock";
+-import { RepositionList } from "./RepositionList";
+-
+-export function FaltantesPage() {
+-  const [refreshKey, setRefreshKey] = useState<number>(0);
+-
+-  const reportMissingItem = async (productId: string, productName: string) => {
+-    try {
+-      if (navigator.onLine) {
+-        const supabase = getSupabase();
+-        const { data: userData } = await supabase.auth.getUser();
+-        const userId = userData.user?.id;
+-        if (!userId) throw new Error("No autenticado");
+-
+-        const { error } = await supabase.from("missing_items").insert({
+-          product_id: productId,
+-          reported_by: userId,
+-          note: "Reportado manualmente",
+-        });
+-        if (error) throw error;
+-      } else {
+-        await enqueueOperation({
+-          kind: "stock_movement",
+-          payload: {
+-            movementKind: "adjustment",
+-            productId: productId,
+-            reason: `Faltante reportado offline: ${productName}`,
+-          },
+-        });
+-      }
+-
+-      alert(`Faltante reportado para: ${productName}`);
+-      setRefreshKey((prev) => prev + 1);
+-    } catch (err: unknown) {
+-      console.error("Error al reportar:", err);
+-      alert("Error al reportar faltante.");
+-    }
+-  };
+-
+-  return (
+-    <AppShell active="admin" title="Reposición y Faltantes">
+-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--esp-l)" }}>
+-        <header className="page-heading">
+-          <h1 style={{ margin: 0 }}>Gestión de Faltantes e Ingresos</h1>
+-        </header>
+-
+-        {/* RF-51: Ingreso rápido de mercadería con lector de barras */}
+-        <QuickRestock onSuccess={() => setRefreshKey((k) => k + 1)} />
+-
+-        {/* RF-50: Lista de reposición agrupada por proveedor */}
+-        <div>
+-          <h2 style={{ marginBottom: "var(--esp-m)" }}>Lista de Reposición por Proveedor (RF-50)</h2>
+-          <RepositionList key={refreshKey} onResolve={() => setRefreshKey((k) => k + 1)} />
+-        </div>
+-
+-        {/* RF-49: Simulador de botón de catálogo */}
+-        <GlassCard style={{ border: "1px dashed var(--glass-borde)" }}>
+-          <h3 style={{ margin: "0 0 var(--esp-s)" }}>Acción Rápida de Faltante (RF-49)</h3>
+-          <p style={{ margin: "0 0 var(--esp-s)", color: "var(--color-tinta-suave)" }}>
+-            Este botón simula la acción disponible en cada tarjeta de producto del catálogo para reportar faltante (con soporte offline).
+-          </p>
+-          <Button
+-            variant="secundario"
+-            onClick={() => reportMissingItem("11111111-1111-1111-1111-111111111111", "Producto Demo")}
+-          >
+-            Marcar Producto Demo como faltante
+-          </Button>
+-        </GlassCard>
+-      </div>
+-    </AppShell>
+-  );
+-}
+diff --git a/src/pages/CatalogPage.tsx b/src/pages/CatalogPage.tsx
+index 7ea5dd1..ed00713 100644
+--- a/src/pages/CatalogPage.tsx
++++ b/src/pages/CatalogPage.tsx
+@@ -5,6 +5,7 @@ import { CatalogFiltersBar } from "../modules/catalog/CatalogFiltersBar";
+ import { exportCatalogToExcel } from "../modules/catalog/exportCatalog";
+ import { EmptyState, GlassCard } from "../shared/ui";
+ import { AppShell } from "../shared/components/AppShell";
++import { MissingReportButton } from "../modules/catalog/MissingReportButton";
+ 
+ export function CatalogPage() {
+   const { products, brands, categories, labels, filters, setFilters, isOffline, isLoading, error } = useCatalog();
+@@ -64,7 +65,9 @@ export function CatalogPage() {
+                 <ProductCard
+                   key={p.id}
+                   product={p}
+-                  onClick={() => setSelected(p.id === selected ? null : p.id)}
++                  expanded={p.id === selected}
++                  onToggle={() => setSelected(p.id === selected ? null : p.id)}
++                  actions={<MissingReportButton productId={p.id} productName={p.name} />}
+                 />
+               ))}
+             </div>
+diff --git a/src/shared/offline/legacy.test.ts b/src/shared/offline/legacy.test.ts
+new file mode 100644
+index 0000000..b1ec36c
+--- /dev/null
++++ b/src/shared/offline/legacy.test.ts
+@@ -0,0 +1,32 @@
++import "fake-indexeddb/auto";
++import { afterEach, describe, expect, it } from "vitest";
++import { enqueueOperation, markOperationFailed, pendingOperations, resetOfflineStorageForTests } from "./queue";
++import { upgradeLegacyOperations } from "./legacy";
++
++describe("migración de faltantes viejos en la cola (RF-49)", () => {
++  afterEach(async () => {
++    await resetOfflineStorageForTests();
++  });
++
++  it("convierte el aviso trabado a missing_item sin cambiar su localId", async () => {
++    const legacy = await enqueueOperation({
++      kind: "stock_movement",
++      payload: { movementKind: "adjustment", productId: "prod-1", reason: "Faltante reportado offline: Pasas" }
++    });
++    await markOperationFailed(legacy.localId, "null value in column quantity");
++    const realAdjustment = await enqueueOperation({
++      kind: "stock_movement",
++      payload: { movementKind: "adjustment", productId: "prod-2", quantity: -1, reason: "Rotura" }
++    });
++
++    expect(await upgradeLegacyOperations()).toBe(1);
++
++    const pending = await pendingOperations();
++    const upgraded = pending.find((o) => o.localId === legacy.localId);
++    expect(upgraded?.kind).toBe("missing_item");
++    expect(upgraded?.payload).toMatchObject({ productId: "prod-1" });
++    expect(upgraded?.failedAt).toBeUndefined();
++    expect(pending.find((o) => o.localId === realAdjustment.localId)?.kind).toBe("stock_movement");
++    expect(await upgradeLegacyOperations()).toBe(0);
++  });
++});
+diff --git a/src/shared/offline/legacy.ts b/src/shared/offline/legacy.ts
+new file mode 100644
+index 0000000..ba0ea4a
+--- /dev/null
++++ b/src/shared/offline/legacy.ts
+@@ -0,0 +1,35 @@
++import { pendingOperations, rewritePendingOperation } from "./queue";
++import type { QueuedOperation } from "./types";
++
++const LEGACY_MISSING_PREFIX = "Faltante reportado offline";
++
++/**
++ * Hasta PR-07, un faltante marcado sin conexión se encolaba como "ajuste de stock" sin cantidad.
++ * La nube no lo puede aplicar, así que quedaba pendiente para siempre. Lo convertimos al tipo
++ * `missing_item` con el mismo localId, de modo que se envíe una sola vez.
++ */
++export function isLegacyMissingReport(operation: QueuedOperation): boolean {
++  const payload = operation.payload as { movementKind?: unknown; quantity?: unknown; reason?: unknown; productId?: unknown };
++  return operation.kind === "stock_movement"
++    && payload.movementKind === "adjustment"
++    && payload.quantity === undefined
++    && typeof payload.productId === "string"
++    && typeof payload.reason === "string"
++    && payload.reason.startsWith(LEGACY_MISSING_PREFIX);
++}
++
++export async function upgradeLegacyOperations(): Promise<number> {
++  let upgraded = 0;
++  for (const operation of await pendingOperations()) {
++    if (!isLegacyMissingReport(operation)) continue;
++    const payload = operation.payload as { productId: string };
++    const { failedAt: _failedAt, failureMessage: _failureMessage, ...rest } = operation;
++    await rewritePendingOperation({
++      ...rest,
++      kind: "missing_item",
++      payload: { productId: payload.productId, note: "Avisado sin conexión (versión anterior de la app)" }
++    });
++    upgraded += 1;
++  }
++  return upgraded;
++}
+diff --git a/src/shared/offline/queue.ts b/src/shared/offline/queue.ts
+index 5e7f45b..ac0173d 100644
+--- a/src/shared/offline/queue.ts
++++ b/src/shared/offline/queue.ts
+@@ -175,6 +175,17 @@ export async function markOperationSynced(localId: string): Promise<void> {
+   pendingMirror = mirrorPendingQueue();
+ }
+ 
++/**
++ * Reemplaza una operación que todavía no se envió, conservando su localId (la idempotencia en
++ * la nube depende de él). Solo para migrar formatos viejos de la cola; nunca para editar ventas.
++ */
++export async function rewritePendingOperation(operation: QueuedOperation): Promise<void> {
++  const current = await readRecord<QueuedOperation>(OPERATION_STORE, operation.localId);
++  if (!current || current.syncedAt) return;
++  await putRecord(OPERATION_STORE, operation);
++  emitQueueChange();
++}
++
+ export async function markOperationFailed(localId: string, reason: string): Promise<void> {
+   const operation = await readRecord<QueuedOperation>(OPERATION_STORE, localId);
+   if (!operation) return;
+diff --git a/src/shared/offline/sync.ts b/src/shared/offline/sync.ts
+index 60c3076..8a2e65d 100644
+--- a/src/shared/offline/sync.ts
++++ b/src/shared/offline/sync.ts
+@@ -1,5 +1,6 @@
+ import { getSupabase } from "../supabase/client";
+ import { markOperationFailed, markOperationSynced, pendingOperations } from "./queue";
++import { upgradeLegacyOperations } from "./legacy";
+ 
+ export type SyncResult = {
+   synchronized: number;
+@@ -7,7 +8,7 @@ export type SyncResult = {
+ };
+ 
+ type PreSyncStep = () => Promise<void>;
+-const preSyncSteps = new Set<PreSyncStep>();
++const preSyncSteps = new Set<PreSyncStep>([async () => { await upgradeLegacyOperations(); }]);
+ 
+ /**
+  * Pasos que deben correr antes de enviar la cola (por ejemplo, crear en la nube el turno de caja
+diff --git a/src/shared/offline/types.ts b/src/shared/offline/types.ts
+index 482846a..2597f68 100644
+--- a/src/shared/offline/types.ts
++++ b/src/shared/offline/types.ts
+@@ -1,4 +1,4 @@
+-export type OfflineOperationKind = "sale" | "stock_movement" | "credit_movement";
++export type OfflineOperationKind = "sale" | "stock_movement" | "credit_movement" | "missing_item";
+ 
+ export type QueuedOperation<TPayload = Record<string, unknown>> = {
+   localId: string;
+diff --git a/src/styles/catalog.css b/src/styles/catalog.css
+index 2426a24..b9841dc 100644
+--- a/src/styles/catalog.css
++++ b/src/styles/catalog.css
+@@ -141,3 +141,19 @@
+     grid-template-columns: 1fr;
+   }
+ }
++
++/* PR-07: la tarjeta es un article; el área tocable es un botón y las acciones van aparte. */
++.product-card__toggle {
++  display: block;
++  width: 100%;
++  padding: 0;
++  border: 0;
++  color: inherit;
++  font: inherit;
++  text-align: left;
++  background: none;
++  cursor: pointer;
++}
++.product-card__toggle:disabled { cursor: default; }
++.product-card__toggle:focus-visible { outline: 2px solid var(--color-acento); outline-offset: 4px; border-radius: var(--radio-control); }
++.product-card__actions { margin-top: var(--esp-m); padding-top: var(--esp-s); border-top: 1px solid var(--glass-borde); }
+diff --git a/supabase/migrations/20260923130000_enum_faltante_offline.sql b/supabase/migrations/20260923130000_enum_faltante_offline.sql
+new file mode 100644
+index 0000000..be2b41d
+--- /dev/null
++++ b/supabase/migrations/20260923130000_enum_faltante_offline.sql
+@@ -0,0 +1,3 @@
++-- Alverde · Nuevo tipo de operación offline para faltantes (RF-49).
++-- Va solo en su archivo: un valor nuevo de enum no se puede usar en la misma transacción.
++alter type public.offline_operation_kind add value if not exists 'missing_item';
+diff --git a/supabase/migrations/20260923131000_faltantes_offline.sql b/supabase/migrations/20260923131000_faltantes_offline.sql
+new file mode 100644
+index 0000000..aab7b8e
+--- /dev/null
++++ b/supabase/migrations/20260923131000_faltantes_offline.sql
+@@ -0,0 +1,99 @@
++-- ==============================================================================
++-- Alverde · Faltantes desde el celular, con o sin conexión (RF-49). Migración incremental.
++-- Antes, sin conexión, la app encolaba un "ajuste de stock" sin cantidad que nunca se podía
++-- aplicar: el faltante no llegaba y la operación quedaba trabada en la cola.
++-- Tests: supabase/tests/faltantes_offline_test.sql
++-- ==============================================================================
++
++create or replace function public.apply_offline_operation(p_operation jsonb)
++returns boolean
++language plpgsql
++security definer
++set search_path = public
++as $$
++declare
++  v_local_id uuid := (p_operation ->> 'localId')::uuid;
++  v_device_id uuid := (p_operation ->> 'deviceId')::uuid;
++  v_kind public.offline_operation_kind := (p_operation ->> 'kind')::public.offline_operation_kind;
++  v_occurred_at timestamptz := coalesce((p_operation ->> 'createdAt')::timestamptz, now());
++  v_payload jsonb := p_operation -> 'payload';
++  v_credit_kind public.credit_movement_kind;
++  v_sign smallint;
++  v_product_id uuid;
++begin
++  if auth.uid() is null then
++    raise exception 'Authentication required';
++  end if;
++
++  if v_kind = 'sale' then
++    raise exception 'Las ventas se registran con process_offline_sale.' using errcode = '22023';
++  end if;
++
++  if v_kind = 'stock_movement' and not public.is_administrator() then
++    raise exception 'Solo la administradora registra movimientos de stock.' using errcode = '42501';
++  end if;
++
++  if v_kind = 'credit_movement' then
++    v_credit_kind := (v_payload ->> 'movementKind')::public.credit_movement_kind;
++    if v_credit_kind = 'adjustment' then
++      if not public.is_administrator() then
++        raise exception 'Solo la administradora ajusta o perdona deudas (RF-48).' using errcode = '42501';
++      end if;
++      v_sign := coalesce(nullif(v_payload ->> 'adjustmentSign', '')::smallint, -1);
++    end if;
++  end if;
++
++  if v_kind = 'missing_item' then
++    v_product_id := nullif(v_payload ->> 'productId', '')::uuid;
++    if v_product_id is null then
++      raise exception 'El aviso de faltante necesita productId.' using errcode = '22023';
++    end if;
++  end if;
++
++  insert into public.offline_operations(local_id, device_id, kind, payload, occurred_at, received_by)
++  values (v_local_id, v_device_id, v_kind, v_payload, v_occurred_at, auth.uid())
++  on conflict (device_id, local_id) do nothing;
++
++  if not found then
++    return true;
++  end if;
++
++  if v_kind = 'stock_movement' then
++    insert into public.stock_movements(local_id, kind, product_id, lot_id, quantity, reason, user_id, occurred_at)
++    values (
++      v_local_id,
++      (v_payload ->> 'movementKind')::public.stock_movement_kind,
++      (v_payload ->> 'productId')::uuid,
++      nullif(v_payload ->> 'lotId', '')::uuid,
++      (v_payload ->> 'quantity')::numeric,
++      v_payload ->> 'reason',
++      auth.uid(),
++      v_occurred_at
++    );
++  elsif v_kind = 'credit_movement' then
++    insert into public.credit_movements(local_id, customer_id, sale_id, kind, amount, adjustment_sign, note, user_id, occurred_at)
++    values (
++      v_local_id,
++      (v_payload ->> 'customerId')::uuid,
++      nullif(v_payload ->> 'saleId', '')::uuid,
++      v_credit_kind,
++      (v_payload ->> 'amount')::numeric,
++      v_sign,
++      v_payload ->> 'note',
++      auth.uid(),
++      v_occurred_at
++    );
++  elsif v_kind = 'missing_item' then
++    -- Dos avisos del mismo producto mientras nadie repuso son el mismo faltante.
++    if not exists (select 1 from public.missing_items where product_id = v_product_id and not resolved) then
++      insert into public.missing_items (product_id, reported_by, note, created_at)
++      values (v_product_id, auth.uid(), nullif(v_payload ->> 'note', ''), v_occurred_at);
++    end if;
++  end if;
++
++  return true;
++end;
++$$;
++
++revoke execute on function public.apply_offline_operation(jsonb) from anon, public;
++grant execute on function public.apply_offline_operation(jsonb) to authenticated;
+diff --git a/supabase/tests/faltantes_offline_test.sql b/supabase/tests/faltantes_offline_test.sql
+new file mode 100644
+index 0000000..88ca815
+--- /dev/null
++++ b/supabase/tests/faltantes_offline_test.sql
+@@ -0,0 +1,39 @@
++-- Tests de 20260923131000_faltantes_offline.sql (RF-49).
++begin;
++select plan(6);
++
++insert into auth.users (id, email) values
++  ('00000000-0000-0000-0000-0000000000a1', 'admin@test'),
++  ('00000000-0000-0000-0000-0000000000e1', 'emp@test');
++update public.profiles set role = 'administrator' where id = '00000000-0000-0000-0000-0000000000a1';
++insert into public.products (id, name, base_unit) values ('00000000-0000-0000-0000-0000000000f1', 'Pasas de uva', 'gram');
++
++create function pg_temp.aviso() returns jsonb language sql as $$
++  select jsonb_build_object('localId', gen_random_uuid(), 'deviceId', gen_random_uuid(), 'kind', 'missing_item', 'createdAt', now(),
++    'payload', jsonb_build_object('productId', '00000000-0000-0000-0000-0000000000f1', 'note', 'Quedan 2 bolsas'))
++$$;
++grant execute on function pg_temp.aviso() to authenticated;
++
++set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000e1';
++set role authenticated;
++select ok(public.apply_offline_operation(pg_temp.aviso()), 'RF-49: un empleado avisa un faltante por la cola offline');
++select ok(public.apply_offline_operation(pg_temp.aviso()), 'Un segundo aviso del mismo producto se acepta');
++select throws_ok($$select public.apply_offline_operation(jsonb_build_object('localId', gen_random_uuid(), 'deviceId', gen_random_uuid(), 'kind', 'missing_item', 'payload', '{}'::jsonb))$$,
++  '22023', null, 'Un aviso sin producto se rechaza');
++reset role;
++
++select is((select count(*)::int from public.missing_items where product_id = '00000000-0000-0000-0000-0000000000f1' and not resolved), 1,
++  'Dos avisos sin reponer son un solo faltante');
++select is((select reported_by from public.missing_items where product_id = '00000000-0000-0000-0000-0000000000f1'), '00000000-0000-0000-0000-0000000000e1'::uuid,
++  'El faltante queda a nombre de quien avisó');
++
++update public.missing_items set resolved = true where product_id = '00000000-0000-0000-0000-0000000000f1';
++set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000e1';
++set role authenticated;
++select public.apply_offline_operation(pg_temp.aviso());
++reset role;
++select is((select count(*)::int from public.missing_items where product_id = '00000000-0000-0000-0000-0000000000f1'), 2,
++  'Después de reponer, un aviso nuevo abre otro faltante');
++
++select * from finish();
++rollback;
+-- 
+2.43.0
+
