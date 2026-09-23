@@ -5,7 +5,7 @@
 
 ---
 
-## 🛠️ 1. Comandos de Verificación Automatizada
+## 🛠️ 1. Comandos de Verificación Automatizada y Entorno Local
 
 Antes de la revisión manual, el agente de QA debe ejecutar la suite de comprobaciones rápidas en la raíz del proyecto:
 
@@ -13,7 +13,7 @@ Antes de la revisión manual, el agente de QA debe ejecutar la suite de comproba
 # 1. Instalar dependencias
 npm install
 
-# 2. Comprobar que TypeScript compila en modo estricto sin errores
+# 2. Comprobar que TypeScript compila en modo estricto sin errores (0 errores requeridos)
 npm run typecheck
 
 # 3. Comprobar pruebas unitarias (deben pasar 2/2 sin timeouts de IndexedDB)
@@ -23,10 +23,15 @@ npm test
 npm run build
 ```
 
-**Criterio de Aceptación Global:**
-- `npm test`: 2 pruebas pasando (`persists operations...`, `removes an event from pending...`). Duración < 3 segundos.
-- `npm run typecheck`: código de salida 0, sin errores ni `any` indebidos.
-- `npm run build`: genera carpeta `dist/` con `index.html`, `catalog.html` y `admin.html`.
+### Configuración del Entorno Local para Pruebas Manuales (`npm run dev`)
+- **Archivo requerido:** `.env.local` en la raíz del proyecto (basado en `.env.example`):
+  ```env
+  VITE_SUPABASE_URL=https://tu-proyecto.supabase.co
+  VITE_SUPABASE_ANON_KEY=tu-anon-key-de-supabase
+  ```
+- **Comportamiento esperado si falta `.env.local`:** El cliente de Supabase (`src/shared/supabase/client.ts`) arroja de forma segura:
+  `Error: Falta configurar VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY.`
+- **Auditoría de seguridad (RNF-10):** Verificar con `git status` que `.env.local` permanezca siempre ignorado y jamás suba secretos al repositorio.
 
 ---
 
@@ -78,6 +83,7 @@ npm run build
 - [ ] **Accesibilidad:**
   - `Modal.tsx` debe enlazar el título con el contenedor dialog mediante `aria-labelledby` y `useId()`.
   - `Button.tsx` no debe permitir que `...rest` sobrescriba su comportamiento controlado de `type` o `disabled`.
+  - `TextField.tsx` debe envolverse con `forwardRef` para permitir control de foco imperativo desde los filtros.
 - [ ] **Modo Hardware Modesto (sin-blur):**
   - Al colocar `<html class="sin-blur">`, las reglas `.glass` deben ejecutar `-webkit-backdrop-filter: none; backdrop-filter: none;` con fondo opaco legible.
 - [ ] **Fallbacks CSS:**
@@ -156,7 +162,20 @@ npm run build
 
 ---
 
-## 📊 7. Matriz de Trazabilidad RNF / RF
+## 🔧 7. Auditoría de Integración y Tipado TypeScript (Commit `58603de`)
+
+Durante la consolidación de la Fase 1 se auditaron y corrigieron 6 archivos para garantizar tipado estricto (código de salida 0 en `tsc -b`):
+
+1. **`src/shared/ui/GlassCard.tsx`**: Soporte polimórfico mediante `ElementType` de React para evitar incompatibilidad con el namespace `JSX` en React 19.
+2. **`src/shared/ui/TextField.tsx`**: Adición de `forwardRef` para posibilitar el enfoque (`focus()`) al limpiar búsquedas.
+3. **`src/modules/catalog/CatalogFiltersBar.tsx`**: Reemplazo de prop obsoleta `options` en `SelectField` por elementos hijos `<option>` y unificación de variantes de botón a español (`fantasma`, `secundario`).
+4. **`src/modules/catalog/ProductCard.tsx`**: Unificación de tono de Badge a `tone="neutro"`.
+5. **`src/modules/catalog/useCatalog.ts`**: Alineación de `saveCatalogSnapshot` y `loadCatalogSnapshot` con el esquema del store de IndexedDB (`rows: unknown[]`).
+6. **`src/pages/CatalogPage.tsx`**: Suministro de props requeridas en `AppShell` (`active="catalog"`, `title="Catálogo"`) y firma limpia en `EmptyState`.
+
+---
+
+## 📊 8. Matriz de Trazabilidad RNF / RF
 
 | Requisito | Descripción | Implementación | Verificación QA |
 |---|---|---|---|
