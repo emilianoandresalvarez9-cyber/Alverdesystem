@@ -1,19 +1,78 @@
+import { useState } from "react";
+import { useCatalog, filterProducts } from "../modules/catalog/useCatalog";
+import { ProductCard } from "../modules/catalog/ProductCard";
+import { CatalogFiltersBar } from "../modules/catalog/CatalogFiltersBar";
+import { exportCatalogToExcel } from "../modules/catalog/exportCatalog";
+import { EmptyState, GlassCard } from "../shared/ui";
 import { AppShell } from "../shared/components/AppShell";
-import { OfflineIndicator } from "../shared/components/OfflineIndicator";
 
 export function CatalogPage() {
+  const { products, brands, categories, labels, filters, setFilters, isOffline, isLoading, error } = useCatalog();
+  const [selected, setSelected] = useState<string | null>(null);
+
+  const visible = filterProducts(products, filters);
+  const selectedProduct = selected ? products.find(p => p.id === selected) : null;
+
   return (
-    <AppShell active="catalog" title="Catálogo">
-      <div className="dashboard-grid">
-        <section className="glass feature-card">
-          <OfflineIndicator />
-          <h2>Base de catálogo lista</h2>
-          <p>La pantalla de consulta de productos se construye en la Fase 1 sobre esta base segura y disponible sin conexión.</p>
-        </section>
-        <section className="glass feature-card">
-          <h2>Próximo módulo</h2>
-          <p>Filtros por marca, rubro y etiquetas; búsqueda rápida; y botón de faltantes para el equipo.</p>
-        </section>
+    <AppShell>
+      <div className="catalog-page">
+        <header className="page-heading">
+          <h1>Catálogo</h1>
+          {isOffline && (
+            <span className="sync-status offline">
+              <span>⚠️</span> Sin conexión — mostrando caché local
+            </span>
+          )}
+        </header>
+
+        <CatalogFiltersBar
+          filters={filters}
+          setFilters={setFilters}
+          brands={brands}
+          categories={categories}
+          labels={labels}
+          onExport={() => exportCatalogToExcel(visible)}
+        />
+
+        {isLoading && (
+          <div className="catalog-grid">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <GlassCard key={i} className="product-card skeleton" style={{ minHeight: 120 }} />
+            ))}
+          </div>
+        )}
+
+        {!isLoading && error && (
+          <GlassCard className="catalog-error">
+            <p style={{ color: "var(--color-error)" }}>{error}</p>
+          </GlassCard>
+        )}
+
+        {!isLoading && !error && visible.length === 0 && (
+          <EmptyState
+            icon="📦"
+            title="Sin resultados"
+            description="Probá cambiando los filtros o la búsqueda."
+          />
+        )}
+
+        {!isLoading && visible.length > 0 && (
+          <>
+            <p className="catalog-count">
+              {visible.length} {visible.length === 1 ? "producto" : "productos"}
+              {visible.length < products.length && ` de ${products.length}`}
+            </p>
+            <div className="catalog-grid">
+              {visible.map(p => (
+                <ProductCard
+                  key={p.id}
+                  product={p}
+                  onClick={() => setSelected(p.id === selected ? null : p.id)}
+                />
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </AppShell>
   );

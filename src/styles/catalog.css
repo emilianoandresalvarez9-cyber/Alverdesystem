@@ -1,0 +1,143 @@
+/* Estilos del catálogo — Agente A (RF-01 a RF-06) */
+/* Usa tokens de src/styles/tokens.css — NO poner colores sueltos */
+
+/* ---- Layout general ---- */
+.catalog-page {
+  display: grid;
+  gap: var(--esp-l);
+}
+
+/* ---- Barra de filtros ---- */
+.catalog-filters {
+  display: grid;
+  gap: var(--esp-s);
+}
+
+.catalog-filters__search input {
+  font-size: var(--texto-l);
+}
+
+.catalog-filters__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--esp-s);
+  align-items: flex-end;
+}
+
+.catalog-filters__row > * {
+  flex: 1 1 140px;
+  min-width: 120px;
+}
+
+/* ---- Grilla de productos ---- */
+.catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: var(--esp-m);
+}
+
+/* ---- Tarjeta de producto ---- */
+.product-card {
+  display: grid;
+  gap: var(--esp-s);
+  transition: transform var(--mov-rapido) var(--mov-curva),
+              box-shadow var(--mov-rapido) var(--mov-curva);
+}
+
+.product-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 24px 64px #06130a70;
+}
+
+.product-card:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 3px;
+}
+
+.product-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--esp-s);
+}
+
+.product-card__name {
+  font-weight: 700;
+  font-size: var(--texto-m);
+  color: var(--color-tinta);
+  line-height: 1.3;
+}
+
+.product-card__price {
+  font-size: var(--texto-s);
+  color: var(--color-tinta-suave);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.product-card__price strong {
+  color: var(--color-acento);
+  font-size: var(--texto-m);
+}
+
+.product-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--esp-xs);
+}
+
+.product-card__labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--esp-xs);
+}
+
+.product-card__presentations {
+  display: grid;
+  gap: var(--esp-xs);
+  border-top: 1px solid var(--glass-borde);
+  padding-top: var(--esp-s);
+  margin-top: var(--esp-xs);
+}
+
+.product-card__presentation {
+  font-size: var(--texto-xs);
+  color: var(--color-tinta-apagada);
+}
+
+/* ---- Contador y estados ---- */
+.catalog-count {
+  font-size: var(--texto-s);
+  color: var(--color-tinta-apagada);
+  margin: 0;
+}
+
+.catalog-error {
+  border-left: 3px solid var(--color-error);
+}
+
+/* ---- Skeleton loading ---- */
+.skeleton {
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .45; }
+}
+
+/* ---- Responsive: pantallas pequeñas (celular del empleado) ---- */
+@media (max-width: 500px) {
+  .catalog-filters__row {
+    flex-direction: column;
+  }
+  .catalog-filters__row > * {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 100%;
+  }
+  .catalog-grid {
+    grid-template-columns: 1fr;
+  }
+}
