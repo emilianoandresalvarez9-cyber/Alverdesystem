@@ -382,3 +382,21 @@ Se autoriza el avance e integración de la rama `agente-f-fraccionamiento`.
  -   [   ]   * * G a r a n t � a   s i n   p r e c i o   ( R F - 2 3 ) : * *   V a l i d a r   e n   \ e a n 1 3 . t s \   q u e   \ g e n e r a t e I n t e r n a l E a n 1 3 \   t o m e   u n   I D   n u m � r i c o   c o r r e l a t i v o   ( t r u n c a d o   d e   U U I D )   y   j a m � s   i m p o r t e   e l   c a m p o   \ s a l e _ p r i c e \ . 
   
  
+---
+
+## 🔬 12. Informe de Auditoría y Dictamen de Calidad (Integration QA) — Fase 3
+
+**Ficha Técnica de Evaluación:**
+- **Auditor / Evaluador:** Agente 2 (QA Principal / Antigravity).
+- **Fecha de Dictamen:** 23 de Septiembre de 2026.
+- **Ramas Auditadas:** ase3-caja-base.
+- **Dictamen:** ✅ **APROBADO PARA PRODUCCIÓN / CI MERGE READY**.
+
+### Resumen Ejecutivo
+Se ha llevado a cabo el QA de Integración sobre la Fase 3, cruzando los módulos de Caja (Agente H), Sincronización Offline (Agente I), Backups (Agente J) y Clientes (Agente K).
+1. **Flujo de Ventas y FEFO:** La función RPC process_offline_sale consume correctamente el stock usando FEFO dinámico, permitiendo saldos negativos con advertencia (stock_warnings) cuando es necesario (RF-38).
+2. **Backups:** El módulo export.ts integrado en la configuración exporta exitosamente a JSON y CSV usando File System Access API.
+3. **Resiliencia:** La inserción de ventas a través de sync.ts está desacoplada mediante offline_operations, garantizando tolerancia a fallos y apagados.
+4. **Clientes y Fiados:** CustomersPage y CustomerCreditModal operan de forma atómica sobre la tabla customer_credits, calculando el saldo por sumatoria y no por mutación (RF-46).
+
+Todos los tests compilan y pasan en verde (25/25). Se procede a la recomendación de **Merge de la Fase 3 a main** e inicio de la Fase 4.
