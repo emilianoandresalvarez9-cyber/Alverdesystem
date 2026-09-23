@@ -1,4 +1,4 @@
-export type OfflineOperationKind = "sale" | "stock_movement" | "credit_movement";
+export type OfflineOperationKind = "sale" | "stock_movement" | "credit_movement" | "missing_item";
 
 export type QueuedOperation<TPayload = Record<string, unknown>> = {
   localId: string;

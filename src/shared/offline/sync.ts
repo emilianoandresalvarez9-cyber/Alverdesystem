@@ -1,5 +1,6 @@
 import { getSupabase } from "../supabase/client";
 import { markOperationFailed, markOperationSynced, pendingOperations } from "./queue";
+import { upgradeLegacyOperations } from "./legacy";
 
 export type SyncResult = {
   synchronized: number;
@@ -7,7 +8,7 @@ export type SyncResult = {
 };
 
 type PreSyncStep = () => Promise<void>;
-const preSyncSteps = new Set<PreSyncStep>();
+const preSyncSteps = new Set<PreSyncStep>([async () => { await upgradeLegacyOperations(); }]);
 
 /**
  * Pasos que deben correr antes de enviar la cola (por ejemplo, crear en la nube el turno de caja
