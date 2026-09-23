@@ -1,5 +1,5 @@
-import { useId } from "react";
-import type { InputHTMLAttributes } from "react";
+import { useId, forwardRef } from "react";
+import type { InputHTMLAttributes, ForwardedRef } from "react";
 
 export type TextFieldProps = InputHTMLAttributes<HTMLInputElement> & {
   /** Texto visible del campo. Obligatorio: ningún input sin etiqueta. */
@@ -10,7 +10,10 @@ export type TextFieldProps = InputHTMLAttributes<HTMLInputElement> & {
   error?: string;
 };
 
-export function TextField({ label, help, error, id, className, ...rest }: TextFieldProps) {
+export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function TextField(
+  { label, help, error, id, className, ...rest },
+  ref: ForwardedRef<HTMLInputElement>
+) {
   const autoId = useId();
   const inputId = id ?? autoId;
   const descriptionId = `${inputId}-desc`;
@@ -19,6 +22,7 @@ export function TextField({ label, help, error, id, className, ...rest }: TextFi
     <label htmlFor={inputId} className={className}>
       {label}
       <input
+        ref={ref}
         id={inputId}
         aria-invalid={error ? true : undefined}
         aria-describedby={described ? descriptionId : undefined}
@@ -35,4 +39,4 @@ export function TextField({ label, help, error, id, className, ...rest }: TextFi
       ) : null}
     </label>
   );
-}
+});

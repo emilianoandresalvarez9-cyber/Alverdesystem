@@ -11,10 +11,9 @@ export function CatalogPage() {
   const [selected, setSelected] = useState<string | null>(null);
 
   const visible = filterProducts(products, filters);
-  const selectedProduct = selected ? products.find(p => p.id === selected) : null;
 
   return (
-    <AppShell>
+    <AppShell active="catalog" title="Catálogo">
       <div className="catalog-page">
         <header className="page-heading">
           <h1>Catálogo</h1>
@@ -49,11 +48,9 @@ export function CatalogPage() {
         )}
 
         {!isLoading && !error && visible.length === 0 && (
-          <EmptyState
-            icon="📦"
-            title="Sin resultados"
-            description="Probá cambiando los filtros o la búsqueda."
-          />
+          <EmptyState title="Sin resultados">
+            Probá cambiando los filtros o la búsqueda.
+          </EmptyState>
         )}
 
         {!isLoading && visible.length > 0 && (

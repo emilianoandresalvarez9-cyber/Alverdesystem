@@ -37,12 +37,12 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
 
       <div className="product-card__meta">
         {product.brand && (
-          <Badge tone="neutral">{product.brand.name}</Badge>
+          <Badge tone="neutro">{product.brand.name}</Badge>
         )}
         {product.category && (
-          <Badge tone="neutral" style={{ opacity: 0.75 }}>{product.category.name}</Badge>
+          <Badge tone="neutro" style={{ opacity: 0.75 }}>{product.category.name}</Badge>
         )}
-        <Badge tone="neutral" style={{ opacity: 0.55 }}>{BASE_UNIT_LABEL[product.base_unit] ?? product.base_unit}</Badge>
+        <Badge tone="neutro" style={{ opacity: 0.55 }}>{BASE_UNIT_LABEL[product.base_unit] ?? product.base_unit}</Badge>
       </div>
 
       {product.labels.length > 0 && (

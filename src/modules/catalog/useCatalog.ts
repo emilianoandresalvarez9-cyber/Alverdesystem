@@ -76,18 +76,15 @@ export function useCatalog(): UseCatalogReturn {
       setBrands(data.brands);
       setCategories(data.categories);
       setLabels(data.labels);
-      // Persistir snapshot offline
-      await saveCatalogSnapshot({
-        fetchedAt: new Date().toISOString(),
-        products: data.products as any,
-      });
+      // Persistir snapshot offline (rows: unknown[])
+      await saveCatalogSnapshot(data.products);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error al cargar el catálogo";
       setError(msg);
       // Intentar cargar desde caché offline
       const snap = await loadCatalogSnapshot();
-      if (snap) {
-        setProducts(snap.products as unknown as CatalogProduct[]);
+      if (snap && snap.rows) {
+        setProducts(snap.rows as unknown as CatalogProduct[]);
         setIsOffline(true);
       }
     } finally {

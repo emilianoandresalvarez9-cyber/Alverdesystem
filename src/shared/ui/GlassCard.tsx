@@ -1,9 +1,9 @@
-import type { ReactNode, HTMLAttributes } from "react";
+import type { ReactNode, HTMLAttributes, ElementType } from "react";
 
 export interface GlassCardProps extends HTMLAttributes<HTMLElement> {
   children?: ReactNode;
   padding?: "normal" | "compact" | "none";
-  as?: keyof JSX.IntrinsicElements;
+  as?: ElementType;
 }
 
 const PADDING: Record<string, string> = {
@@ -15,18 +15,18 @@ const PADDING: Record<string, string> = {
 export function GlassCard({
   children,
   padding = "normal",
-  as: Tag = "div",
+  as: Component = "div",
   className = "",
   style,
   ...rest
 }: GlassCardProps) {
   return (
-    <Tag
+    <Component
       className={`glass ${className}`}
       style={{ borderRadius: "var(--radio-carta)", padding: PADDING[padding], ...style }}
       {...rest}
     >
       {children}
-    </Tag>
+    </Component>
   );
 }
