@@ -14,9 +14,10 @@ import { ReportsDashboard } from "../modules/reports/ReportsDashboard";
 import { AuditHistoryPage } from "../modules/audit/AuditHistoryPage";
 import { BranchesManager } from "../modules/admin/BranchesManager";
 import { ScalePresentations } from "../modules/admin/ScalePresentations";
+import { ProductsManager } from "../modules/admin/ProductsManager";
 import "../styles/pos.css";
 
-type AdminTab = "reports" | "stock" | "fractioning" | "classifiers" | "restock" | "barcodes" | "scale" | "branches" | "audit" | "settings";
+type AdminTab = "reports" | "stock" | "fractioning" | "classifiers" | "products" | "restock" | "barcodes" | "scale" | "branches" | "audit" | "settings";
 
 export function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>("reports");
@@ -63,6 +64,13 @@ export function AdminPage() {
             onClick={() => setActiveTab("classifiers")}
           >
             🏷️ Marcas / Rubros / Etiquetas
+          </Button>
+
+          <Button
+            variant={activeTab === "products" ? "primario" : "fantasma"}
+            onClick={() => setActiveTab("products")}
+          >
+            📦 Productos ABM
           </Button>
 
           <Button
@@ -150,6 +158,9 @@ export function AdminPage() {
             <ClassifierManager type={classifierType} />
           </div>
         )}
+
+        {/* Productos y Presentaciones ABM */}
+        {activeTab === "products" && <ProductsManager />}
 
         {/* Venta con balanza (ADR-001) */}
         {activeTab === "scale" && <ScalePresentations />}
