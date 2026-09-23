@@ -48,8 +48,21 @@ async function runSynchronization(): Promise<SyncResult> {
   let failed = 0;
 
   for (const operation of operations) {
-    const rpcName = operation.kind === "sale" ? "process_offline_sale" : "apply_offline_operation";
-    const payload = operation.kind === "sale" ? { payload: operation } : { p_operation: operation };
+    let rpcName = "apply_offline_operation";
+    let payload: Record<string, unknown> = { p_operation: operation };
+
+    if (operation.kind === "sale") {
+      rpcName = "process_offline_sale";
+      payload = { payload: operation };
+    } else if (operation.kind === "customer") {
+      rpcName = "sync_offline_customer";
+      payload = {
+        p_id: operation.localId,
+        p_name: operation.payload.name,
+        p_phone: operation.payload.phone || null,
+        p_credit_limit: operation.payload.creditLimit ?? null
+      };
+    }
 
     const { error } = await getSupabase().rpc(rpcName, payload);
 

@@ -38,16 +38,21 @@ export async function loadAccounts(): Promise<AccountsResult> {
   return { accounts: withPending(base.accounts, pending), refreshedAt: base.refreshedAt, fromCache };
 }
 
-/** Alta de cliente (RF-45). Necesita conexión: el id lo asigna la nube. */
+/** Alta de cliente (RF-45). Soporta offline (T-13). */
 export async function createCustomer(input: { name: string; phone?: string; creditLimit?: number | null }): Promise<void> {
   const name = input.name.trim();
   if (!name) throw new Error("El nombre es obligatorio.");
-  const { error } = await getSupabase().from("customers").insert({
-    name,
-    phone: input.phone?.trim() || null,
-    ...(input.creditLimit !== undefined && input.creditLimit !== null ? { credit_limit: input.creditLimit } : {})
+
+  await enqueueOperation({
+    kind: "customer",
+    payload: {
+      name,
+      phone: input.phone?.trim() || null,
+      creditLimit: input.creditLimit
+    }
   });
-  if (error) throw new Error(error.code === "42501" ? "Solo la administradora define el tope de fiado." : error.message);
+
+  synchronizePendingOperations().catch(console.error);
 }
 
 /** RF-47: solo la administradora (lo controla la base). null = sin tope. */

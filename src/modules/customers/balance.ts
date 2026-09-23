@@ -14,9 +14,15 @@ export function movementDelta(movement: Pick<CreditMovementPayload, "movementKin
  * Deuda que este equipo registró y todavía no llegó a la nube: movimientos de fiado y ventas
  * fiadas en la cola. Se suma al saldo de la nube para que un abono sin conexión se vea al instante.
  */
-export function pendingDeltas(operations: QueuedOperation[]): Map<string, number> {
+export type PendingInfo = {
+  deltas: Map<string, number>;
+  newAccounts: CustomerAccount[];
+};
+
+export function pendingDeltas(operations: QueuedOperation[]): PendingInfo {
   const cents = new Map<string, number>();
   const add = (customerId: string, value: number) => cents.set(customerId, (cents.get(customerId) ?? 0) + toCents(value));
+  const newAccounts: CustomerAccount[] = [];
 
   for (const operation of operations) {
     if (operation.syncedAt) continue;
@@ -26,16 +32,31 @@ export function pendingDeltas(operations: QueuedOperation[]): Map<string, number
     } else if (operation.kind === "sale") {
       const payload = operation.payload as { paymentMethod?: string; customerId?: string; totalAmount?: number };
       if (payload.paymentMethod === "credit" && payload.customerId) add(payload.customerId, Number(payload.totalAmount ?? 0));
+    } else if (operation.kind === "customer") {
+      const payload = operation.payload as any;
+      newAccounts.push({
+        id: operation.localId,
+        name: payload.name,
+        phone: payload.phone || null,
+        credit_limit: payload.creditLimit ?? null,
+        balance: 0,
+        active: true,
+        last_movement_at: null
+      });
     }
   }
-  return new Map([...cents].map(([id, value]) => [id, value / 100]));
+  return {
+    deltas: new Map([...cents].map(([id, value]) => [id, value / 100])),
+    newAccounts
+  };
 }
 
-export function withPending(accounts: CustomerAccount[], pending: Map<string, number>): CustomerAccount[] {
-  return accounts.map((account) => {
-    const extra = pending.get(account.id);
+export function withPending(accounts: CustomerAccount[], pending: PendingInfo): CustomerAccount[] {
+  const combined = accounts.map((account) => {
+    const extra = pending.deltas.get(account.id);
     return extra ? { ...account, balance: (toCents(account.balance) + toCents(extra)) / 100 } : account;
   });
+  return [...combined, ...pending.newAccounts];
 }
 
 /** RF-47: el tope lo define la dueña; el sistema solo avisa si una venta lo supera. */
