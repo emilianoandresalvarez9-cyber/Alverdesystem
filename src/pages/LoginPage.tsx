@@ -1,7 +1,7 @@
 import { type FormEvent, useState } from "react";
 import { hasSupabaseConfig } from "../shared/config/env";
-import { signIn, currentSession } from "../shared/auth/session";
-import { getSupabase } from "../shared/supabase/client";
+import { signIn, signOut, currentSession, currentProfile } from "../shared/auth/session";
+import { homeFor } from "../shared/auth/roles";
 
 export function LoginPage() {
   const [email, setEmail] = useState("");
@@ -16,15 +16,15 @@ export function LoginPage() {
 
     try {
       await signIn(email, password);
+      const session = await currentSession();
+      if (!session) throw new Error("No se pudo iniciar la sesión. Probá de nuevo.");
 
-      // Redirigir según el rol: administrador va a /admin.html, empleado a /catalog.html
-      const { data } = await getSupabase()
-        .from("profiles")
-        .select("role")
-        .single();
-
-      const destination = data?.role === "administrator" ? "/admin.html" : "/catalog.html";
-      location.assign(destination);
+      const profile = await currentProfile(session);
+      if (!profile.active) {
+        await signOut();
+        throw new Error("Tu usuario está desactivado. Pedile a la administradora que lo reactive.");
+      }
+      location.assign(homeFor(profile.role));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "No se pudo iniciar sesión.");
     } finally {
