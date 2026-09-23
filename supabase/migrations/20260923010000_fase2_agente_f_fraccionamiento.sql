@@ -38,7 +38,7 @@ BEGIN
             LIMIT 1;
 
             IF v_conflict_lot_id IS NOT NULL THEN
-                RAISE EXCEPTION 'Regla de oro del granel: Ya existe una bolsa abierta activa para este producto (Lote: %). No se puede abrir una segunda bolsa mientras la anterior siga activa (RF-11, RF-12).'
+                RAISE EXCEPTION 'Regla de oro del granel: Ya existe una bolsa abierta activa para este producto (Lote: %). No se puede abrir una segunda bolsa mientras la anterior siga activa (RF-11, RF-12).', v_conflict_lot_id
                     USING ERRCODE = 'P0001';
             END IF;
         END IF;
