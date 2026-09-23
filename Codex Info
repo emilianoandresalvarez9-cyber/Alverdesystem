@@ -1,0 +1,303 @@
+diff --git a/C:\Users\emiliano\Alverdesystem\HOJA_DE_RUTA_RECUPERACION_QA.md b/C:\Users\emiliano\Alverdesystem\HOJA_DE_RUTA_RECUPERACION_QA.md
+new file mode 100644
+--- /dev/null
++++ b/C:\Users\emiliano\Alverdesystem\HOJA_DE_RUTA_RECUPERACION_QA.md
+@@ -0,0 +1,98 @@
++# Hoja de ruta de recuperación y calidad — Alverde System
++
++**Estado inicial:** RELEASE BLOQUEADA.  
++**Fuente de diagnóstico:** `DIAGNOSTICO_QA_QC_CODEX_2026-09-23.md`.  
++**Regla de secuenciación:** no iniciar una tarea que consuma un contrato de datos hasta que el contrato y sus pruebas estén aprobados. P0 precede siempre a P1/P2.
++
++## Estado verificado al iniciar
++
++| Área | Evidencia actual | Estado QA |
++|---|---|---|
++| Compilación, tipos y tests unitarios | Build, TypeScript y 29 tests pasan | Base técnica, insuficiente para release |
++| Catálogo seguro de empleado | Existe vista `employee_catalog`, pero la UI consulta tablas restringidas | P0 abierto |
++| FEFO / EAN-13 / cola IndexedDB | Hay helpers y tests unitarios | Parcial; no integrado en ventas reales |
++| Caja y clientes | UI simulada; no persisten datos | P0 abierto |
++| Migraciones, ventas, reportes y RLS | Contratos incompatibles y políticas permisivas | P0 abierto |
++| Fraccionamiento | Operación multi-paso desde cliente, sin transacción | P0 abierto |
++| Backup / reportes / offline | Implementaciones parciales y sin pruebas de recuperación | P1 abierto |
++| Trazabilidad Git | Local 44 commits por delante del remoto y cambios sin commit | Bloqueante de release |
++
++### Cambios locales existentes que aún no están aceptados
++
++Los siguientes cambios se encontraron sin commit en el árbol local. Compilan, pero **no resuelven el flujo de negocio ni están aprobados**:
++
++- Entradas MPA `pos.html` y `customers.html`, más sus `src/entries/*`.
++- Registro de esas páginas en Vite y en el service worker.
++- Configuración que admite URL local `http://` de Supabase.
++
++Antes de integrarlos, un agente debe autenticarlos, conectarlos con navegación y validar el comportamiento real. Codex no modificó código de producto: añadió el diagnóstico, este prompt y esta hoja de ruta.
++
++## Secuencia de trabajo
++
++| Orden | PR / responsable sugerido | Dependencias | Resultado obligatorio | Criterio de aceptación |
++|---:|---|---|---|---|
++| 0 | `qa/reconciliar-baseline` — integrador técnico | Ninguna | Inventario de commits locales/remotos, baseline candidata y política de ramas | Ningún merge directo; PRs trazables; árbol limpio; CI sobre commit identificable |
++| 1 | `fix/db-contract-rls` — propietario de datos | 0 | Contrato único de ventas, clientes, lotes y pagos; migración correctiva; RLS mínima | `supabase db reset` pasa; pruebas de empleado A/B/admin; sin políticas abiertas; RPCs idempotentes |
++| 2 | `fix/catalog-employee-access` — catálogo/seguridad | 1 para contrato final; puede preparar tipos antes | UI consume vista/proyección segura para empleado y rutas aplican rol | Empleado ve catálogo/precios; no recibe costos/márgenes; admin conserva gestión |
++| 3 | `fix/atomic-stock-fractioning` — inventario | 1 | RPCs transaccionales para fraccionamiento, ajustes e ingresos | Éxito, fallo y concurrencia no dejan movimientos/stock parciales; regla de bolsa abierta probada |
++| 4 | `feat/pos-real-offline` — caja | 1, 2, 3 | Escaneo real, carrito desde catálogo, turno, cobro, venta offline idempotente y FEFO | Venta online/offline/reintento crea una sola venta, ítems y movimientos correctos |
++| 5 | `feat/customers-credit-real` — clientes | 1, 4 | CRUD real, crédito/abonos y vínculo de venta fiada | Saldo e historial persistentes, autorizados y auditables; no hay datos hardcodeados |
++| 6 | `fix/protected-operational-pages` — frontend | 2, 4, 5 | POS/Clientes autenticados, con navegación por rol y service worker coherente | URLs directas no exponen UI a anónimos; rutas visibles según rol; assets offline probados |
++| 7 | `fix/reports-backups-contract` — administración | 1, 4, 5 | Reportes sobre esquema final; backup/restauración verificables | Totales coinciden con ventas; errores no se silencian; restauración validada en BD de prueba |
++| 8 | `test/acceptance-and-ci` — QA automatizado | 1–7 según caso | Suites SQL/RLS/RPC, E2E y matriz offline | CI ejecuta migraciones y evidencia casos críticos; se eliminan tests vacíos |
++| 9 | `qa/release-candidate` — QA/QC | 0–8 | Informe de revalidación de commit candidato | Todos los P0 cerrados, P1 aceptados o explícitamente diferidos, PRs publicados y árbol limpio |
++
++## Detalle de entregables por fase
++
++### 0. Reconciliar el baseline
++
++- No empujar los 44 commits locales como un bloque.
++- Comparar local con `origin/main`, identificar qué PR/documento corresponde a cada cambio y decidir el punto de partida en una propuesta revisable.
++- Mantener el historial existente; no usar reset destructivo ni force push.
++- Cerrar o actualizar las afirmaciones de “v1.0.0” para que no contradigan la realidad de QA.
++
++### 1. Contrato de base, seguridad y migraciones
++
++- Elegir un único esquema para `sales`, `sale_items`, `customers`, `credit_movements`, turnos y reportes. Documentar nombre, tipo, nulabilidad, dueño y semántica de cada campo usado por frontend/RPC.
++- Reemplazar la migración contradictoria con cambios incrementales. No alterar migraciones ya aplicadas como mecanismo de corrección.
++- Revocar/eliminar las políticas permisivas de Fase 3 y restablecer mínimo privilegio. Las operaciones de negocio deben pasar por RPCs con control de rol.
++- Asegurar idempotencia con identificadores locales por dispositivo; probar reintentos.
++
++### 2. Catálogo y rutas por rol
++
++- Adaptar el catálogo de empleado a `employee_catalog` u otra proyección explícitamente segura.
++- Mantener los campos administrativos solo para administrador.
++- Extender la puerta de autenticación con autorización de ruta; no basta verificar que exista sesión.
++
++### 3. Integridad de inventario
++
++- Llevar fraccionamiento, ingresos y ajustes al servidor transaccional. Cualquier error debe revertir la operación completa.
++- Aplicar bloqueo/orden determinista para que la regla de una bolsa abierta sea segura frente a concurrencia.
++- Cada cambio físico debe dejar movimiento de stock y cambio de lote consistentes.
++
++### 4–6. Operación diaria real
++
++- Reemplazar POS y clientes simulados por servicios reales que consuman el contrato aprobado.
++- La venta debe recuperar presentación/precio real, validar stock/FEFO, registrar pago y cliente, y preservar operación si se cae la red.
++- Incorporar páginas de Caja/Clientes al shell autenticado, navegación y caché correspondiente solo tras probarlas.
++
++### 7. Administración, reportes y respaldo
++
++- Proyectar reportes desde el contrato final, con filtros de período y manejo visible de errores.
++- Unificar los dos mecanismos de backup. Definir exactamente qué tablas se respaldan, rechazar backups incompletos/corruptos y probar recuperación sin pérdida silenciosa.
++
++### 8–9. Evidencia de calidad y release
++
++La CI debe añadir, como mínimo:
++
++- Migración limpia de Supabase y pruebas SQL de permisos/RPCs.
++- Empleado A no lee ni escribe datos del empleado B cuando corresponde; administrador sí puede operar su ámbito.
++- Venta online, venta offline, reintento idempotente, FEFO, stock negativo si el requisito lo permite y auditoría.
++- Fraccionamiento válido, rechazo por segunda bolsa, y rollback completo frente a un error inyectado.
++- Cliente nuevo, fiado, abono y saldo/historial consistentes.
++- Backup, restauración y comparación de datos esperados.
++- Flujo E2E de login, navegación, Caja y Clientes; eliminar los `expect(true)`.
++
++## Definición de "hecho"
++
++Un ítem está hecho solo si tiene PR, contrato explícito, prueba automatizada relevante, resultados de CI, revisión de seguridad y comportamiento observado contra una base de prueba. “Compila”, una maqueta renderizada o una declaración en CAnti no satisfacen esta definición.
+
+
+diff --git a/C:\Users\emiliano\Alverdesystem\PROMPT_RECTOR_PARA_AGENTES.md b/C:\Users\emiliano\Alverdesystem\PROMPT_RECTOR_PARA_AGENTES.md
+new file mode 100644
+--- /dev/null
++++ b/C:\Users\emiliano\Alverdesystem\PROMPT_RECTOR_PARA_AGENTES.md
+@@ -0,0 +1,65 @@
++# Prompt rector para agentes de recuperación — Alverde System
++
++## Misión
++
++Trabajás sobre la recuperación controlada de Alverde System. El proyecto **no está aprobado para producción**. Tu objetivo no es maximizar la cantidad de archivos ni declarar una fase terminada: es entregar una corrección pequeña, segura, verificable y revisable que cierre un ítem de `HOJA_DE_RUTA_RECUPERACION_QA.md`.
++
++El diagnóstico vinculante de QA está en `DIAGNOSTICO_QA_QC_CODEX_2026-09-23.md`. `CAnti.md` es una bitácora histórica: puede aportar contexto, pero no prueba que algo funcione ni reemplaza requisitos, código o tests.
++
++## Orden de lectura obligatorio
++
++1. `requisitos-sistema-dietetica.md`
++2. `AGENTS.md`
++3. `DIAGNOSTICO_QA_QC_CODEX_2026-09-23.md`
++4. `HOJA_DE_RUTA_RECUPERACION_QA.md`
++5. Solo después, los archivos que modificará tu tarea.
++
++Si estos documentos difieren, priorizá requisitos y seguridad. Informá la contradicción; no la resuelvas inventando un contrato.
++
++## Reglas no negociables
++
++- No escribas directo en `main`, no fuerces pushes y no mezcles los commits locales no publicados con tu cambio. Creá una rama por tarea y abrí un PR pequeño.
++- No declares “terminado”, “100%”, “producción” ni cierres un P0 sin las pruebas de aceptación indicadas en la hoja de ruta.
++- No uses mocks, `alert` como confirmación de persistencia, `console.log` como flujo de negocio, `expect(true).toBe(true)`, ni comentarios que sustituyan una operación real.
++- No expongas costos, márgenes, multiplicadores, secretos ni datos de otros empleados. No soluciones el catálogo de empleado relajando RLS sobre tablas administrativas.
++- No agregues políticas RLS `USING (true)` o `WITH CHECK (true)` para datos operativos sensibles. Toda política debe justificar quién puede leer/escribir qué y probarse con roles reales.
++- Las operaciones de ventas, stock, fraccionamiento, crédito y restauración no pueden quedar a medio aplicar. Si involucran varias escrituras, implementalas como una transacción/RPC atómica o no las declares operativas.
++- No redefinas una tabla existente con `CREATE TABLE IF NOT EXISTS` para “agregar” columnas. Usá una migración incremental que reconcilie el contrato, sea idempotente cuando corresponda y pase un reset de base limpio.
++- Respetá el modelo offline: cada mutación local debe tener un identificador idempotente, estado visible de sincronización y comportamiento definido ante reintento.
++
++## Forma de trabajo
++
++Antes de editar, dejá en el PR o en el primer commit una nota breve con:
++
++1. P0/P1 que resolvés y sus dependencias.
++2. Contrato de entrada/salida, tablas/RPCs o componentes afectados.
++3. Riesgos de datos y autorización.
++4. Pruebas que vas a ejecutar.
++
++Durante la implementación, evitá cambios cosméticos ajenos. Si descubrís otro bloqueo, documentalo y detenete en el límite de tu tarea; no lo tapes con un fallback ficticio.
++
++## Entregable mínimo por PR
++
++- Una descripción clara del problema, la decisión técnica y el alcance excluido.
++- Migración versionada si cambia datos o permisos; sin reescribir migraciones ya aplicadas.
++- Pruebas automatizadas relevantes: unitarias para lógica pura; SQL/RLS/RPC para datos; E2E para el flujo de usuario cuando corresponda.
++- Resultado de `npm run typecheck`, `npm test`, `npm run build` y, para cambios de base, `supabase db reset` más las pruebas SQL.
++- Evidencia explícita de rol empleado y administrador cuando se toque autenticación, catálogo, ventas, stock o auditoría.
++- Un árbol de trabajo limpio fuera de los archivos de tu propia tarea.
++
++## Contratos que deben quedar definidos antes de implementar UI operativa
++
++El integrador de base debe publicar y hacer cumplir un contrato único para:
++
++- Venta, ítems, total, método(s) de pago, sucursal/caja, usuario, fecha e idempotencia offline.
++- Asignación FEFO, actualización de lotes y movimientos de stock.
++- Clientes, límite/saldo y movimientos de crédito asociados a ventas/abonos.
++- Estados de lotes y fraccionamiento; qué transición abre/cierra una bolsa.
++- Vistas seguras para empleado y operaciones exclusivas de administrador.
++- Backup/restauración: contenido, validación, permisos y comportamiento ante error.
++
++No construyas POS, reportes, clientes o backup sobre nombres de columnas supuestos. Consumí el contrato aprobado o pedí que se complete primero.
++
++## Criterio de salida
++
++Una tarea solo se considera lista para QA cuando su PR es pequeño, pasa sus pruebas relevantes en CI, no introduce un bypass de seguridad y demuestra el comportamiento contra una base real de prueba. La aprobación final pertenece a QA/QC, no al agente que implementa.
+
+Copilot QA dice: Sí. Revisé la estructura real del repo y hay una diferencia importante entre “la base técnica compila” y “el negocio está cubierto”.
+
+La señal más importante es la que está en Codex Info: dice que la release estaba bloqueada, con P0 abiertos, y que la UI todavía consultaba tablas restringidas, había caja/clientes simulados, contratos incompatibles de ventas, fraccionamiento sin transacción y rutas no protegidas por rol.
+
+Resumen corto:
+
+Sí hay base técnica y varias piezas buenas.
+No está listo para cumplir los requisitos funcionales reales del negocio.
+Lo que falta no es “detalle de UX”; es la parte crítica del flujo operativo.
+Lo que está bien
+
+Hay foundation de Fase 0: login, catálogo base, Auth, service worker, cola offline, etc.
+Hay componentes de diseño y algunas pantallas.
+Hay una capa de FEFO / lote / restock educativa.
+Hay un diagnóstico QA muy claro en Codex Info y QA_SEGUIMIENTO.md.
+Lo que falta con respecto a requisitos funcionales reales
+
+Contrato de datos y seguridad no está cerrado
+En src/modules/catalog/useCatalog.ts se consulta directamente a products, brands, categories, labels, y no a employee_catalog ni a una proyección segura explícita.
+Eso contradice la regla del requisito: empleado no debe ver costos ni márgenes, y el acceso debe ser por vista/proyección segura.
+El QA en Codex Info lo marca como P0 abierto: “Catálogo seguro de empleado: existe vista employee_catalog, pero la UI consulta tablas restringidas”.
+No hay flujo real de caja / POS
+El repo tiene páginas mínimas LoginPage, CatalogPage, AdminPage, pero no veo una verdadera implementación de:
+carrito de venta,
+escaneo real con código de barras,
+cobro,
+cierre de turno,
+venta offline idempotente,
+cálculo FEFO al vender.
+El QA dice: “Caja y clientes: UI simulada; no persisten datos” y “POS real offline” es un bloque de trabajo futuro P0.
+Fraccionamiento no está transaccional
+src/modules/stock/fefo.ts es un helper útil de FEFO, pero no se ve conectado a una operación real de venta/fraccionamiento.
+src/modules/restock/QuickRestock.tsx hace inserciones directas en stock_lots y stock_movements, sin una RPC transaccional ni validación fuerte de regla de “una sola bolsa abierta” ni rollback.
+El QA lo marca como P0: “Fraccionamiento: Operación multi-paso desde cliente, sin transacción”.
+No hay contrato final de ventas / clientes / crédito
+Hay modelos de negocio definidos, pero no veo una capa real de:
+ventas con cliente,
+crédito y abonos,
+saldo persistente,
+historial real,
+RLS bien cerrado.
+Codex Info lo deja explícito: “Migraciones, ventas, reportes y RLS: Contratos incompatibles y políticas permisivas”.
+Rutas por rol no están realmente protegidas
+Hay AuthGate y login por rol, pero la validación real del rol para acceso a páginas/operaciones no está demostrada como una capa robusta.
+QA pide “autorización de ruta; no basta verificar que exista sesión”.
+Backups/reportes no están cerrados
+Esto todavía está como P1/P0 según el diagnóstico: backup/restauración no verificado, reportes no conectados al contrato final.
+El repo presenta una contradicción de estado
+TAREAS.md dice que Fase 1 está mergeada y completada.
+Codex Info dice que la release está bloqueada y que hay P0 abiertos.
+Eso es una señal de que el repo tiene documentación de “estado final” que no coincide con la realidad de negocio.
+Evidencias directas del código
+
+src/modules/catalog/useCatalog.ts
+Consulta products y no employee_catalog.
+Esto no cumple la restricción de empleado para costos y márgenes.
+src/modules/restock/QuickRestock.tsx
+Inserta stock directo al cliente.
+No hay servicio transaccional.
+src/modules/stock/fefo.ts
+Tiene lógica útil, pero es una utilidad aislada, no el flujo completo de venta.
+src/modules/admin/ClassifierManager.tsx
+Está implementado, pero es solo administración de clasificación, no el conjunto de requisitos de negocio.
+Lo que debería hacerse antes de decir “está listo”
+
+Reconciliar baseline
+Decidir cuál es la línea base real de repo.
+No mezclar docs de “todo mergeado” con la realidad de QA.
+Corregir contrato de datos
+Un esquema único para ventas, clientes, lotes, pagos, crédito.
+RLS mínimo y pruebas SQL.
+Reemplazar consultas directas del catálogo por vista segura.
+Implementar transacciones reales para:
+ingreso de stock,
+fraccionamiento,
+venta,
+crédito y abono.
+Construir POS y clientes reales.
+Integrar backup/reportes con ese contrato final.
+QA de aceptación en CI.
+Mi conclusión honesta
+
+El código actual no está “listo para release” según el diagnóstico del QA/QC que está en Codex Info.
+Hay una base sólida y varios módulos avanzados, pero el proyecto todavía no cumple la parte funcional crítica del negocio.
+Si lo que querés es una guía práctica, te puedo armar ahora mismo una lista exacta de:
+P0 a resolver primero,
+archivos a tocar,
+orden recomendado de PRs,
+y una batería de tests de aceptación que debería pasar antes de cerrar release.
+Si querés, te hago la próxima respuesta en formato de roadmap de trabajo, con:
+
+prioridad 0/1/2,
+archivos afectados,
+qué falta exactamente,
+y qué validar en cada módulo.
+
+Copilot sugerencias: Repositorio:
+https://github.com/emilianoandresalvarez9-cyber/Alverdesystem
+
+Rama de trabajo:
+fix/catalog-employee-access
+
+No modificar main directamente.
+
+Leer antes de trabajar:
+- requisitos-sistema-dietetica.md
+- AGENTS.md
+- Codex Info
+- QA_SEGUIMIENTO.md
+
+Objetivo del PR:
+1. Hacer que useCatalog.ts consulte employee_catalog para el catálogo de Empleado.
+2. No exponer costos, márgenes, multiplicadores ni tablas administrativas.
+3. Mantener filtros por texto, marca, rubro y etiqueta.
+4. Corregir las políticas de missing_items que usan USING (true) o WITH CHECK (true).
+5. Agregar pruebas SQL/RLS para Empleado y Administrador.
+6. Ejecutar typecheck, tests, build, supabase db reset y supabase test db.
+7. Abrir un Pull Request hacia main.
+
+
+Mensaje: Importante sobre este chat
+Yo ya puedo consultar el repositorio público y crear ramas mediante las herramientas disponibles. No necesitás darme tu contraseña ni un token. La autorización para operaciones de escritura depende de la sesión de GitHub/Copilot que esté ejecutando el agente, no de un permiso que puedas escribir en el chat.
+
+La rama que ya quedó preparada es:
+
+Text
+fix/catalog-employee-access
