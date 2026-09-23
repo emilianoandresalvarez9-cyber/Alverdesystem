@@ -1,6 +1,7 @@
 -- ==============================================================================
 -- Alverde System — Migración Fase 3 (Sincronización de Ventas Offline y FEFO)
 -- Cubre: RF-35 a RF-37 (FEFO), RF-38 (Stock Negativo con Advertencia)
+-- Corrección: Adaptado al esquema canónico de Fase 0 (sales, sale_items).
 -- ==============================================================================
 
 -- 1. Eliminar la restricción de cantidad positiva estricta en lotes
@@ -59,6 +60,7 @@ DECLARE
   v_deduct numeric;
   v_last_lot uuid;
   v_product_id uuid;
+  v_payment_method public.payment_method;
 BEGIN
   IF auth.uid() IS NULL THEN
     RAISE EXCEPTION 'Authentication required';
@@ -73,18 +75,27 @@ BEGIN
     RETURN true; -- Ya procesado anteriormente
   END IF;
 
-  -- Crear cabecera de la venta
+  -- Mapeo de enum de pago (default cash)
+  BEGIN
+    v_payment_method := (v_sale_payload ->> 'paymentMethod')::public.payment_method;
+  EXCEPTION WHEN OTHERS THEN
+    v_payment_method := 'cash'::public.payment_method;
+  END;
+
+  -- Crear cabecera de la venta (Esquema Fase 0 + Fase 3 FIX)
   INSERT INTO public.sales(
-    offline_local_id, shift_id, user_id, customer_id, payment_method, created_at, total_amount
+    local_id, shift_id, user_id, customer_id, payment_method, occurred_at, created_at, total_amount, status
   )
   VALUES (
-    v_local_id::text,
+    v_local_id,
     nullif(v_sale_payload ->> 'shiftId', '')::uuid,
     auth.uid(),
     nullif(v_sale_payload ->> 'customerId', '')::uuid,
-    (v_sale_payload ->> 'paymentMethod')::text,
+    v_payment_method,
     v_occurred_at,
-    (v_sale_payload ->> 'totalAmount')::numeric
+    v_occurred_at,
+    (v_sale_payload ->> 'totalAmount')::numeric,
+    'closed'::public.sale_status
   )
   RETURNING id INTO v_sale_id;
 
@@ -94,16 +105,13 @@ BEGIN
     v_presentation_id := (v_item ->> 'presentationId')::uuid;
     v_requested_qty := (v_item ->> 'quantity')::numeric;
 
-    -- Obtener product_id a partir del presentation_id
-    SELECT product_id INTO v_product_id FROM public.product_presentations WHERE id = v_presentation_id;
-
-    -- Guardar item de la venta
+    -- Guardar item de la venta (Esquema Fase 0 + Fase 3 FIX)
     INSERT INTO public.sale_items(
-      sale_id, product_id, lot_id, quantity, unit_price, subtotal
+      sale_id, presentation_id, lot_id, quantity, unit_price, subtotal
     )
     VALUES (
       v_sale_id,
-      v_product_id,
+      v_presentation_id,
       nullif(v_item ->> 'lotId', '')::uuid,
       v_requested_qty,
       (v_item ->> 'unitPrice')::numeric,
