@@ -19,9 +19,10 @@ export async function synchronizePendingOperations(): Promise<SyncResult> {
   let failed = 0;
 
   for (const operation of operations) {
-    const { error } = await getSupabase().rpc("apply_offline_operation", {
-      p_operation: operation
-    });
+    const rpcName = operation.kind === "sale" ? "process_offline_sale" : "apply_offline_operation";
+    const payload = operation.kind === "sale" ? { payload: operation } : { p_operation: operation };
+
+    const { error } = await getSupabase().rpc(rpcName, payload);
 
     if (error) {
       failed += 1;

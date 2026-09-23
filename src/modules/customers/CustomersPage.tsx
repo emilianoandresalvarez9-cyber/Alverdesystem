@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { GlassCard, TextField, Button, Badge } from '../../shared/ui';
-import { Customer } from './types';
+import type { Customer } from './types';
 import { CustomerCreditModal } from './CustomerCreditModal';
 
 // Mock data for initial rendering
@@ -58,7 +58,7 @@ export const CustomersPage: React.FC = () => {
                 <h3 style={{ margin: 0, fontSize: '18px', color: 'var(--text-primary)' }}>{customer.name}</h3>
                 <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-secondary)' }}>{customer.phone || 'Sin telfono'}</p>
               </div>
-              <Badge tone={customer.status === 'active' ? 'positive' : 'critical'}>
+              <Badge tone={customer.status === 'active' ? 'exito' : 'error'}>
                 {customer.status === 'active' ? 'Activo' : 'Inactivo'}
               </Badge>
             </div>
@@ -70,7 +70,7 @@ export const CustomersPage: React.FC = () => {
               </p>
             </div>
 
-            <Button variant="secondary" onClick={() => handleOpenCredit(customer)}>
+            <Button variant="secundario" onClick={() => handleOpenCredit(customer)}>
               Gestionar Fiado / Abonos
             </Button>
           </GlassCard>

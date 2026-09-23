@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Modal, TextField, Button } from '../../shared/ui';
-import { Customer } from './types';
+import type { Customer } from './types';
 
 interface CustomerCreditModalProps {
   isOpen: boolean;
@@ -26,12 +26,12 @@ export const CustomerCreditModal: React.FC<CustomerCreditModalProps> = ({ isOpen
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`Gestionar Fiado: ${customer.name}`}>
+    <Modal open={isOpen} onClose={onClose} title={`Gestionar Fiado: ${customer.name}`}>
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '16px' }}>
         <div style={{ display: 'flex', gap: '8px' }}>
           <Button 
             type="button" 
-            variant={type === 'payment' ? 'primary' : 'secondary'} 
+            variant={type === 'payment' ? 'primario' : 'secundario'} 
             onClick={() => setType('payment')}
             style={{ flex: 1 }}
           >
@@ -39,7 +39,7 @@ export const CustomerCreditModal: React.FC<CustomerCreditModalProps> = ({ isOpen
           </Button>
           <Button 
             type="button" 
-            variant={type === 'charge' ? 'primary' : 'secondary'} 
+            variant={type === 'charge' ? 'primario' : 'secundario'} 
             onClick={() => setType('charge')}
             style={{ flex: 1 }}
           >
@@ -66,8 +66,8 @@ export const CustomerCreditModal: React.FC<CustomerCreditModalProps> = ({ isOpen
         />
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px' }}>
-          <Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button>
-          <Button type="submit" variant="primary">Confirmar {type === 'payment' ? 'Abono' : 'Fiado'}</Button>
+          <Button type="button" variant="secundario" onClick={onClose}>Cancelar</Button>
+          <Button type="submit" variant="primario">Confirmar {type === 'payment' ? 'Abono' : 'Fiado'}</Button>
         </div>
       </form>
     </Modal>
