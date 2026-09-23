@@ -1,4 +1,4 @@
-# QA_SEGUIMIENTO.md — Ruta de Verificación y Auditoría de Calidad
+﻿# QA_SEGUIMIENTO.md — Ruta de Verificación y Auditoría de Calidad
 
 > **Documento para el agente de QA (Codex / Claude / Auditor).**  
 > Este archivo detalla cada tarea completada en Fase 0 y Fase 1, sus archivos asociados, los requisitos cubiertos y los pasos exactos para verificar su correcto funcionamiento.
@@ -195,6 +195,30 @@ Durante la consolidación de la Fase 1 se auditaron y corrigieron 6 archivos par
 | **RNF-10** | Sin secretos en git | `.env.example`, `.gitignore` | Claves solo en variables de entorno |
 
 ---
+
+
+---
+
+## 📦 9. Fase 2 — Agente E: Lotes, Vencimientos y Algoritmo FEFO (RF-07 a RF-10, RF-56, RF-57)
+
+- **Requisitos asociados:** RF-07 (Control de stock por lote), RF-08 (Vencimiento efectivo), RF-09 (Algoritmo FEFO), RF-10 (Semáforo y listado de lotes), RF-56 (Archivar productos sin borrar ventas pasadas), RF-57 (Ajustes y descartes con motivo obligatorio).
+- **Archivos creados/modificados:**
+  - `src/modules/stock/types.ts`: Modelos de datos para lotes, estados semafóricos y resultados de asignación FEFO.
+  - `src/modules/stock/expiry.ts`: Lógica de cálculo de vencimiento efectivo (`opened_at + open_shelf_life_days` vs `manufacturer_expiry_date`) y cálculo de días restantes.
+  - `src/modules/stock/fefo.ts`: Algoritmo puro de deducción First-Expired, First-Out con cierre automático de lotes agotados.
+  - `src/modules/stock/fefo.test.ts`: 5 pruebas unitarias automatizadas en Vitest que cubren orden por vencimiento, fallback a FIFO, deducción encadenada y agotamiento de stock.
+  - `src/modules/stock/LotStatusBadge.tsx`: Componente visual semafórico (Rojo = Vencido/Crítico ≤7d, Naranja = Por vencer ≤30d, Verde = En regla).
+  - `src/modules/stock/StockAdjustmentModal.tsx`: Modal para registrar mermas, descartes o ajustes de inventario con motivo obligatorio (`stock_movements` con cantidad negativa).
+  - `src/modules/stock/StockLotsTable.tsx`: Tabla reactiva de lotes con acción de apertura de lote (`opened_at = now()`) y botón de descarte.
+  - `src/modules/stock/StockDashboard.tsx`: Panel principal con KPI cards (Lotes Abiertos, Vencidos, Críticos, En Regla) y filtros combinables por estado, semáforo y ordenamiento.
+  - `src/pages/AdminPage.tsx`: Actualizado con navegación modular por pestañas (Lotes FEFO, Faltantes, Clasificadores, Configuración).
+
+### Puntos de auditoría QA:
+- [ ] **Pruebas Automatizadas:** Ejecutar `npm test` y verificar que las 7 pruebas pasen (las 2 de IndexedDB + las 5 nuevas de FEFO).
+- [ ] **Algoritmo FEFO (RF-09):** Verificar en `fefo.ts` que la función `allocateByFefo()` ordene por `effective_expiry_date` ascendente y use la fecha de recepción como desempate secundario.
+- [ ] **Cálculo de Vencimiento Efectivo (RF-08):** Probar que un lote sin fecha de fabricante pero con apertura calculada adopte la fecha de apertura + vida útil, y que si ambas existen adopte la menor.
+- [ ] **Motivo Obligatorio en Ajustes (RF-57):** Verificar que `StockAdjustmentModal` impida registrar si el campo de motivo está vacío o si la cantidad supera el stock del lote.
+- [ ] **Integridad Histórica (RF-56):** Verificar que `archiveProduct` únicamente modifique `active = false` en `products` y jamás ejecute un `DELETE`.
 
 ## ✍️ Formato de Veredicto Esperado del Agente QA
 
