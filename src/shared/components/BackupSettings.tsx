@@ -2,9 +2,12 @@ import { useState } from "react";
 import { chooseBackupDirectory } from "../offline/backup";
 import { pendingOperations } from "../offline/queue";
 import { tryWritePendingOperationsBackup } from "../offline/backup";
+import { generateFullBackup, saveBackupToDisk, jsonToCSV, downloadFile } from "../backup/export";
+import { Button } from "../ui";
 
 export function BackupSettings() {
-  const [message, setMessage] = useState("Aún no se eligió una carpeta de respaldo.");
+  const [message, setMessage] = useState("Aún no se eligió una carpeta de respaldo para la cola offline.");
+  const [backupLoading, setBackupLoading] = useState(false);
 
   async function enableBackup() {
     try {
@@ -18,11 +21,56 @@ export function BackupSettings() {
     }
   }
 
+  async function handleFullBackup() {
+    try {
+      setBackupLoading(true);
+      const backup = await generateFullBackup();
+      await saveBackupToDisk(backup);
+      alert("Copia de seguridad generada correctamente.");
+    } catch (e) {
+      alert("Error al generar copia de seguridad.");
+    } finally {
+      setBackupLoading(false);
+    }
+  }
+
+  async function handleExportCSV() {
+    try {
+      setBackupLoading(true);
+      const backup = await generateFullBackup();
+      
+      // Exportar tabla de productos como ejemplo de a Excel
+      const productsCSV = jsonToCSV(backup.tables.products || []);
+      downloadFile(productsCSV, "alverde-productos.csv", "text/csv");
+
+      const stockCSV = jsonToCSV(backup.tables.stock_lots || []);
+      downloadFile(stockCSV, "alverde-lotes.csv", "text/csv");
+      
+    } catch (e) {
+      alert("Error al exportar a Excel (CSV).");
+    } finally {
+      setBackupLoading(false);
+    }
+  }
+
   return (
-    <section className="glass feature-card">
-      <h2>Segunda copia local</h2>
-      <p>{message}</p>
-      <button className="button" onClick={() => void enableBackup()}>Elegir carpeta de respaldo</button>
+    <section className="glass feature-card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--esp-s)' }}>
+      <h2>Segunda copia local y Backups (RF-41 a RF-44)</h2>
+      <p style={{ fontSize: "var(--texto-s)", color: "var(--color-tinta-suave)", margin: 0 }}>
+        {message}
+      </p>
+      
+      <div style={{ display: 'flex', gap: 'var(--esp-xs)', flexWrap: 'wrap', marginTop: 'var(--esp-xs)' }}>
+        <Button variant="secundario" onClick={() => void enableBackup()}>
+          Elegir carpeta (Cola Offline)
+        </Button>
+        <Button variant="primario" onClick={handleFullBackup} disabled={backupLoading}>
+          {backupLoading ? "Generando..." : "Descargar DB Completa"}
+        </Button>
+        <Button variant="fantasma" onClick={handleExportCSV} disabled={backupLoading}>
+          Exportar a Excel (CSV)
+        </Button>
+      </div>
     </section>
   );
 }
