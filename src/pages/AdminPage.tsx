@@ -10,9 +10,10 @@ import { RepositionList } from "../modules/restock/RepositionList";
 import { BarcodeDashboard } from "../modules/barcodes";
 import { BulkDashboard } from "../modules/fractioning";
 import { Button, GlassCard } from "../shared/ui";
-import { ReportsDashboard } from "../modules/admin/ReportsDashboard";
+import { ReportsDashboard } from "../modules/reports/ReportsDashboard";
+import { AuditHistoryPage } from "../modules/audit/AuditHistoryPage";
 
-type AdminTab = "reports" | "stock" | "fractioning" | "classifiers" | "restock" | "barcodes" | "settings";
+type AdminTab = "reports" | "stock" | "fractioning" | "classifiers" | "restock" | "barcodes" | "audit" | "settings";
 
 export function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>("reports");
@@ -66,6 +67,13 @@ export function AdminPage() {
             onClick={() => setActiveTab("barcodes")}
           >
             🖨️ Códigos y Planilla
+          </Button>
+
+          <Button
+            variant={activeTab === "audit" ? "primario" : "fantasma"}
+            onClick={() => setActiveTab("audit")}
+          >
+            🕵️ Trazabilidad
           </Button>
 
           <Button
@@ -126,7 +134,10 @@ export function AdminPage() {
           </div>
         )}
 
-        {/* Tab 4: Configuración y Respaldos */}
+        {/* Tab 4: Trazabilidad y Auditoría (Agente O) */}
+        {activeTab === "audit" && <AuditHistoryPage />}
+
+        {/* Tab 5: Configuración y Respaldos */}
         {activeTab === "settings" && (
           <div className="dashboard-grid">
             <section className="glass feature-card">
