@@ -12,7 +12,8 @@
     "preview": "vite preview",
     "qa:guard": "node scripts/qa-guard.mjs",
     "test:db:nodocker": "bash qa/pg-harness/run.sh .",
-    "verify": "npm run qa:guard && npm run typecheck && npm test && npm run build"
+    "verify": "npm run qa:guard && npm run typecheck && npm test && npm run build",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
@@ -21,10 +22,12 @@
     "recharts": "^3.10.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/node": "^22.13.4",
     "@types/react": "^19.0.8",
     "@types/react-dom": "^19.0.3",
     "@vitejs/plugin-react": "^4.4.1",
+    "dotenv": "^18.0.3",
     "fake-indexeddb": "^6.0.0",
     "typescript": "^5.7.3",
     "vite": "^6.1.0",

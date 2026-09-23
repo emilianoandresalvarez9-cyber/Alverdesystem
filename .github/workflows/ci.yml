@@ -43,9 +43,34 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: 2.117.0
-      # Mismo arranque que el CI anterior, verde en main (run #46).
       - run: supabase start
       - run: supabase db reset
-      # pg_prove devuelve código de salida distinto de 0 si falla cualquier test.
-      # (El job anterior usaba `psql -f`, que devuelve 0 aunque los tests fallen.)
       - run: supabase test db
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.117.0
+      - run: supabase start
+      - run: supabase db reset
+      # Create .env.local for e2e tests
+      - run: echo "VITE_SUPABASE_URL=http://localhost:54321" > .env.local
+      - run: echo "VITE_SUPABASE_ANON_KEY=$(supabase status -o json | jq -r .ANON_KEY)" >> .env.local
+      - run: npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
