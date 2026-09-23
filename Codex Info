@@ -269,3 +269,35 @@ prioridad 0/1/2,
 archivos afectados,
 qué falta exactamente,
 y qué validar en cada módulo.
+
+Copilot sugerencias: Repositorio:
+https://github.com/emilianoandresalvarez9-cyber/Alverdesystem
+
+Rama de trabajo:
+fix/catalog-employee-access
+
+No modificar main directamente.
+
+Leer antes de trabajar:
+- requisitos-sistema-dietetica.md
+- AGENTS.md
+- Codex Info
+- QA_SEGUIMIENTO.md
+
+Objetivo del PR:
+1. Hacer que useCatalog.ts consulte employee_catalog para el catálogo de Empleado.
+2. No exponer costos, márgenes, multiplicadores ni tablas administrativas.
+3. Mantener filtros por texto, marca, rubro y etiqueta.
+4. Corregir las políticas de missing_items que usan USING (true) o WITH CHECK (true).
+5. Agregar pruebas SQL/RLS para Empleado y Administrador.
+6. Ejecutar typecheck, tests, build, supabase db reset y supabase test db.
+7. Abrir un Pull Request hacia main.
+
+
+Mensaje: Importante sobre este chat
+Yo ya puedo consultar el repositorio público y crear ramas mediante las herramientas disponibles. No necesitás darme tu contraseña ni un token. La autorización para operaciones de escritura depende de la sesión de GitHub/Copilot que esté ejecutando el agente, no de un permiso que puedas escribir en el chat.
+
+La rama que ya quedó preparada es:
+
+Text
+fix/catalog-employee-access
