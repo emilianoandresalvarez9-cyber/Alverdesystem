@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { encodeEan13Modules } from "./ean13";
 
 interface BarcodeSvgProps {
+  id?: string;
   code: string;
   width?: number | string;
   height?: number;
@@ -17,6 +18,7 @@ interface BarcodeSvgProps {
  * Cero dependencias externas.
  */
 export function BarcodeSvg({
+  id,
   code,
   width = "100%",
   height = 80,
@@ -54,6 +56,7 @@ export function BarcodeSvg({
 
   return (
     <svg
+      id={id}
       xmlns="http://www.w3.org/2000/svg"
       viewBox={`0 0 ${svgWidth} ${height}`}
       width={width}
