@@ -20,14 +20,30 @@ export function registerPreSyncStep(step: PreSyncStep): () => void {
 }
 
 let inFlight: Promise<SyncResult> | undefined;
+let retryTimeout: ReturnType<typeof setTimeout> | undefined;
+let retryDelay = 2000;
 
-/**
- * Envía la cola en orden. Si ya hay una sincronización en curso, devuelve esa misma promesa en
- * lugar de mandar las operaciones dos veces en paralelo.
- */
 export function synchronizePendingOperations(): Promise<SyncResult> {
-  inFlight ??= runSynchronization().finally(() => {
+  if (retryTimeout) {
+    clearTimeout(retryTimeout);
+    retryTimeout = undefined;
+  }
+  
+  inFlight ??= runSynchronization().then((result) => {
     inFlight = undefined;
+    if (result.failed > 0 && navigator.onLine) {
+      console.warn("Reintentando en " + retryDelay + "ms");
+      retryTimeout = setTimeout(() => {
+        void synchronizePendingOperations();
+      }, retryDelay);
+      retryDelay = Math.min(retryDelay * 2, 120000);
+    } else {
+      retryDelay = 2000;
+    }
+    return result;
+  }).catch((err) => {
+    inFlight = undefined;
+    throw err;
   });
   return inFlight;
 }
