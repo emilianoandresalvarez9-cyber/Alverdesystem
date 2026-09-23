@@ -4,10 +4,29 @@ import { pendingOperations } from "../offline/queue";
 import { tryWritePendingOperationsBackup } from "../offline/backup";
 import { generateFullBackup, saveBackupToDisk, jsonToCSV, downloadFile } from "../backup/export";
 import { Button } from "../ui";
+import { backupService } from "../backup/backupService";
+import { useRef } from "react";
 
 export function BackupSettings() {
   const [message, setMessage] = useState("Aún no se eligió una carpeta de respaldo para la cola offline.");
   const [backupLoading, setBackupLoading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  async function handleRestoreOfflineBackup(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setMessage("Leyendo archivo de respaldo offline...");
+    try {
+      const text = await file.text();
+      await backupService.restoreData(text);
+      setMessage("Respaldo offline restaurado correctamente. Recargue la página si es necesario.");
+    } catch (error: any) {
+      setMessage("Error al restaurar: " + error.message);
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
 
   async function enableBackup() {
     try {
