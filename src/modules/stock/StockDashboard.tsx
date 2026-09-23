@@ -3,6 +3,7 @@ import { useStockLots } from "./useStockLots";
 import { StockLotsTable } from "./StockLotsTable";
 import { GlassCard, TextField, SelectField, Button } from "../../shared/ui";
 import { FractioningModal } from "../fractioning/FractioningModal";
+import { exportToExcel } from "../../shared/export/excel";
 import type { StockLot } from "./types";
 
 interface StockDashboardProps {

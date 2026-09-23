@@ -1,4 +1,5 @@
-import type { CatalogProduct } from "./types";
+const fs = require('fs');
+fs.writeFileSync('src/modules/catalog/exportCatalog.ts', `import type { CatalogProduct } from "./types";
 import { exportToExcel } from "../../shared/export/excel";
 
 export function exportCatalogToExcel(products: CatalogProduct[], filename = "catalogo-alverde") {
@@ -29,3 +30,4 @@ export function exportCatalogToExcel(products: CatalogProduct[], filename = "cat
 
   exportToExcel(headers, matrix, filename);
 }
+`);

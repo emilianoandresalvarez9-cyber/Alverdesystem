@@ -6,6 +6,7 @@ import { formatMoney } from "../pos/money";
 import { createCustomer, loadAccounts, type AccountsResult } from "./api";
 import { filterAccounts } from "./balance";
 import { CustomerCreditModal } from "./CustomerCreditModal";
+import { exportToExcel } from "../../shared/export/excel";
 import type { CustomerAccount } from "./types";
 
 export function CustomersPage() {
@@ -36,6 +37,7 @@ export function CustomersPage() {
       <GlassCard className="pos-panel pos-scan">
         <TextField label="Buscar cliente" placeholder="Nombre o teléfono" value={search} onChange={(e) => setSearch(e.target.value)} />
         <Button onClick={() => setCreating(true)}>Nuevo cliente</Button>
+        <Button variant="fantasma" onClick={() => exportToExcel(["Nombre", "Telefono", "Saldo", "Activo"], visible.map(c => [c.name, c.phone || "", c.balance.toFixed(2), c.active ? "Si" : "No"]), "clientes")}>Exportar</Button>
       </GlassCard>
 
       {error && <p className="form-error" role="alert">{error}</p>}
