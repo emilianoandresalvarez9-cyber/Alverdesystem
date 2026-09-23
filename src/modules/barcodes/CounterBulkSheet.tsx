@@ -17,7 +17,7 @@ export function CounterBulkSheet() {
         .select(`
           id, name, base_unit, manufacturer_barcode,
           category:categories(name),
-          presentations:product_presentations(id, name, internal_barcode, base_quantity, sale_price, active)
+          presentations:product_presentations(id, name, internal_barcode, base_quantity, sale_price, active, sold_by_weight)
         `)
         .eq("active", true)
         .eq("base_unit", "gram"); // RF-22: Granel
@@ -32,7 +32,7 @@ export function CounterBulkSheet() {
       data.forEach((p: any) => {
         if (!p.presentations) return;
         p.presentations
-          .filter((pr: any) => pr.active && pr.internal_barcode) // Solo los que ya tienen barcode generado
+          .filter((pr: any) => pr.active && pr.sold_by_weight && pr.internal_barcode) // Solo "Balanza" con código (las bolsitas se escanean de su paquete)
           .forEach((pr: any) => {
             flatItems.push({
               productId: p.id,
@@ -72,7 +72,7 @@ export function CounterBulkSheet() {
   if (items.length === 0) {
     return (
       <EmptyState title="No hay códigos generados">
-        Primero debes generar los códigos internos EAN-13 para los productos a granel en la pestaña de gestión.
+        No hay presentaciones marcadas "Balanza" con código. Marcalas en Administración → Balanza y generá sus códigos en la pestaña de gestión.
       </EmptyState>
     );
   }
@@ -115,7 +115,7 @@ export function CounterBulkSheet() {
               {catItems.map(item => (
                 <div key={item.presentationId} style={{ border: "1px dashed #ccc", padding: "10px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
                   <strong style={{ fontSize: "1.1rem", marginBottom: "4px" }}>{item.productName}</strong>
-                  <span style={{ fontSize: "0.85rem", color: "#555", marginBottom: "10px" }}>{item.presentationName}</span>
+                  <span style={{ fontSize: "0.85rem", color: "#555", marginBottom: "10px" }}>{item.presentationName} · Balanza: pesar y escanear</span>
                   
                   {item.internalBarcode ? (
                     <BarcodeSvg 

@@ -6,8 +6,9 @@ const unit: PosEntry = {
   presentationId: "bolsa", productId: "n", productName: "Nueces", presentationName: "250 g",
   baseUnit: "gram", baseQuantity: 250, salePrice: 1500, soldByWeight: false, internalBarcode: "1", manufacturerBarcode: null
 };
-const bulkPerKg: PosEntry = {
-  ...unit, presentationId: "granel-kg", presentationName: "granel por kg", baseQuantity: 1000, salePrice: 3000, soldByWeight: true
+// ADR-001: una presentación "Balanza" es por gramo; $3000/kg se guarda como $3 por gramo.
+const bulk: PosEntry = {
+  ...unit, presentationId: "lentejas-granel", presentationName: "granel", baseQuantity: 1, salePrice: 3, soldByWeight: true
 };
 
 let n = 0;
@@ -24,14 +25,14 @@ describe("carrito", () => {
   });
 
   it("RF-33: 350 g de un granel a $3000/kg suman $1050", () => {
-    const lines = cartReducer([], { type: "addWeighed", entry: bulkPerKg, weight: 350, lineId: id() });
-    expect(lines[0]?.quantity).toBe(0.35);
+    const lines = cartReducer([], { type: "addWeighed", entry: bulk, weight: 350, lineId: id() });
+    expect(lines[0]?.quantity).toBe(350);
     expect(cartTotal(lines)).toBe(1050);
   });
 
   it("un producto por peso no se agrega sin peso", () => {
-    expect(cartReducer([], { type: "add", entry: bulkPerKg, lineId: id() })).toEqual([]);
-    expect(cartReducer([], { type: "addWeighed", entry: bulkPerKg, weight: 0, lineId: id() })).toEqual([]);
+    expect(cartReducer([], { type: "add", entry: bulk, lineId: id() })).toEqual([]);
+    expect(cartReducer([], { type: "addWeighed", entry: bulk, weight: 0, lineId: id() })).toEqual([]);
   });
 
   it("cantidad 0 quita la línea", () => {
@@ -43,7 +44,7 @@ describe("carrito", () => {
 describe("buildSalePayload (contrato con process_offline_sale)", () => {
   const lines: CartLine[] = [
     { lineId: "a", entry: unit, quantity: 3 },
-    { lineId: "b", entry: bulkPerKg, quantity: 0.35, weight: 350 }
+    { lineId: "b", entry: bulk, quantity: 350, weight: 350 }
   ];
 
   it("envía cantidades en unidades de presentación y el total que se mostró", () => {
@@ -51,7 +52,7 @@ describe("buildSalePayload (contrato con process_offline_sale)", () => {
     expect(payload.totalAmount).toBe(5550);
     expect(payload.items.map((i) => [i.presentationId, i.quantity, i.unitPrice])).toEqual([
       ["bolsa", 3, 1500],
-      ["granel-kg", 0.35, 3000]
+      ["lentejas-granel", 350, 3]
     ]);
     expect(payload).not.toHaveProperty("customerId");
   });

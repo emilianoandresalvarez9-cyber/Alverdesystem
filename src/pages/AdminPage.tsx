@@ -13,9 +13,10 @@ import { Button, GlassCard } from "../shared/ui";
 import { ReportsDashboard } from "../modules/reports/ReportsDashboard";
 import { AuditHistoryPage } from "../modules/audit/AuditHistoryPage";
 import { BranchesManager } from "../modules/admin/BranchesManager";
+import { ScalePresentations } from "../modules/admin/ScalePresentations";
 import "../styles/pos.css";
 
-type AdminTab = "reports" | "stock" | "fractioning" | "classifiers" | "restock" | "barcodes" | "branches" | "audit" | "settings";
+type AdminTab = "reports" | "stock" | "fractioning" | "classifiers" | "restock" | "barcodes" | "scale" | "branches" | "audit" | "settings";
 
 export function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>("reports");
@@ -69,6 +70,13 @@ export function AdminPage() {
             onClick={() => setActiveTab("barcodes")}
           >
             🖨️ Códigos y Planilla
+          </Button>
+
+          <Button
+            variant={activeTab === "scale" ? "primario" : "fantasma"}
+            onClick={() => setActiveTab("scale")}
+          >
+            ⚖️ Balanza
           </Button>
 
           <Button
@@ -142,6 +150,9 @@ export function AdminPage() {
             <ClassifierManager type={classifierType} />
           </div>
         )}
+
+        {/* Venta con balanza (ADR-001) */}
+        {activeTab === "scale" && <ScalePresentations />}
 
         {/* Sucursales y cajas (RF-53, RF-55): la caja de /pos.html elige de esta lista */}
         {activeTab === "branches" && <BranchesManager />}

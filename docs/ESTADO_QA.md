@@ -1,6 +1,6 @@
 # Estado QA por requisito
 
-Actualizado con PR-01 a PR-09. "Probado" significa que hay un test automatizado que falla si el
+Actualizado con PR-01 a PR-10. "Probado" significa que hay un test automatizado que falla si el
 requisito se rompe. Nada de esto está verificado todavía en el hardware real (ver T-03).
 
 | Requisito | Estado | Evidencia |
@@ -8,7 +8,8 @@ requisito se rompe. Nada de esto está verificado todavía en el hardware real (
 | RF-01 a RF-06 Catálogo, filtros, exportación | Implementado | Revisión previa; `rls_catalog_test.sql` para el acceso de empleado |
 | RF-07, RF-08, RF-09 Lotes, vencimiento efectivo, FEFO | Probado en venta | `venta_contrato_test.sql` (FEFO por vencimiento efectivo) |
 | RF-10 Listado de lotes | Implementado | Sin test automatizado |
-| RF-11 a RF-17b Fraccionamiento y granel | Parcial | Lógica probada (`fractioningLogic.test.ts`); escritura no atómica (T-01) y unidades por decidir (T-02) |
+| RF-11 a RF-17b Fraccionamiento y granel | Parcial | Lógica probada (`fractioningLogic.test.ts`); unidades definidas en ADR-001 (`balanza_granel_test.sql`); escritura no atómica (T-01) |
+| RF-22 Granel escaneado desde la planilla | Probado | Planilla solo con presentaciones "Balanza"; `balanza_granel_test.sql` |
 | RF-18 a RF-23 Códigos de barra | Probado | `ean13.test.ts`, `catalogLookup.test.ts`, `scanDetector.test.ts` |
 | RF-24 a RF-30 Proveedores y precios | Pendiente | T-10, T-12 |
 | RF-31 Ventas con medio de pago | Probado | `venta_contrato_test.sql`, `cart.test.ts`, `saleContract.test.ts` |
@@ -46,4 +47,5 @@ requisito se rompe. Nada de esto está verificado todavía en el hardware real (
 | P10 | Stock negativo hacía fallar la venta (RF-38 nunca funcionó) | PR-04 |
 | P11 | El respaldo de cierre respaldaba una base inexistente | PR-05 |
 | P12 | RF-49 no existía (página de faltantes era un simulador sin montar) | PR-07 |
+| P13 | El generador de códigos internos puede repetir códigos e ignora errores | Pendiente (T-16) |
 | — | CI de base de datos siempre verde (`psql -f` ignora fallas) | PR-01 |

@@ -66,9 +66,18 @@ export function validateEan13(code: string): Ean13ValidationResult {
  * Utiliza un prefijo (20 a 29) y un ID de presentación numérico o string numérico (hasta 10 dígitos).
  * El precio NO SE INCLUYE NUNCA (RF-23).
  */
+/**
+ * Prefijo reservado para etiquetas impresas por una balanza con el peso dentro del código
+ * (ADR-001, opción futura). El generador interno nunca lo usa, para que no haya choques.
+ */
+export const SCALE_LABEL_PREFIX = 29;
+
 export function generateInternalEan13(presentationSequenceId: string | number, prefix: number = 20): string {
   if (prefix < 20 || prefix > 29) {
     throw new Error("El prefijo interno debe estar entre 20 y 29.");
+  }
+  if (prefix === SCALE_LABEL_PREFIX) {
+    throw new Error(`El prefijo ${SCALE_LABEL_PREFIX} está reservado para etiquetas de balanza.`);
   }
 
   const idStr = String(presentationSequenceId).replace(/\D/g, "");
