@@ -10,7 +10,8 @@ export default defineConfig({
       input: {
         login: fileURLToPath(new URL("./index.html", import.meta.url)),
         catalog: fileURLToPath(new URL("./catalog.html", import.meta.url)),
-        admin: fileURLToPath(new URL("./admin.html", import.meta.url))
+        admin: fileURLToPath(new URL("./admin.html", import.meta.url)),
+        pos: fileURLToPath(new URL("./pos.html", import.meta.url))
       }
     }
   }

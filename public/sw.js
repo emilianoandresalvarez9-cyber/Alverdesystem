@@ -1,5 +1,5 @@
-const CACHE_NAME = "alverde-shell-v1";
-const APP_SHELL = ["/", "/index.html", "/catalog.html", "/admin.html"];
+const CACHE_NAME = "alverde-shell-v2";
+const APP_SHELL = ["/", "/index.html", "/catalog.html", "/admin.html", "/pos.html"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));

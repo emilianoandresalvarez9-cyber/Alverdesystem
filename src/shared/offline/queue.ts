@@ -1,7 +1,9 @@
 import { tryWritePendingOperationsBackup } from "./backup";
 import type { CatalogSnapshot, NewQueuedOperation, QueuedOperation } from "./types";
 
-const DB_NAME = "alverde-offline";
+/** Nombre de la base IndexedDB de la app. Lo comparten la cola, el catálogo local y los respaldos. */
+export const OFFLINE_DB_NAME = "alverde-offline";
+const DB_NAME = OFFLINE_DB_NAME;
 const DB_VERSION = 1;
 const OPERATION_STORE = "operations";
 const CATALOG_STORE = "catalog";
@@ -94,6 +96,33 @@ async function mirrorPendingQueue(): Promise<void> {
     // Los datos quedan seguros en IndexedDB y se reintentara en la proxima operacion.
     console.warn("No se pudo actualizar la segunda copia local.", error);
   }
+}
+
+/** Lee una preferencia local del dispositivo (caja asignada, turno en curso, etc.). */
+export async function readSetting<T>(key: string): Promise<T | undefined> {
+  const record = await readRecord<{ key: string; value: T }>(SETTING_STORE, key);
+  return record?.value;
+}
+
+/** Guarda una preferencia local del dispositivo. `undefined` la borra. */
+export async function writeSetting<T>(key: string, value: T | undefined): Promise<void> {
+  if (value === undefined) {
+    const db = await openDatabase();
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(SETTING_STORE, "readwrite");
+      transaction.objectStore(SETTING_STORE).delete(key);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error ?? new Error("No se pudo borrar la preferencia local."));
+    });
+    return;
+  }
+  await putRecord(SETTING_STORE, { key, value });
+}
+
+/** Todas las operaciones, sincronizadas o no (para resúmenes de turno y respaldos). */
+export async function allOperations(): Promise<QueuedOperation[]> {
+  const values = await readAll<QueuedOperation>(OPERATION_STORE);
+  return values.sort((left, right) => left.createdAt.localeCompare(right.createdAt));
 }
 
 export async function deviceId(): Promise<string> {

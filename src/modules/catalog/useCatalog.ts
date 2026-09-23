@@ -68,7 +68,8 @@ export function useCatalog(): UseCatalogReturn {
         name: row.presentation_name,
         base_quantity: row.base_quantity,
         internal_barcode: row.internal_barcode,
-        sale_price: row.sale_price,
+        sale_price: Number(row.sale_price),
+        sold_by_weight: Boolean(row.sold_by_weight),
         active: true
       });
     }
