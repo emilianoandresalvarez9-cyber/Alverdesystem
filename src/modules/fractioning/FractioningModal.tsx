@@ -1,3 +1,4 @@
+import type { SupabaseAny } from "../../shared/types";
 import { useState, useEffect, useMemo } from "react";
 import { Modal, Button, TextField, SelectField, GlassCard, Badge } from "../../shared/ui";
 import { getSupabase } from "../../shared/supabase/client";
@@ -46,7 +47,7 @@ export function FractioningModal({ originLot, open, onClose, onSuccess }: Fracti
         if (err) throw err;
         
         if (active && data) {
-          const options: PresentationOption[] = data.map((d: any) => ({
+          const options: PresentationOption[] = data.map((d: SupabaseAny) => ({
             id: d.id,
             name: d.name,
             base_quantity: d.base_quantity,

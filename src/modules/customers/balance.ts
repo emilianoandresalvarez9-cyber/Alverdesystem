@@ -1,3 +1,4 @@
+import type { SupabaseAny } from "../../shared/types";
 import type { QueuedOperation } from "../../shared/offline/types";
 import type { CreditMovementPayload, CustomerAccount } from "./types";
 
@@ -33,7 +34,7 @@ export function pendingDeltas(operations: QueuedOperation[]): PendingInfo {
       const payload = operation.payload as { paymentMethod?: string; customerId?: string; totalAmount?: number };
       if (payload.paymentMethod === "credit" && payload.customerId) add(payload.customerId, Number(payload.totalAmount ?? 0));
     } else if (operation.kind === "customer") {
-      const payload = operation.payload as any;
+      const payload = operation.payload as SupabaseAny;
       newAccounts.push({
         id: operation.localId,
         name: payload.name,

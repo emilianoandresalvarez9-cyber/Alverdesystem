@@ -174,7 +174,7 @@ export function QuickRestock({ onSuccess }: QuickRestockProps) {
               label="Cantidad a ingresar"
               type="number"
               min="0.001"
-              step="any"
+              step={0.001}
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
             />

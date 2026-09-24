@@ -1,9 +1,10 @@
+import type { SupabaseAny } from "../../shared/types";
 import { useEffect, useState } from "react";
 import { getSupabase } from "../../shared/supabase/client";
 import { GlassCard, Badge, EmptyState } from "../../shared/ui";
 
 export function MarginDashboard() {
-  const [margins, setMargins] = useState<any[]>([]);
+  const [margins, setMargins] = useState<SupabaseAny[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -44,7 +45,7 @@ export function MarginDashboard() {
 
       return {
         id: pres.id,
-        productName: Array.isArray(pres.products) ? (pres.products[0] as any)?.name : (pres.products as any)?.name,
+        productName: Array.isArray(pres.products) ? (pres.products[0] as SupabaseAny)?.name : (pres.products as SupabaseAny)?.name,
         presentationName: pres.name,
         cost,
         price,

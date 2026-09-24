@@ -1,3 +1,4 @@
+import type { SupabaseAny } from "../../shared/types";
 import { useState, useRef } from "react";
 import { GlassCard, Button, Badge } from "../../shared/ui";
 import { generateFullBackup, downloadBackupFile, exportToCsv, restoreFullBackup, type FullBackupData } from "../../shared/offline/fullBackup";
@@ -14,7 +15,7 @@ export function BackupManager() {
       const data = await generateFullBackup();
       downloadBackupFile(data);
       setMessage("Copia generada exitosamente.");
-    } catch (error: any) {
+    } catch (error: SupabaseAny) {
       setMessage(error.message);
     } finally {
       setLoading(false);
@@ -38,7 +39,7 @@ export function BackupManager() {
       setMessage("Restaurando datos...");
       await restoreFullBackup(data);
       setMessage("Copia de seguridad restaurada correctamente.");
-    } catch (error: any) {
+    } catch (error: SupabaseAny) {
       setMessage(`Error restaurando: ${error.message}`);
     } finally {
       setLoading(false);
@@ -51,10 +52,10 @@ export function BackupManager() {
     setMessage(`Exportando tabla ${tableName}...`);
     try {
       const data = await generateFullBackup();
-      const tableData = (data.tables as any)[tableName];
+      const tableData = (data.tables as SupabaseAny)[tableName];
       exportToCsv(tableName, tableData || []);
       setMessage("Exportacion completada.");
-    } catch (error: any) {
+    } catch (error: SupabaseAny) {
       setMessage(error.message);
     } finally {
       setLoading(false);

@@ -1,3 +1,4 @@
+import type { SupabaseAny } from "../../shared/types";
 import { useState, useEffect } from "react";
 import { GlassCard, Button, TextField, Badge } from "../../shared/ui";
 import { getSupabase } from "../../shared/supabase/client";
@@ -37,7 +38,7 @@ export function ShelfLifeManager() {
 
       if (err) throw err;
       
-      const mapped = (data || []).map((p: any) => ({
+      const mapped = (data || []).map((p: SupabaseAny) => ({
         id: p.id,
         name: p.name,
         brand: p.brand?.name || null,

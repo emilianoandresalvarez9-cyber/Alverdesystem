@@ -1,3 +1,4 @@
+import type { SupabaseAny } from "../types";
 import { useState } from "react";
 import { chooseBackupDirectory } from "../offline/backup";
 import { pendingOperations } from "../offline/queue";

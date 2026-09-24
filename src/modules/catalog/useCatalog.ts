@@ -1,3 +1,4 @@
+import type { SupabaseAny } from "../../shared/types";
 import { useState, useEffect, useCallback } from "react";
 import { getSupabase } from "../../shared/supabase/client";
 import { loadCatalogSnapshot, saveCatalogSnapshot } from "../../shared/offline/queue";
@@ -52,7 +53,7 @@ export function useCatalog(): UseCatalogReturn {
           id: row.product_id,
           name: row.product_name,
           manufacturer_barcode: row.manufacturer_barcode,
-          base_unit: row.base_unit as any,
+          base_unit: row.base_unit as SupabaseAny,
           open_shelf_life_days: row.open_shelf_life_days,
           label_text: row.label_text,
           active: true, // filtered by view

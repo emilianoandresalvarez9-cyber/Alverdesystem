@@ -117,7 +117,7 @@ export function StockAdjustmentModal({
           type="number"
           min="0.001"
           max={lot.current_quantity}
-          step="any"
+          step={0.001}
           value={quantity}
           onChange={(e) => setQuantity(e.target.value)}
           placeholder={`Máximo: ${lot.current_quantity}`}

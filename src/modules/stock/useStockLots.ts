@@ -1,3 +1,4 @@
+import type { SupabaseAny } from "../../shared/types";
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { getSupabase } from "../../shared/supabase/client";
 import { calculateEffectiveExpiry, getDaysUntilExpiry, evaluateExpiryStatus } from "./expiry";
@@ -42,7 +43,7 @@ export function useStockLots() {
 
       if (err) throw err;
 
-      const normalized: StockLot[] = (data ?? []).map((row: any) => {
+      const normalized: StockLot[] = (data ?? []).map((row: SupabaseAny) => {
         const pres = row.presentation;
         const prod = pres?.product;
         const mfgExpiry = row.manufacturer_expiry_date;
@@ -111,7 +112,7 @@ export function useStockLots() {
 
       if (err) throw err;
       await fetchLots();
-    } catch (e: any) {
+    } catch (e: SupabaseAny) {
       const msg = e.message || "";
       if (msg.includes("Regla de oro")) {
         console.log(msg); // Muestra el error estructurado de la base de datos

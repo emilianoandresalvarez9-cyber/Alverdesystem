@@ -1,3 +1,4 @@
+import type { SupabaseAny } from "../../shared/types";
 import { useState, useEffect } from "react";
 import { GlassCard, SelectField, EmptyState, Button } from "../../shared/ui";
 import { getSupabase } from "../../shared/supabase/client";
@@ -49,7 +50,7 @@ export function ReportsDashboard() {
 
       const salesMap = new Map<string, number>();
       if (sales) {
-        sales.forEach((sale: any) => {
+        sales.forEach((sale: SupabaseAny) => {
           const day = new Date(sale.occurred_at).toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit', month: '2-digit' });
           salesMap.set(day, (salesMap.get(day) || 0) + Number(sale.total_amount));
         });
@@ -66,7 +67,7 @@ export function ReportsDashboard() {
 
       const prodMap = new Map<string, { q: number, r: number, cat: string }>();
       if (saleItems) {
-        saleItems.forEach((item: any) => {
+        saleItems.forEach((item: SupabaseAny) => {
           if (!item.products) return;
           const pName = Array.isArray(item.products) ? item.products[0].name : item.products.name;
           const pCat = Array.isArray(item.products) ? item.products[0].category_id : item.products.category_id;
@@ -93,7 +94,7 @@ export function ReportsDashboard() {
       });
       
       const { data: categories } = await sb.from('categories').select('id, name');
-      const catNameMap = new Map<string, string>(categories?.map((c: any) => [c.id, c.name]) || []);
+      const catNameMap = new Map<string, string>(categories?.map((c: SupabaseAny) => [c.id, c.name]) || []);
 
       const catDemand: CategoryDemand[] = Array.from(catMap.entries())
         .map(([id, value]) => ({ name: catNameMap.get(id) || 'Sin Rubro', value }))

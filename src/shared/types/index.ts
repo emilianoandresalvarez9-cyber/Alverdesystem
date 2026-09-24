@@ -71,3 +71,6 @@ export interface Supplier {
   name: string;
   contact?: string;
 }
+
+
+export type SupabaseAny = ReturnType<typeof JSON.parse>;

@@ -84,7 +84,19 @@ export function AdminPage() {
             🖨️ Códigos y Planilla
           </Button>
 
-          <Button variant={activeTab === "scale" ? "primario" : "fantasma"} onClick={() => setActiveTab("scale")}>Balanza (Cat�logo)</Button> <Button variant={activeTab === "scale_manager" ? "primario" : "fantasma"} onClick={() => setActiveTab("scale_manager")}>Configuraci�n Balanza</Button>
+          <Button
+            variant={activeTab === "scale" ? "primario" : "fantasma"}
+            onClick={() => setActiveTab("scale")}
+          >
+            ⚖️ Balanza (Catálogo)
+          </Button>
+
+          <Button
+            variant={activeTab === "scale_manager" ? "primario" : "fantasma"}
+            onClick={() => setActiveTab("scale_manager")}
+          >
+            ⚙️ Configuración Balanza
+          </Button>
 
           <Button
             variant={activeTab === "branches" ? "primario" : "fantasma"}
@@ -200,4 +212,3 @@ export function AdminPage() {
     </AppShell>
   );
 }
-

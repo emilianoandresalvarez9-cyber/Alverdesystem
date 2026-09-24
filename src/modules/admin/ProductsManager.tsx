@@ -6,6 +6,10 @@ import type { Product, Presentation, Brand, Category } from "../../shared/types"
 
 export function ProductsManager() {
   const [errorMsg, setErrorMsg] = useState("");
+  const [pricePrompt, setPricePrompt] = useState<{presId: string, oldPrice: number} | null>(null);
+  const [newPriceInput, setNewPriceInput] = useState("");
+  const [pricePrompt, setPricePrompt] = useState<{presId: string, oldPrice: number} | null>(null);
+  const [newPriceInput, setNewPriceInput] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -109,15 +113,20 @@ export function ProductsManager() {
     }
   };
 
-  const handleUpdatePrice = async (presId: string, oldPrice: number) => {
-    const newPrice = prompt("Nuevo precio (esto guardará historial RF-27):", oldPrice.toString());
-    if (!newPrice) return;
-    const { error } = await sb.from("product_presentations").update({ sale_price: parseFloat(newPrice) }).eq("id", presId);
+  const handleUpdatePrice = (presId: string, oldPrice: number) => {
+    setPricePrompt({presId, oldPrice});
+    setNewPriceInput(oldPrice.toString());
+  };
+
+  const confirmUpdatePrice = async () => {
+    if (!pricePrompt) return;
+    const { error } = await sb.from("product_presentations").update({ sale_price: parseFloat(newPriceInput) }).eq("id", pricePrompt.presId);
     if (error) setErrorMsg(error.message);
     else {
       setSuccessMsg("Precio actualizado");
       handleSelectProduct(selectedProduct);
     }
+    setPricePrompt(null);
   };
 
   return (
