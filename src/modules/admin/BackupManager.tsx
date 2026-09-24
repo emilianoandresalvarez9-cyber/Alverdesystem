@@ -2,6 +2,7 @@ import type { SupabaseAny } from "../../shared/types";
 import { useState, useRef } from "react";
 import { GlassCard, Button, Badge } from "../../shared/ui";
 import { generateFullBackup, downloadBackupFile, exportToCsv, restoreFullBackup, type FullBackupData } from "../../shared/offline/fullBackup";
+import { getSupabase } from "../../shared/supabase/client";
 
 export function BackupManager() {
   const [loading, setLoading] = useState(false);

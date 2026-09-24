@@ -16,8 +16,8 @@ test.describe('Flujo de Venta E2E', () => {
     
     // Esperamos redirección (el app debería mandar a /catalog.html o similar según el rol, pero forzamos POS si no lo hace automáticamente)
     // Para no depender del delay de la red, esperamos que cambie la URL o pasen 3 segs
-    await page.waitForTimeout(3000);
-    await page.goto('/pos.html');
+    // Esperamos redirección automática
+    await page.waitForURL('**/pos.html', { timeout: 10000 });
     
     // 3. Validar carga del POS
     await expect(page.locator('h1').first()).toBeVisible({ timeout: 10000 });
@@ -48,7 +48,31 @@ test.describe('Flujo de Venta E2E', () => {
     await expect(btnConfirmar).toBeVisible({ timeout: 2000 });
     await btnConfirmar.click();
     
+
     // Esperamos mensaje de éxito (la app limpia el carrito después de la venta)
-    await expect(btnConfirmar).toBeHidden({ timeout: 3000 });
+    await expect(btnConfirmar).toBeHidden({ timeout: 5000 });
+
+    // 7. Verificación E2E Real: Validar que la venta está en IndexedDB (Offline)
+    const offlineSalesCount = await page.evaluate(async () => {
+      return new Promise((resolve, reject) => {
+        const req = window.indexedDB.open("alverde-pos-db");
+        req.onerror = () => reject(req.error);
+        req.onsuccess = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains("offline_sales")) {
+            resolve(0);
+            return;
+          }
+          const tx = db.transaction("offline_sales", "readonly");
+          const store = tx.objectStore("offline_sales");
+          const countReq = store.count();
+          countReq.onsuccess = () => resolve(countReq.result);
+          countReq.onerror = () => reject(countReq.error);
+        };
+      });
+    });
+
+    expect(offlineSalesCount).toBeGreaterThan(0);
+
   });
 });
