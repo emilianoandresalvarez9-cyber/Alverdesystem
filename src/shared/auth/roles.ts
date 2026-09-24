@@ -4,7 +4,7 @@ export type Profile = { id: string; role: AppRole; active: boolean };
 
 /** Página de inicio de cada rol después de ingresar. */
 export function homeFor(role: AppRole): string {
-  return role === "administrator" ? "/admin.html" : "/catalog.html";
+  return role === "administrator" ? "/admin.html" : "/pos.html";
 }
 
 /** Un administrador accede a todo; un empleado solo a páginas sin rol requerido. */
