@@ -3,6 +3,8 @@ import { getSupabase } from "../../shared/supabase/client";
 import { Button, TextField, SelectField, GlassCard, Badge, EmptyState } from "../../shared/ui";
 
 export function ProductsManager() {
+  const [errorMsg, setErrorMsg] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
   const [products, setProducts] = useState<any[]>([]);
   const [brands, setBrands] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -49,7 +51,7 @@ export function ProductsManager() {
   };
 
   const handleSaveProduct = async () => {
-    if (!productName) return alert("Nombre obligatorio");
+    if (!productName) return setErrorMsg("Nombre obligatorio");
     const payload = {
       name: productName,
       brand_id: productBrandId || null,
@@ -60,13 +62,13 @@ export function ProductsManager() {
 
     if (selectedProduct) {
       const { error } = await sb.from("products").update(payload).eq("id", selectedProduct.id);
-      if (error) alert(error.message);
-      else { alert("Actualizado"); loadData(); }
+      if (error) setErrorMsg(error.message);
+      else { setSuccessMsg("Actualizado"); loadData(); }
     } else {
       const { error, data } = await sb.from("products").insert(payload).select().single();
-      if (error) alert(error.message);
+      if (error) setErrorMsg(error.message);
       else {
-        alert("Creado");
+        setSuccessMsg("Creado");
         loadData();
         handleSelectProduct(data);
       }
@@ -75,10 +77,10 @@ export function ProductsManager() {
 
   const handleArchiveProduct = async () => {
     if (!selectedProduct) return;
-    if (!confirm("¿Archivar producto? Sus ventas históricas se conservarán (RF-56).")) return;
+    if (!window.confirm("¿Archivar producto? Sus ventas históricas se conservarán (RF-56).")) return;
     const { error } = await sb.from("products").update({ active: false }).eq("id", selectedProduct.id);
-    if (error) alert(error.message);
-    else { alert("Archivado"); loadData(); setSelectedProduct(null); }
+    if (error) setErrorMsg(error.message);
+    else { setSuccessMsg("Archivado"); loadData(); setSelectedProduct(null); }
   };
 
   // Presentations
@@ -87,7 +89,7 @@ export function ProductsManager() {
   const [presSalePrice, setPresSalePrice] = useState("");
 
   const handleSavePresentation = async () => {
-    if (!selectedProduct || !presName || !presBaseQty || !presSalePrice) return alert("Faltan datos");
+    if (!selectedProduct || !presName || !presBaseQty || !presSalePrice) return setErrorMsg("Faltan datos");
     
     const { error } = await sb.from("product_presentations").insert({
       product_id: selectedProduct.id,
@@ -96,9 +98,9 @@ export function ProductsManager() {
       sale_price: parseFloat(presSalePrice)
     });
 
-    if (error) alert(error.message);
+    if (error) setErrorMsg(error.message);
     else {
-      alert("Presentación añadida");
+      setSuccessMsg("Presentación añadida");
       setPresName(""); setPresBaseQty(""); setPresSalePrice("");
       handleSelectProduct(selectedProduct);
     }
@@ -108,9 +110,9 @@ export function ProductsManager() {
     const newPrice = prompt("Nuevo precio (esto guardará historial RF-27):", oldPrice.toString());
     if (!newPrice) return;
     const { error } = await sb.from("product_presentations").update({ sale_price: parseFloat(newPrice) }).eq("id", presId);
-    if (error) alert(error.message);
+    if (error) setErrorMsg(error.message);
     else {
-      alert("Precio actualizado");
+      setSuccessMsg("Precio actualizado");
       handleSelectProduct(selectedProduct);
     }
   };

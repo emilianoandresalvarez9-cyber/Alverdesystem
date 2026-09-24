@@ -7,7 +7,10 @@ import { Button } from "../ui";
 import { backupService } from "../backup/backupService";
 import { useRef } from "react";
 
+import { useCurrentProfile } from '../auth/AuthGate';
+
 export function BackupSettings() {
+  const { role } = useCurrentProfile();
   const [message, setMessage] = useState("Aún no se eligió una carpeta de respaldo para la cola offline.");
   const [backupLoading, setBackupLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);

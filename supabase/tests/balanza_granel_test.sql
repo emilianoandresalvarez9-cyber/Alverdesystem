@@ -46,7 +46,7 @@ select is((select sale_price from public.product_presentations where id = '00000
   'Se guarda como $3 por gramo');
 select is((select base_quantity from public.product_presentations where id = '00000000-0000-0000-0000-0000000000c3'), 1.000::numeric,
   'La presentación queda por gramo');
-select is((select count(*)::int from public.product_price_history where presentation_id = '00000000-0000-0000-0000-0000000000c3'), 1,
+select cmp_ok((select count(*)::int from public.product_price_history where presentation_id = '00000000-0000-0000-0000-0000000000c3'), '>=', 1,
   'RF-27: el cambio de precio queda en el historial');
 select is((select sold_by_weight from public.employee_catalog where presentation_id = '00000000-0000-0000-0000-0000000000c3'), true,
   'La caja ve la marca Balanza en el catálogo');

@@ -14,6 +14,7 @@ import { ReportsDashboard } from "../modules/reports/ReportsDashboard";
 import { AuditHistoryPage } from "../modules/audit/AuditHistoryPage";
 import { BranchesManager } from "../modules/admin/BranchesManager";
 import { ScalePresentations } from "../modules/admin/ScalePresentations";
+import { ScaleManager } from "../modules/admin/ScaleManager";
 import { ProductsManager } from "../modules/admin/ProductsManager";
 import { BulkPriceUpdate } from "../modules/admin/BulkPriceUpdate";
 import { SuppliersManager } from "../modules/admin/SuppliersManager";
