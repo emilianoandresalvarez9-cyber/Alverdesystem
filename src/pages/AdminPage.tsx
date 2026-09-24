@@ -15,9 +15,12 @@ import { AuditHistoryPage } from "../modules/audit/AuditHistoryPage";
 import { BranchesManager } from "../modules/admin/BranchesManager";
 import { ScalePresentations } from "../modules/admin/ScalePresentations";
 import { ProductsManager } from "../modules/admin/ProductsManager";
+import { BulkPriceUpdate } from "../modules/admin/BulkPriceUpdate";
+import { SuppliersManager } from "../modules/admin/SuppliersManager";
+import { MarginDashboard } from "../modules/reports/MarginDashboard";
 import "../styles/pos.css";
 
-type AdminTab = "reports" | "stock" | "fractioning" | "classifiers" | "products" | "restock" | "barcodes" | "scale" | "branches" | "audit" | "settings";
+type AdminTab = "reports" | "margins" | "stock" | "fractioning" | "classifiers" | "products" | "prices" | "suppliers" | "restock" | "barcodes" | "scale" | "branches" | "audit" | "settings";
 
 export function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>("reports");
@@ -110,7 +113,9 @@ export function AdminPage() {
         </div>
 
         {/* Tab 0: Reportes */}
-        {activeTab === "reports" && <ReportsDashboard />}
+        {activeTab === "margins" && <MarginDashboard />}
+          {activeTab === "suppliers" && <SuppliersManager />}
+          {activeTab === "reports" && <ReportsDashboard />}
 
         {/* Tab 1: Lotes y Vencimientos (Agente E) */}
         {activeTab === "stock" && <StockDashboard />}
@@ -160,7 +165,8 @@ export function AdminPage() {
         )}
 
         {/* Productos y Presentaciones ABM */}
-        {activeTab === "products" && <ProductsManager />}
+        {activeTab === "prices" && <BulkPriceUpdate />}
+          {activeTab === "products" && <ProductsManager />}
 
         {/* Venta con balanza (ADR-001) */}
         {activeTab === "scale" && <ScalePresentations />}
