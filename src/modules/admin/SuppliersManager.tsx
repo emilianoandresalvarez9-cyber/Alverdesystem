@@ -3,7 +3,7 @@ import { getSupabase } from "../../shared/supabase/client";
 import { Button, TextField, GlassCard, Badge, EmptyState } from "../../shared/ui";
 
 export function SuppliersManager() {
-  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [suppliers, setSuppliers] = useState<{id: string; name: string; contact?: string}[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -50,7 +50,7 @@ export function SuppliersManager() {
     setLoading(false);
   };
 
-  const handleEdit = (sup: any) => {
+  const handleEdit = (sup: {id: string; name: string; contact?: string}) => {
     setName(sup.name);
     setContact(sup.contact || "");
     setEditingId(sup.id);

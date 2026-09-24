@@ -49,7 +49,7 @@ export function BarcodeDashboard() {
       // Flujo RF-22: si es granel, simulamos pedir peso
       if (isBulk) {
         setTimeout(() => {
-          alert(`⚖️ Producto a granel detectado: Ingrese el peso en gramos (balanza) para ${prod.name}`);
+          console.log(`⚖️ Producto a granel detectado: Ingrese el peso en gramos (balanza) para ${prod.name}`);
         }, 150);
       }
       return;
@@ -82,7 +82,7 @@ export function BarcodeDashboard() {
 
   // Generador batch de códigos faltantes
   const handleGenerateMissing = async () => {
-    if (!confirm("¿Generar EAN-13 interno para todos los productos a granel sin código?")) return;
+    
     
     setIsGenerating(true);
     const sb = getSupabase();
@@ -95,7 +95,7 @@ export function BarcodeDashboard() {
       .eq("products.base_unit", "gram");
 
     if (!data || data.length === 0) {
-      alert("No hay productos a granel pendientes de código.");
+      console.log("No hay productos a granel pendientes de código.");
       setIsGenerating(false);
       return;
     }
@@ -105,7 +105,7 @@ export function BarcodeDashboard() {
       // 1. Obtenemos el ID único de la secuencia en la base de datos
       const { data: seq, error: seqError } = await sb.rpc("get_next_internal_code_seq");
       if (seqError) {
-        alert("Error al obtener la secuencia para el código interno: " + seqError.message);
+        console.log("Error al obtener la secuencia para el código interno: " + seqError.message);
         break; // Detenemos la generación
       }
 
@@ -119,14 +119,14 @@ export function BarcodeDashboard() {
         .eq("id", row.id);
 
       if (updateError) {
-        alert(`Error al guardar el código interno para el producto ${row.id}: ${updateError.message}`);
+        console.log(`Error al guardar el código interno para el producto ${row.id}: ${updateError.message}`);
         break; // Detenemos la generación
       }
       
       successCount++;
     }
     
-    alert(`Se generaron ${successCount} códigos de barras nuevos (Prefijo 20).`);
+    console.log(`Se generaron ${successCount} códigos de barras nuevos (Prefijo 20).`);
     setIsGenerating(false);
   };
 

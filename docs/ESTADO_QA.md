@@ -9,4 +9,4 @@ El proyecto ha sido revisado, mitigando las deudas técnicas detectadas por el d
 - **P2-01 & P2-02:** Los alerts primitivos y destructivos detectados en `ProductsManager` han sido removidos y reemplazados por manejo de estado en la UI.
 - **P2-03:** Se ha removido el stub residual `barcodePdf.ts` que contenía código no implementado.
 
-El sistema pasa satisfactoriamente las validaciones del backend (`npm run supabase test db`), del frontend (`npm run test`), y los comandos de build final (`npm run build`). Se ha generado PR a Main con el estado de release funcional y seguro.
+El sistema pasa satisfactoriamente las validaciones del backend (`npx supabase test db`), del frontend (`npm run test`), y los comandos de build final (`npm run build`). Se ha generado PR a Main con el estado de release funcional y seguro.

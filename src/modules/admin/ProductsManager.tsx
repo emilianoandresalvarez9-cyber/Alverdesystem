@@ -2,36 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { getSupabase } from "../../shared/supabase/client";
 import { Button, TextField, SelectField, GlassCard, Badge, EmptyState } from "../../shared/ui";
 
-
-interface Brand {
-  id: string;
-  name: string;
-}
-
-interface Category {
-  id: string;
-  name: string;
-}
-
-interface Product {
-  id: string;
-  name: string;
-  brand_id?: string | null;
-  category_id?: string | null;
-  base_unit?: string;
-  active: boolean;
-}
-
-interface Presentation {
-  id: string;
-  product_id: string;
-  name: string;
-  sale_price: number;
-  internal_code?: string;
-  barcode?: string;
-  status: string;
-  base_quantity?: number;
-}
+import type { Product, Presentation, Brand, Category } from "../../shared/types";
 
 export function ProductsManager() {
   const [errorMsg, setErrorMsg] = useState("");

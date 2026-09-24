@@ -24,8 +24,8 @@ export function BackupSettings() {
       const text = await file.text();
       await backupService.restoreData(text);
       setMessage("Respaldo offline restaurado correctamente. Recargue la página si es necesario.");
-    } catch (error: any) {
-      setMessage("Error al restaurar: " + error.message);
+    } catch (error: unknown) {
+      setMessage("Error al restaurar: " + (error instanceof Error ? error.message : String(error)));
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
@@ -39,7 +39,7 @@ export function BackupSettings() {
         ? "Respaldo local habilitado. Las operaciones pendientes se actualizarán automáticamente."
         : "La carpeta se guardó, pero el navegador necesita permiso de escritura.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "No se pudo habilitar el respaldo local.");
+      setMessage(error instanceof Error ? (error instanceof Error ? error.message : String(error)) : "No se pudo habilitar el respaldo local.");
     }
   }
 
@@ -48,9 +48,9 @@ export function BackupSettings() {
       setBackupLoading(true);
       const backup = await generateFullBackup();
       await saveBackupToDisk(backup);
-      alert("Copia de seguridad generada correctamente.");
-    } catch (e) {
-      alert("Error al generar copia de seguridad.");
+      setMessage("Copia de seguridad generada correctamente.");
+    } catch (error: unknown) {
+      setMessage("Error al generar copia de seguridad.");
     } finally {
       setBackupLoading(false);
     }
@@ -58,7 +58,7 @@ export function BackupSettings() {
 
   async function handleExportCSV() {
     if (role !== "administrator") {
-      alert("No autorizado");
+      setMessage("No autorizado");
       return;
     }
     try {
@@ -79,8 +79,8 @@ export function BackupSettings() {
       const salesCSV = jsonToCSV(backup.tables.sales || []);
       downloadFile(salesCSV, "alverde-ventas.csv", "text/csv");
       
-    } catch (e) {
-      alert("Error al exportar a Excel (CSV).");
+    } catch (error: unknown) {
+      setMessage("Error al exportar a Excel (CSV).");
     } finally {
       setBackupLoading(false);
     }

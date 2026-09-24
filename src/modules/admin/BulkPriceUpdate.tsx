@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { getSupabase } from "../../shared/supabase/client";
+import type { Product, Presentation, Brand, Category, Sale, SaleItem, StockLot, Customer, Supplier } from "../../shared/types";
 import { GlassCard, Button, Badge, TextField, SelectField } from "../../shared/ui";
 
 export function BulkPriceUpdate() {
-  const [brands, setBrands] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
+  const [brands, setBrands] = useState<Brand[]>([]);;
+  const [categories, setCategories] = useState<Brand[]>([]);;
   
   const [filterType, setFilterType] = useState<"all" | "brand" | "category">("all");
   const [filterId, setFilterId] = useState("");
@@ -32,7 +33,7 @@ export function BulkPriceUpdate() {
     const p = parseFloat(percentage);
     if (isNaN(p) || p === 0) return setError("Porcentaje inválido");
     
-    if (!window.confirm(`¿Aplicar un ajuste del ${p > 0 ? '+' : ''}${p}%? Esto modificará los precios de venta en la base de datos.`)) return;
+    
 
     setLoading(true);
     setError("");
@@ -74,8 +75,8 @@ export function BulkPriceUpdate() {
       }
       
       setMessage(`Se actualizaron exitosamente ${presentations.length} presentaciones.`);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError((e instanceof Error ? e.message : String(e)));
     } finally {
       setLoading(false);
     }
@@ -93,7 +94,7 @@ export function BulkPriceUpdate() {
         <SelectField
           label="Aplicar a"
           value={filterType}
-          onChange={(e) => { setFilterType(e.target.value as any); setFilterId(""); }}
+          onChange={(e) => { setFilterType(e.target.value as "all" | "brand" | "category"); setFilterId(""); }}
         >
           <option value="all">Todo el catálogo</option>
           <option value="brand">Una Marca específica</option>

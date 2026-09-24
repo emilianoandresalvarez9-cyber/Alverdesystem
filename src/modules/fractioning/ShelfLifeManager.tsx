@@ -84,7 +84,7 @@ export function ShelfLifeManager() {
     if (!clear) {
       days = parseInt(bulkDays, 10);
       if (!validateShelfLifeDays(days)) {
-        alert("Ingresá un número válido de días mayor a 0.");
+        console.log("Ingresá un número válido de días mayor a 0.");
         return;
       }
     }
@@ -107,9 +107,9 @@ export function ShelfLifeManager() {
       
       setSelectedIds(new Set());
       setBulkDays("");
-      alert(`Vida útil ${clear ? "borrada" : "asignada"} a ${selectedIds.size} producto(s).`);
+      console.log(`Vida útil ${clear ? "borrada" : "asignada"} a ${selectedIds.size} producto(s).`);
     } catch (e) {
-      alert(e instanceof Error ? `Error: ${e.message}` : "Error aplicando vida útil.");
+      console.log(e instanceof Error ? `Error: ${e.message}` : "Error aplicando vida útil.");
     } finally {
       setLoading(false);
     }

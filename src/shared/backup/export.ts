@@ -3,7 +3,7 @@ import { getSupabase } from "../supabase/client";
 export interface BackupData {
   timestamp: string;
   version: string;
-  tables: Record<string, any[]>;
+  tables: Record<string, Record<string, unknown>[]>;
 }
 
 const TABLES_TO_BACKUP = [
@@ -12,7 +12,12 @@ const TABLES_TO_BACKUP = [
   "stock_lots",
   "stock_movements",
   "customers",
-  "customer_credits",
+  "credit_movements",
+  "sales",
+  "sale_items",
+  "audit_history",
+  "supplier_products",
+  "suppliers",
   "offline_operations"
 ];
 
@@ -30,8 +35,7 @@ export async function generateFullBackup(): Promise<BackupData> {
   for (const table of TABLES_TO_BACKUP) {
     const { data, error } = await supabase.from(table).select("*");
     if (error) {
-      console.warn(`Error fetching ${table} for backup:`, error);
-      backup.tables[table] = [];
+      throw new Error(`Fallo critico exportando la tabla ${table}: ${error.message}`);
     } else {
       backup.tables[table] = data || [];
     }
@@ -43,9 +47,9 @@ export async function generateFullBackup(): Promise<BackupData> {
 /**
  * Convierte datos JSON a formato CSV compatible con Excel (RF-43)
  */
-export function jsonToCSV(data: any[]): string {
-  if (data.length === 0) return "";
-  const headers = Object.keys(data[0]);
+export function jsonToCSV(data: Record<string, unknown>[]): string {
+  if (!data || data.length === 0) return "";
+  const headers = Object.keys(data[0] || {});
   const rows = data.map(row => 
     headers.map(header => {
       const val = row[header];
@@ -73,13 +77,13 @@ export function downloadFile(content: string, filename: string, mimeType: string
 }
 
 /**
- * Guarda el backup automáticamete en el disco mediante File System Access API (RF-42)
+ * Guarda el backup automaticamente en el disco mediante File System Access API (RF-42)
  */
-export async function saveBackupToDisk(backup: BackupData, directoryHandle?: any): Promise<boolean> {
+export async function saveBackupToDisk(backup: BackupData, directoryHandle?: FileSystemDirectoryHandle): Promise<boolean> {
   try {
     const jsonString = JSON.stringify(backup, null, 2);
     
-    // Si tenemos permiso en un directorio (Drive, pendrive) guardamos ahí
+    // Si tenemos permiso en un directorio (Drive, pendrive) guardamos ahi
     if (directoryHandle && directoryHandle.getFileHandle) {
       const filename = `alverde-backup-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
       const fileHandle = await directoryHandle.getFileHandle(filename, { create: true });

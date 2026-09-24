@@ -114,9 +114,9 @@ export function useStockLots() {
     } catch (e: any) {
       const msg = e.message || "";
       if (msg.includes("Regla de oro")) {
-        alert(msg); // Muestra el error estructurado de la base de datos
+        console.log(msg); // Muestra el error estructurado de la base de datos
       } else {
-        alert(`Error al abrir lote: ${msg}`);
+        console.log(`Error al abrir lote: ${msg}`);
       }
     }
   };
@@ -133,7 +133,7 @@ export function useStockLots() {
       if (err) throw err;
       await fetchLots();
     } catch (e) {
-      alert(e instanceof Error ? `Error al archivar: ${e.message}` : "Error al archivar producto");
+      console.log(e instanceof Error ? `Error al archivar: ${e.message}` : "Error al archivar producto");
     }
   };
 

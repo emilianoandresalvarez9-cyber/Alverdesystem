@@ -85,7 +85,7 @@ export function RepositionList({ refreshTrigger, onResolve }: RepositionListProp
       setItems(prev => prev.filter(i => i.id !== itemId));
       if (onResolve) onResolve();
     } catch (e) {
-      alert(e instanceof Error ? `Error al resolver: ${e.message}` : "Error al resolver faltante");
+      console.log(e instanceof Error ? `Error al resolver: ${e.message}` : "Error al resolver faltante");
     }
   };
 

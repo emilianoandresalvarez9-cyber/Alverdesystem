@@ -65,7 +65,7 @@ export function ScaleManager() {
           {connected ? "0.000 kg" : "---"}
         </div>
         <p className="text-xs text-slate-500 mt-2 text-center">
-          Esta lectura es simulada. La implementación de la API Web Serial o un agente local es necesaria para lectura real.
+          Funcionalidad futura. Esta interfaz es una maquetacion para futura integracion con hardware. La implementación de la API Web Serial o un agente local es necesaria para lectura real.
         </p>
       </GlassCard>
     </div>

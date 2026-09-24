@@ -3,21 +3,28 @@ import { getSupabase } from "../supabase/client";
 export interface FullBackupData {
   exportedAt: string;
   version: number;
-  tables: {
-    products?: any[];
-    product_presentations?: any[];
-    categories?: any[];
-    brands?: any[];
-    labels?: any[];
-    stock_lots?: any[];
-    customers?: any[];
-  };
+  tables: Record<string, Record<string, unknown>[]>;
 }
 
+const TABLES = [
+  "products",
+  "product_presentations",
+  "categories",
+  "brands",
+  "labels",
+  "stock_lots",
+  "customers",
+  "credit_movements",
+  "sales",
+  "sale_items",
+  "audit_history",
+  "supplier_products",
+  "suppliers",
+  "offline_operations"
+];
+
 /**
- * Genera un objeto con toda la base de datos operativa (excepto historial y ventas para que no sea inmenso, 
- * o se podrian incluir si se requiere).
- * RF-41 a RF-44 requieren respaldar datos clave.
+ * Genera un objeto con toda la base de datos operativa.
  */
 export async function generateFullBackup(): Promise<FullBackupData> {
   const sb = getSupabase();
@@ -27,20 +34,15 @@ export async function generateFullBackup(): Promise<FullBackupData> {
     tables: {}
   };
 
-  // Fetch sequential
   const fetchTable = async (table: string) => {
     const { data, error } = await sb.from(table).select("*");
     if (error) throw new Error(`Error exportando ${table}: ${error.message}`);
     return data;
   };
 
-  backup.tables.products = await fetchTable("products");
-  backup.tables.product_presentations = await fetchTable("product_presentations");
-  backup.tables.categories = await fetchTable("categories");
-  backup.tables.brands = await fetchTable("brands");
-  backup.tables.labels = await fetchTable("labels");
-  backup.tables.stock_lots = await fetchTable("stock_lots");
-  backup.tables.customers = await fetchTable("customers");
+  for (const t of TABLES) {
+    backup.tables[t] = await fetchTable(t);
+  }
 
   return backup;
 }
@@ -62,17 +64,16 @@ export function downloadBackupFile(data: FullBackupData) {
 /**
  * Convierte un array de objetos JSON a CSV y lo descarga (RF-43)
  */
-export function exportToCsv(tableName: string, data: any[]) {
+export function exportToCsv(tableName: string, data: Record<string, unknown>[]) {
   if (!data || data.length === 0) {
-    alert("No hay datos para exportar.");
+    console.warn("No hay datos para exportar en " + tableName);
     return;
   }
 
-  const headers = Object.keys(data[0]);
+  const headers = Object.keys(data[0] || {});
   const rows = data.map(obj => 
     headers.map(header => {
       const val = obj[header];
-      // Escapar comillas dobles y comas
       if (val === null || val === undefined) return "";
       const str = String(val).replace(/"/g, '""');
       return `"${str}"`;
@@ -81,7 +82,6 @@ export function exportToCsv(tableName: string, data: any[]) {
 
   const csvContent = [headers.join(","), ...rows].join("\n");
   
-  // Agregar BOM para que Excel detecte UTF-8 correctamente
   const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -93,27 +93,18 @@ export function exportToCsv(tableName: string, data: any[]) {
 
 /**
  * Restaura la base de datos desde el JSON provisto.
- * (RF-44)
  */
 export async function restoreFullBackup(data: FullBackupData): Promise<void> {
   const sb = getSupabase();
-  
-  // Como es un restore destructivo, normalmente requeriria borrar o hacer upsert
-  // Haremos upsert tabla por tabla.
   const tables = data.tables;
   
-  const restoreTable = async (tableName: string, rows: any[] | undefined) => {
+  const restoreTable = async (tableName: string, rows: Record<string, unknown>[] | undefined) => {
     if (!rows || rows.length === 0) return;
     const { error } = await sb.from(tableName).upsert(rows);
     if (error) throw new Error(`Error restaurando ${tableName}: ${error.message}`);
   };
 
-  // Orden respetando las claves foraneas (brands, categories primero)
-  await restoreTable("brands", tables.brands);
-  await restoreTable("categories", tables.categories);
-  await restoreTable("labels", tables.labels);
-  await restoreTable("products", tables.products);
-  await restoreTable("product_presentations", tables.product_presentations);
-  await restoreTable("stock_lots", tables.stock_lots);
-  await restoreTable("customers", tables.customers);
+  for (const t of TABLES) {
+    await restoreTable(t, tables[t]);
+  }
 }

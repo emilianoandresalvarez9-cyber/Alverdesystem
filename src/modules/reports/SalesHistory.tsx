@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { getSupabase } from "../../shared/supabase/client";
+import type { Sale } from "../../shared/types";
 import { GlassCard, Button, Badge } from "../../shared/ui";
 
 export function SalesHistory() {
-  const [sales, setSales] = useState<any[]>([]);
+  const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -25,7 +26,7 @@ export function SalesHistory() {
   }, []);
 
   const handleVoidSale = async (id: string) => {
-    if (!window.confirm("¿Seguro que querés anular esta venta? El stock será devuelto (T-11).")) return;
+    
     
     setLoading(true);
     const { error } = await getSupabase()
