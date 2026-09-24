@@ -21,7 +21,7 @@ import { SuppliersManager } from "../modules/admin/SuppliersManager";
 import { MarginDashboard } from "../modules/reports/MarginDashboard";
 import "../styles/pos.css";
 
-type AdminTab = "reports" | "margins" | "stock" | "fractioning" | "classifiers" | "products" | "prices" | "suppliers" | "restock" | "barcodes" | "scale" | "branches" | "audit" | "settings";
+type AdminTab = "reports" | "margins" | "stock" | "fractioning" | "classifiers" | "products" | "prices" | "suppliers" | "restock" | "barcodes" | "scale" | "scale_manager" | "branches" | "audit" | "settings";
 
 export function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>("reports");
@@ -171,6 +171,7 @@ export function AdminPage() {
 
         {/* Venta con balanza (ADR-001) */}
         {activeTab === "scale" && <ScalePresentations />}
+        {activeTab === "scale_manager" && <ScaleManager />}
 
         {/* Sucursales y cajas (RF-53, RF-55): la caja de /pos.html elige de esta lista */}
         {activeTab === "branches" && <BranchesManager />}

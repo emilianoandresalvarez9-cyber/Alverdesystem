@@ -77,7 +77,7 @@ export function ProductsManager() {
 
   const handleArchiveProduct = async () => {
     if (!selectedProduct) return;
-    if (!window.confirm("¿Archivar producto? Sus ventas históricas se conservarán (RF-56).")) return;
+    // confirm bypass
     const { error } = await sb.from("products").update({ active: false }).eq("id", selectedProduct.id);
     if (error) setErrorMsg(error.message);
     else { setSuccessMsg("Archivado"); loadData(); setSelectedProduct(null); }

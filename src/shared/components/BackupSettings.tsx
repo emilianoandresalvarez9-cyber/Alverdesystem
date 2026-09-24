@@ -57,16 +57,27 @@ export function BackupSettings() {
   }
 
   async function handleExportCSV() {
+    if (role !== "administrator") {
+      alert("No autorizado");
+      return;
+    }
     try {
       setBackupLoading(true);
       const backup = await generateFullBackup();
       
-      // Exportar tabla de productos como ejemplo de a Excel
-      const productsCSV = jsonToCSV(backup.tables.products || []);
+      let products = backup.tables.products || [];
+      // Si necesitasemos ocultar costo lo haríamos, pero hemos bloqueado todo a no-admin para mayor seguridad.
+      const productsCSV = jsonToCSV(products);
       downloadFile(productsCSV, "alverde-productos.csv", "text/csv");
 
       const stockCSV = jsonToCSV(backup.tables.stock_lots || []);
       downloadFile(stockCSV, "alverde-lotes.csv", "text/csv");
+      
+      const customersCSV = jsonToCSV(backup.tables.customers || []);
+      downloadFile(customersCSV, "alverde-clientes.csv", "text/csv");
+      
+      const salesCSV = jsonToCSV(backup.tables.sales || []);
+      downloadFile(salesCSV, "alverde-ventas.csv", "text/csv");
       
     } catch (e) {
       alert("Error al exportar a Excel (CSV).");
@@ -86,9 +97,9 @@ export function BackupSettings() {
         <Button variant="secundario" onClick={() => void enableBackup()}>
           Elegir carpeta (Cola Offline)
         </Button>
-        <Button variant="primario" onClick={handleFullBackup} disabled={backupLoading}>
+        {role === "administrator" && (<Button variant="primario" onClick={handleFullBackup} disabled={backupLoading}>
           {backupLoading ? "Generando..." : "Descargar DB Completa"}
-        </Button>
+        </Button>)}
         <Button variant="fantasma" onClick={handleExportCSV} disabled={backupLoading}>
           Exportar a Excel (CSV)
         </Button>

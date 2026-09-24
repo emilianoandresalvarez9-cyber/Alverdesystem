@@ -1,6 +1,6 @@
 -- Tests de 20260923110000_contrato_venta.sql (process_offline_sale v2 y shift_totals).
 begin;
-select plan(24);
+select plan(31);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000000a1', 'admin@test'),
@@ -127,8 +127,8 @@ select throws_ok(
 -- Venta con precio legítimo modificado genera alerta pero pasa
 select ok(
   public.process_offline_sale(jsonb_build_object('localId', '80a92d8f-7f55-430c-9f6b-80a22a362fcc', 'deviceId', gen_random_uuid(), 'kind', 'sale',
-    'payload', jsonb_build_object('paymentMethod', 'cash', 'shiftId', '00000000-0000-0000-0000-000000000501', 'totalAmount', 10,
-      'items', jsonb_build_array(jsonb_build_object('presentationId', '00000000-0000-0000-0000-0000000000c1', 'quantity', 1, 'unitPrice', 10)))
+    'payload', jsonb_build_object('paymentMethod', 'cash', 'shiftId', '00000000-0000-0000-0000-000000000501', 'totalAmount', 1400,
+      'items', jsonb_build_array(jsonb_build_object('presentationId', '00000000-0000-0000-0000-0000000000c1', 'quantity', 1, 'unitPrice', 1400)))
   )),
   'Acepta venta con precio diferente al catálogo (escenario offline válido)'
 );
@@ -138,6 +138,55 @@ select is(
   (select count(*) from public.stock_warnings where message like 'Diferencia de precio en presentación%' and sale_id = (select id from public.sales where local_id = '80a92d8f-7f55-430c-9f6b-80a22a362fcc'))::integer,
   1,
   'Generó alerta de stock_warnings por diferencia de precio (QA P0-03)'
+);
+
+
+
+-- P0-03 Strict Integrity Tests
+select throws_like(
+  $$ select public.process_offline_sale('{"localId": "11111111-1111-1111-1111-111111111111", "deviceId": "22222222-2222-2222-2222-222222222222", "kind": "sale", "payload": {"paymentMethod": "cash", "items": [{"presentationId": "00000000-0000-0000-0000-000000000000", "unitPrice": 100}]}}'::jsonb) $$,
+  'La cantidad no puede ser menor o igual a cero.',
+  'Rechaza cantidad ausente (NULL)'
+);
+
+select throws_like(
+  $$ select public.process_offline_sale('{"localId": "11111111-1111-1111-1111-111111111112", "deviceId": "22222222-2222-2222-2222-222222222222", "kind": "sale", "payload": {"paymentMethod": "cash", "items": [{"presentationId": "00000000-0000-0000-0000-000000000000", "quantity": 1}]}}'::jsonb) $$,
+  'El precio unitario no puede ser negativo.',
+  'Rechaza precio ausente (NULL)'
+);
+
+select throws_like(
+  $$ select public.process_offline_sale('{"localId": "11111111-1111-1111-1111-111111111113", "deviceId": "22222222-2222-2222-2222-222222222222", "kind": "sale", "payload": {"paymentMethod": "cash", "items": [{"presentationId": "00000000-0000-0000-0000-000000000000", "quantity": -5, "unitPrice": 100}]}}'::jsonb) $$,
+  'La cantidad no puede%',
+  'Rechaza cantidad negativa'
+);
+
+select throws_like(
+  $$ select public.process_offline_sale('{"localId": "11111111-1111-1111-1111-111111111114", "deviceId": "22222222-2222-2222-2222-222222222222", "kind": "sale", "payload": {"paymentMethod": "cash", "items": [{"presentationId": "00000000-0000-0000-0000-000000000000", "quantity": 1, "unitPrice": "invalido"}]}}'::jsonb) $$,
+  'invalid input syntax for type numeric: \"invalido\"',
+  'Rechaza formato no numerico'
+);
+
+-- Prueba de rollback en segundo item
+select throws_like(
+  $$ select public.process_offline_sale('{"localId": "99999999-9999-9999-9999-999999999999", "deviceId": "22222222-2222-2222-2222-222222222222", "kind": "sale", "payload": {"paymentMethod": "cash", "items": [
+    {"presentationId": "00000000-0000-0000-0000-0000000000c1", "quantity": 1, "unitPrice": 1500},
+    {"presentationId": "00000000-0000-0000-0000-0000000000c1", "quantity": 1, "unitPrice": -50}
+  ]}}'::jsonb) $$,
+  'El precio unitario no puede%',
+  'Falla en el segundo item aborta la transaccion'
+);
+
+select is(
+  (select count(*) from public.sales where local_id = '99999999-9999-9999-9999-999999999999'),
+  0::bigint,
+  'El rollback funciono: la venta no se guardo parcialmente'
+);
+
+select is(
+  (select count(*) from public.offline_operations where local_id = '99999999-9999-9999-9999-999999999999'),
+  0::bigint,
+  'El rollback funciono: la operacion offline no quedo registrada'
 );
 
 
