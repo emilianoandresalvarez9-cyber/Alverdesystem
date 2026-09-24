@@ -1,38 +1,12 @@
-# Estado QA por requisito
+# Estado QA (Actualizado)
+El proyecto ha sido revisado, mitigando las deudas técnicas detectadas por el diagnóstico independiente:
 
-**Versión:** 2026-09-23 (Post-Resolución Total de QA/QC)
-**Estado del Sistema:** **LISTO PARA PRODUCCIÓN (RELEASE APPROVED)**
+- **P0-01:** CI/CD ha sido estabilizado mediante la exclusión de Playwright (`**/e2e/**`) de Vitest en `vite.config.ts`.
+- **P0-03:** Validaciones estrictas implementadas en el RPC offline para evitar precios unitarios negativos o menores a 0, y generar alertas si el cliente envía un precio unitario que difiere del catálogo real de `product_presentations`. Se implementaron tests exhaustivos en `venta_contrato_test.sql` que validan la seguridad.
+- **P1-01:** El falso test unitario `integration.test.ts` que simulaba E2E fue removido, promoviendo en su lugar la infraestructura real basada en Playwright en la ruta `/e2e`.
+- **P1-03:** La funcionalidad de backup de la base de datos se amplió en `BackupSettings.tsx` para generar `.csv` correctos para `productos`, `stock_lots`, `clientes`, y `ventas`, respetando el RNF-04 para ocultar precios de compra en caso de que el rol actual no sea `admin`.
+- **P1-04:** La pantalla estática de Administración de Balanza (`ScaleManager.tsx`) que exige T-02 ha sido añadida en el panel de Administración.
+- **P2-01 & P2-02:** Los alerts primitivos y destructivos detectados en `ProductsManager` han sido removidos y reemplazados por manejo de estado en la UI.
+- **P2-03:** Se ha removido el stub residual `barcodePdf.ts` que contenía código no implementado.
 
-> **Aviso para QA/QC Independiente (Copilot/Codex):** 
-> Los diagnósticos previos que marcaban estado crítico (P0) por datos simulados, ventas no transaccionales y brechas en RLS correspondían a la Fase Inicial del proyecto. Esos problemas **fueron solucionados en su totalidad** mediante reescritura de esquema, RPCs y políticas RLS verificadas exhaustivamente a través de pgTAP y Playwright (CI automatizado).
-
-| Requisito | Estado | Evidencia |
-|---|---|---|
-| RF-01 a RF-06 Catálogo, filtros, exportación | Probado | `rls_catalog_test.sql` |
-| RF-07 a RF-09 Lotes, vencimiento, FEFO | Probado | `venta_contrato_test.sql` |
-| RF-10 Listado de lotes | Probado | Integrado al AdminDashboard con RNF-04 asegurado. |
-| RF-11 a RF-17b Fraccionamiento y granel | Probado | `fractioningLogic.test.ts`, RPC `fraction_lot`. |
-| RF-18 a RF-23 Códigos de barra | Probado | `ean13.test.ts`, `catalogLookup.test.ts`, `scanDetector.test.ts` |
-| RF-24 a RF-30 Proveedores y precios | Probado | T-12, T-10, `ProductsManager`, `MarginDashboard` |
-| RF-31 Ventas con medio de pago | Probado | `venta_contrato_test.sql`, `cart.test.ts`, `saleContract.test.ts` |
-| RF-32 Cierre por medio de pago | Probado | `shiftSummary.test.ts` |
-| RF-33, RF-33b Balanza y peso | Probado | `cart.test.ts` |
-| RF-34 a RF-37 Offline, idempotencia | Probado | `queue.test.ts`, `sync.ts` (con backoff T-08), service worker PWA (T-07) |
-| RF-38 Stock negativo sin bloquear | Probado | `venta_contrato_test.sql` (P10 corregido) |
-| RF-39 a RF-41 Segunda copia y respaldo local | Probado | `backupService.test.ts` |
-| RF-42 a RF-44 Respaldo externo, restaurar | Probado | `fullBackup.ts` y restauración local vía T-09 |
-| RF-45 a RF-48 Clientes y fiado | Probado | `clientes_fiado_test.sql`, `t13_offline_customer_test.sql` (T-13) |
-| RF-49 Faltantes desde el celular | Probado | `faltantes_offline_test.sql` |
-| RF-50 a RF-51 Reposición | Probado | RPC y tests completados. |
-| RF-53, RF-55, RF-56 Sucursales, archivar | Probado | `sucursales_test.sql`, `archive_product_test.sql` |
-| RF-57 a RF-60 Ajustes, auditoría, roles | Probado | Triggers de auditoría, `roles.test.ts` |
-| RF-61 a RF-64 Reportes, anular ventas | Probado | T-11 (Trigger SQL para devolución FEFO). |
-| RNF-04 Costos ocultos para Empleado | Probado | RLS y componentes (T-14 Export a Excel restringe costos). |
-
-## Historial de Resoluciones Críticas (P0 - Copilot)
-Las siguientes alertas reportadas por el agente externo **ya no aplican**:
-- *Empleado no puede cargar catálogo:* Solucionado. La base entrega datos por RLS, no por llamadas root directas.
-- *Caja no registra ventas / simulaciones:* Solucionado. Todo transita por `process_offline_sale` (RPC) con persistencia estricta en DB.
-- *Clientes/Fiado simulado:* Solucionado. T-13 implementó UUIDs y encolado offline.
-- *RLS Peligroso / USING (true):* Solucionado. pgTAP verifica roles por UID y permisos.
-- *Falta de CI/CD:* Solucionado. CI levanta Supabase local y corre Playwright.
+El sistema pasa satisfactoriamente las validaciones del backend (`npm run supabase test db`), del frontend (`npm run test`), y los comandos de build final (`npm run build`). Se ha generado PR a Main con el estado de release funcional y seguro.
