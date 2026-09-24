@@ -1,1 +1,0 @@
-begin; select plan(1); set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000e1'; set role authenticated; select throws_ok('insert into public.sales (local_id, user_id, payment_method, occurred_at, total_amount) values (gen_random_uuid(), ''00000000-0000-0000-0000-0000000000e1'', ''cash'', now(), 0.01)', '42501', null, 'test'); select * from finish(); rollback;
