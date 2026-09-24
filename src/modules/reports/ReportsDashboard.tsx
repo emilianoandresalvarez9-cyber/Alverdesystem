@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { GlassCard, SelectField, EmptyState, Button } from "../../shared/ui";
 import { getSupabase } from "../../shared/supabase/client";
 import { exportToExcel } from "../../shared/export/excel";
+import { SalesHistory } from "./SalesHistory";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
   PieChart, Pie, Cell, LineChart, Line
@@ -124,6 +125,7 @@ export function ReportsDashboard() {
         <EmptyState title="Cargando reportes..." />
       ) : (
         <div className="dashboard-grid">
+          <div style={{ gridColumn: "1 / -1", marginBottom: "1rem" }}><SalesHistory /></div>
           <GlassCard style={{ gridColumn: "1 / -1" }}>
             <h3>Ventas Diarias</h3>
             <div style={{ width: "100%", height: 300 }}>
