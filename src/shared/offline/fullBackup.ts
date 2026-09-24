@@ -6,20 +6,20 @@ export interface FullBackupData {
   tables: Record<string, Record<string, unknown>[]>;
 }
 
-const TABLES = [
-  "products",
-  "product_presentations",
+const TABLES_RESTORE_ORDER = [
   "categories",
   "brands",
   "labels",
-  "stock_lots",
+  "suppliers",
   "customers",
-  "credit_movements",
+  "products",
+  "product_presentations",
+  "supplier_products",
+  "stock_lots",
   "sales",
   "sale_items",
+  "credit_movements",
   "audit_history",
-  "supplier_products",
-  "suppliers",
   "offline_operations"
 ];
 
@@ -40,7 +40,7 @@ export async function generateFullBackup(): Promise<FullBackupData> {
     return data;
   };
 
-  for (const t of TABLES) {
+  for (const t of TABLES_RESTORE_ORDER) {
     backup.tables[t] = await fetchTable(t);
   }
 
@@ -104,7 +104,7 @@ export async function restoreFullBackup(data: FullBackupData): Promise<void> {
     if (error) throw new Error(`Error restaurando ${tableName}: ${error.message}`);
   };
 
-  for (const t of TABLES) {
+  for (const t of TABLES_RESTORE_ORDER) {
     await restoreTable(t, tables[t]);
   }
 }

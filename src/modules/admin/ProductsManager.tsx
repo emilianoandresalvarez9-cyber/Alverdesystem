@@ -8,8 +8,6 @@ export function ProductsManager() {
   const [errorMsg, setErrorMsg] = useState("");
   const [pricePrompt, setPricePrompt] = useState<{presId: string, oldPrice: number} | null>(null);
   const [newPriceInput, setNewPriceInput] = useState("");
-  const [pricePrompt, setPricePrompt] = useState<{presId: string, oldPrice: number} | null>(null);
-  const [newPriceInput, setNewPriceInput] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);

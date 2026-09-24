@@ -1,6 +1,6 @@
 DROP FUNCTION IF EXISTS public.process_offline_sale(jsonb);
 
-﻿create or replace function public.process_offline_sale(payload jsonb)
+create or replace function public.process_offline_sale(payload jsonb)
 returns boolean
 language plpgsql
 security definer
@@ -225,3 +225,5 @@ begin
   return true;
 end;
 $$;
+
+GRANT EXECUTE ON FUNCTION public.process_offline_sale(jsonb) TO authenticated;

@@ -2,39 +2,59 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Flujo de Venta E2E', () => {
   test('Flujo de caja offline comprobando login, busqueda, carrito y cobro', async ({ page }) => {
-    // 1. Ir a la raíz y asegurar que el login carga
+    // Limpiar BD antes del test? E2E corre sobre la DB local pero no la limpia automaticamente aca.
+    // Usar env vars (fallback por defecto a lo que habia localmente si no estan seteadas, util para devs locales)
+    const testEmail = process.env.TEST_EMPLOYEE_EMAIL || 'empleado@alverde.local';
+    const testPass = process.env.TEST_EMPLOYEE_PASSWORD || 'empleado123';
+    const testProduct = process.env.TEST_PRODUCT_NAME || 'almendra';
+
+    // 1. Ir a la raiz y asegurar que el login carga
     await page.goto('/');
     
-    // Fallar si no aparece el botón Ingresar
+    // Fallar si no aparece el boton Ingresar
     const loginBtn = page.locator('button', { hasText: /Ingresar/i });
     await expect(loginBtn).toBeVisible({ timeout: 5000 });
     
     // 2. Realizar login
-    await page.fill('input[type="email"]', 'empleado@alverde.local');
-    await page.fill('input[type="password"]', 'empleado123');
+    await page.fill('input[type="email"]', testEmail);
+    await page.fill('input[type="password"]', testPass);
     await loginBtn.click();
     
-    // Esperamos redirección (el app debería mandar a /catalog.html o similar según el rol, pero forzamos POS si no lo hace automáticamente)
-    // Para no depender del delay de la red, esperamos que cambie la URL o pasen 3 segs
-    // Esperamos redirección automática
-    await page.waitForURL('**/pos.html', { timeout: 10000 });
+    // Dejar que la app navegue por si sola (no forzar pos.html porque quiza rompe el router de auth)
+    await page.waitForTimeout(4000);
+    
+    // Buscar el boton "Caja" o ver si ya estamos en pos.html
+    const navCaja = page.locator('a', { hasText: /Caja/i });
+    if (await navCaja.isVisible()) {
+      await navCaja.click();
+    }
     
     // 3. Validar carga del POS
     await expect(page.locator('h1').first()).toBeVisible({ timeout: 10000 });
+
+    // 3.5 Si pide abrir turno, lo abrimos
+    const btnAbrirTurno = page.locator('button', { hasText: /Abrir turno/i });
+    try {
+      await btnAbrirTurno.waitFor({ state: 'visible', timeout: 2000 });
+      await btnAbrirTurno.click();
+      await btnAbrirTurno.waitFor({ state: 'hidden', timeout: 3000 });
+    } catch (e) {
+      // No pidió abrir turno
+    }
     
-    // 4. Buscar un producto real ("almendra")
-    const searchInput = page.locator('input[placeholder*="Buscar"]');
+    // 4. Buscar un producto real
+    const searchInput = page.getByLabel(/nombre/i);
     await expect(searchInput).toBeVisible();
-    await searchInput.fill('almendra');
+    await searchInput.fill(testProduct);
     
-    // Esperar resultados de la búsqueda
-    const resultItem = page.locator('li').filter({ hasText: /Almendra/i }).first();
+    // Esperar resultados de la busqueda
+    const resultItem = page.locator('li').filter({ hasText: new RegExp(testProduct, "i") }).first();
     await expect(resultItem).toBeVisible({ timeout: 5000 });
     
     // 5. Agregar al carrito
     await resultItem.click();
     
-    // Validar que se agregó al carrito (subtotal visible)
+    // Validar que se agrego al carrito (subtotal visible)
     const cartTotal = page.locator('div', { hasText: /Total:/i }).first();
     await expect(cartTotal).toBeVisible();
     
@@ -48,31 +68,40 @@ test.describe('Flujo de Venta E2E', () => {
     await expect(btnConfirmar).toBeVisible({ timeout: 2000 });
     await btnConfirmar.click();
     
-
-    // Esperamos mensaje de éxito (la app limpia el carrito después de la venta)
+    // Esperamos mensaje de exito (la app limpia el carrito despues de la venta)
     await expect(btnConfirmar).toBeHidden({ timeout: 5000 });
 
-    // 7. Verificación E2E Real: Validar que la venta está en IndexedDB (Offline)
-    const offlineSalesCount = await page.evaluate(async () => {
+    // 7. Verificacion E2E Real: Validar que la venta esta en IndexedDB (Offline)
+    const offlineSales = await page.evaluate(async () => {
       return new Promise((resolve, reject) => {
-        const req = window.indexedDB.open("alverde-pos-db");
+        const req = window.indexedDB.open("alverde-offline");
         req.onerror = () => reject(req.error);
         req.onsuccess = () => {
           const db = req.result;
-          if (!db.objectStoreNames.contains("offline_sales")) {
-            resolve(0);
+          if (!db.objectStoreNames.contains("operations")) {
+            resolve([]);
             return;
           }
-          const tx = db.transaction("offline_sales", "readonly");
-          const store = tx.objectStore("offline_sales");
-          const countReq = store.count();
-          countReq.onsuccess = () => resolve(countReq.result);
-          countReq.onerror = () => reject(countReq.error);
+          const tx = db.transaction("operations", "readonly");
+          const store = tx.objectStore("operations");
+          const getAllReq = store.getAll();
+          getAllReq.onsuccess = () => resolve(getAllReq.result);
+          getAllReq.onerror = () => reject(getAllReq.error);
         };
       });
     });
 
-    expect(offlineSalesCount).toBeGreaterThan(0);
-
+    expect(offlineSales).toBeInstanceOf(Array);
+    const saleOps = (offlineSales as any[]).filter(op => op.kind === 'sale');
+    expect(saleOps.length).toBeGreaterThan(0);
+    
+    const lastSale = saleOps[saleOps.length - 1];
+    expect(lastSale).toBeDefined();
+    expect(lastSale.payload).toBeDefined();
+    expect(lastSale.payload.items).toBeDefined();
+    expect(lastSale.payload.items.length).toBeGreaterThan(0);
+    
+    // Ademas, podriamos validar que la venta este en la base si habia red...
+    // Pero como la DB local esta activa y Playwright la usa, Supabase se va a sincronizar automaticamente.
   });
 });

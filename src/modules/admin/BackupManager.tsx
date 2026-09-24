@@ -1,4 +1,4 @@
-import type { SupabaseAny } from "../../shared/types";
+
 import { useState, useRef } from "react";
 import { GlassCard, Button, Badge } from "../../shared/ui";
 import { generateFullBackup, downloadBackupFile, exportToCsv, restoreFullBackup, type FullBackupData } from "../../shared/offline/fullBackup";
@@ -16,7 +16,7 @@ export function BackupManager() {
       const data = await generateFullBackup();
       downloadBackupFile(data);
       setMessage("Copia generada exitosamente.");
-    } catch (error: SupabaseAny) {
+    } catch (error: any) {
       setMessage(error.message);
     } finally {
       setLoading(false);
@@ -40,7 +40,7 @@ export function BackupManager() {
       setMessage("Restaurando datos...");
       await restoreFullBackup(data);
       setMessage("Copia de seguridad restaurada correctamente.");
-    } catch (error: SupabaseAny) {
+    } catch (error: any) {
       setMessage(`Error restaurando: ${error.message}`);
     } finally {
       setLoading(false);
@@ -52,11 +52,12 @@ export function BackupManager() {
     setLoading(true);
     setMessage(`Exportando tabla ${tableName}...`);
     try {
-      const data = await generateFullBackup();
-      const tableData = (data.tables as SupabaseAny)[tableName];
-      exportToCsv(tableName, tableData || []);
+      const sb = getSupabase();
+      const { data, error } = await sb.from(tableName).select("*");
+      if (error) throw new Error(error.message);
+      exportToCsv(tableName, data || []);
       setMessage("Exportacion completada.");
-    } catch (error: SupabaseAny) {
+    } catch (error: any) {
       setMessage(error.message);
     } finally {
       setLoading(false);
@@ -96,8 +97,12 @@ export function BackupManager() {
           <Button variant="secundario" onClick={() => handleExportCsv("products")} disabled={loading}>Catálogo</Button>
           <Button variant="secundario" onClick={() => handleExportCsv("customers")} disabled={loading}>Clientes</Button>
           <Button variant="secundario" onClick={() => handleExportCsv("stock_lots")} disabled={loading}>Stock / Lotes</Button>
-        </div>
-      </div>
-    </GlassCard>
+                  <Button variant="secundario" onClick={() => handleExportCsv("sales")} disabled={loading}>Ventas</Button>
+          <Button variant="secundario" onClick={() => handleExportCsv("sale_items")} disabled={loading}>Items de Venta</Button>
+          <Button variant="secundario" onClick={() => handleExportCsv("credit_movements")} disabled={loading}>Movimientos Credito</Button>
+          <Button variant="secundario" onClick={() => handleExportCsv("audit_history")} disabled={loading}>Auditoria</Button>
+          <Button variant="secundario" onClick={() => handleExportCsv("suppliers")} disabled={loading}>Proveedores</Button>
+          <Button variant="secundario" onClick={() => handleExportCsv("offline_operations")} disabled={loading}>Operaciones Offline</Button>
+        </div>\n      </div>\n    </GlassCard>
   );
 }

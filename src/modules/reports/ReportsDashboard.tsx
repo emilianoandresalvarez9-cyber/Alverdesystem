@@ -1,4 +1,3 @@
-import type { SupabaseAny } from "../../shared/types";
 import { useState, useEffect } from "react";
 import { GlassCard, SelectField, EmptyState, Button } from "../../shared/ui";
 import { getSupabase } from "../../shared/supabase/client";
@@ -50,7 +49,7 @@ export function ReportsDashboard() {
 
       const salesMap = new Map<string, number>();
       if (sales) {
-        sales.forEach((sale: SupabaseAny) => {
+        sales.forEach((sale: { occurred_at: string, total_amount: number }) => {
           const day = new Date(sale.occurred_at).toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit', month: '2-digit' });
           salesMap.set(day, (salesMap.get(day) || 0) + Number(sale.total_amount));
         });
@@ -67,10 +66,11 @@ export function ReportsDashboard() {
 
       const prodMap = new Map<string, { q: number, r: number, cat: string }>();
       if (saleItems) {
-        saleItems.forEach((item: SupabaseAny) => {
+        saleItems.forEach((item: { quantity: number; subtotal: number; products?: { name: string; category_id: string } | { name: string; category_id: string }[] | null }) => {
           if (!item.products) return;
-          const pName = Array.isArray(item.products) ? item.products[0].name : item.products.name;
-          const pCat = Array.isArray(item.products) ? item.products[0].category_id : item.products.category_id;
+          const isArr = Array.isArray(item.products);
+          const pName = isArr ? ((item.products as { name: string; category_id: string }[])[0]?.name || "Desconocido") : (item.products as { name: string; category_id: string }).name;
+          const pCat = isArr ? ((item.products as { name: string; category_id: string }[])[0]?.category_id || "") : (item.products as { name: string; category_id: string }).category_id;
           
           const current = prodMap.get(pName) || { q: 0, r: 0, cat: pCat };
           prodMap.set(pName, { 
@@ -94,7 +94,7 @@ export function ReportsDashboard() {
       });
       
       const { data: categories } = await sb.from('categories').select('id, name');
-      const catNameMap = new Map<string, string>(categories?.map((c: SupabaseAny) => [c.id, c.name]) || []);
+      const catNameMap = new Map<string, string>(categories?.map((c: { id: string; name: string }) => [c.id, c.name]) || []);
 
       const catDemand: CategoryDemand[] = Array.from(catMap.entries())
         .map(([id, value]) => ({ name: catNameMap.get(id) || 'Sin Rubro', value }))
