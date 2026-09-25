@@ -43,7 +43,7 @@ test.describe('Flujo de Venta E2E', () => {
     }
     
     // 4. Buscar un producto real
-    const searchInput = page.getByLabel(/nombre/i);
+    const searchInput = page.getByLabel(/código o nombre del producto/i);
     await expect(searchInput).toBeVisible();
     await searchInput.fill(testProduct);
     
