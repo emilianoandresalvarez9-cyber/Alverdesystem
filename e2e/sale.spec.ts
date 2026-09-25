@@ -59,13 +59,8 @@ test.describe('Flujo de Venta E2E', () => {
     await expect(btnCobrar).toBeVisible();
     await btnCobrar.click();
     
-    // Confirmar en el modal
-    const btnConfirmar = page.locator('button', { hasText: /Confirmar/i });
-    await expect(btnConfirmar).toBeVisible({ timeout: 2000 });
-    await btnConfirmar.click();
-    
-    // Esperamos mensaje de exito (la app limpia el carrito despues de la venta)
-    await expect(btnConfirmar).toBeHidden({ timeout: 5000 });
+    // El POS guarda la venta directamente y muestra el resultado en el panel.
+    await expect(page.locator('.pos-feedback')).toContainText(/Venta guardada:/i, { timeout: 5000 });
 
     // 7. Verificacion E2E Real: Validar que la venta esta en IndexedDB (Offline)
     const offlineSales = await page.evaluate(async () => {
