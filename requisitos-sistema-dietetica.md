@@ -94,6 +94,7 @@ Son dos roles nada más. Los costos y márgenes viven en una tabla separada con 
 
 ### Precios, costos y proveedores
 - **RF-24.** Cada producto puede tener más de un proveedor, cada uno con su propio código, costo y fecha de última compra; uno se marca como proveedor principal.
+- **Unidad del costo de proveedor (aclaración para RF-25):** el costo que se registra es el importe total pagado por el envase del proveedor y se carga también cuánto contiene, expresado en la unidad base del producto (unidades, gramos o mililitros). El sistema normaliza el costo dividiendo importe por contenido antes de calcular la sugerencia.
 - **RF-25.** El precio de venta sugerido sale de: último costo × multiplicador (por defecto 2, equivalente a 100% de recargo sobre el costo o 50% de margen sobre el precio de venta). El multiplicador se puede pisar por rubro o por producto.
 - **RF-26.** El sistema calcula y muestra el margen en pesos y en porcentaje de cada producto, visible solo para el rol Administrador.
 - **RF-27.** El sistema guarda un historial de precios por producto (para seguir la inflación).
