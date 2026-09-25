@@ -67,6 +67,25 @@ jobs:
       # Create .env.local for e2e tests
       - run: echo "VITE_SUPABASE_URL=http://localhost:54321" > .env.local
       - run: echo "VITE_SUPABASE_ANON_KEY=$(supabase status -o json | jq -r .ANON_KEY)" >> .env.local
+      - name: Create E2E employee
+        run: |
+          test_email="e2e-employee@alverde.local"
+          test_password="$(openssl rand -hex 24)"
+          service_role_key="$(supabase status -o json | jq -r .SERVICE_ROLE_KEY)"
+          if [ -z "$service_role_key" ] || [ "$service_role_key" = "null" ]; then
+            echo "Supabase local did not return SERVICE_ROLE_KEY" >&2
+            exit 1
+          fi
+          curl --fail --silent --show-error \
+            --request POST "http://localhost:54321/auth/v1/admin/users" \
+            --header "apikey: ${service_role_key}" \
+            --header "Authorization: Bearer ${service_role_key}" \
+            --header "Content-Type: application/json" \
+            --data "$(jq -cn --arg email "$test_email" --arg password "$test_password" \
+              '{email: $email, password: $password, email_confirm: true, user_metadata: {display_name: "E2E Employee"}}')" \
+            > /dev/null
+          echo "TEST_EMPLOYEE_EMAIL=${test_email}" >> "$GITHUB_ENV"
+          echo "TEST_EMPLOYEE_PASSWORD=${test_password}" >> "$GITHUB_ENV"
       - run: npx playwright test
       - uses: actions/upload-artifact@v4
         if: always()

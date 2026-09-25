@@ -20,27 +20,23 @@ test.describe('Flujo de Venta E2E', () => {
     await page.fill('input[type="password"]', testPass);
     await loginBtn.click();
     
-    // Dejar que la app navegue por si sola (no forzar pos.html porque quiza rompe el router de auth)
-    await page.waitForTimeout(4000);
-    
-    // Buscar el boton "Caja" o ver si ya estamos en pos.html
-    const navCaja = page.locator('a', { hasText: /Caja/i });
-    if (await navCaja.isVisible()) {
-      await navCaja.click();
-    }
+    await expect(page).toHaveURL(/\/pos\.html(?:$|[?#])/, { timeout: 10000 });
     
     // 3. Validar carga del POS
     await expect(page.locator('h1').first()).toBeVisible({ timeout: 10000 });
 
-    // 3.5 Si pide abrir turno, lo abrimos
-    const btnAbrirTurno = page.locator('button', { hasText: /Abrir turno/i });
-    try {
-      await btnAbrirTurno.waitFor({ state: 'visible', timeout: 2000 });
-      await btnAbrirTurno.click();
-      await btnAbrirTurno.waitFor({ state: 'hidden', timeout: 3000 });
-    } catch (e) {
-      // No pidió abrir turno
+    // 3.5 Asignar la caja local sembrada si este navegador todavía no tiene una.
+    const useRegister = page.getByRole('button', { name: /Usar esta caja/i });
+    if (await useRegister.isVisible()) {
+      await page.getByLabel('Caja').selectOption({ label: 'Caja E2E (Central)' });
+      await useRegister.click();
     }
+
+    // Abrir el turno requerido para vender.
+    const btnAbrirTurno = page.locator('button', { hasText: /Abrir turno/i });
+    await expect(btnAbrirTurno).toBeVisible({ timeout: 5000 });
+    await btnAbrirTurno.click();
+    await expect(btnAbrirTurno).toBeHidden({ timeout: 5000 });
     
     // 4. Buscar un producto real
     const searchInput = page.getByLabel(/código o nombre del producto/i);
@@ -78,15 +74,35 @@ test.describe('Flujo de Venta E2E', () => {
         req.onerror = () => reject(req.error);
         req.onsuccess = () => {
           const db = req.result;
+          const close = () => db.close();
           if (!db.objectStoreNames.contains("operations")) {
+            close();
             resolve([]);
             return;
           }
           const tx = db.transaction("operations", "readonly");
           const store = tx.objectStore("operations");
           const getAllReq = store.getAll();
-          getAllReq.onsuccess = () => resolve(getAllReq.result);
-          getAllReq.onerror = () => reject(getAllReq.error);
+          getAllReq.onsuccess = () => {
+            const result = getAllReq.result;
+            close();
+            resolve(result);
+          };
+          getAllReq.onerror = () => {
+            const error = getAllReq.error;
+            close();
+            reject(error);
+          };
+          tx.onabort = () => {
+            const error = tx.error;
+            close();
+            reject(error);
+          };
+          tx.onerror = () => {
+            const error = tx.error;
+            close();
+            reject(error);
+          };
         };
       });
     });
