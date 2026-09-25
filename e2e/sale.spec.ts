@@ -44,15 +44,15 @@ test.describe('Flujo de Venta E2E', () => {
     await searchInput.fill(testProduct);
     
     // Esperar resultados de la busqueda
-    const resultItem = page.locator('li').filter({ hasText: new RegExp(testProduct, "i") }).first();
+    const resultItem = page.locator('.pos-results button').filter({ hasText: new RegExp(testProduct, "i") }).first();
     await expect(resultItem).toBeVisible({ timeout: 5000 });
     
     // 5. Agregar al carrito
     await resultItem.click();
     
-    // Validar que se agrego al carrito (subtotal visible)
-    const cartTotal = page.locator('div', { hasText: /Total:/i }).first();
-    await expect(cartTotal).toBeVisible();
+    // Validar el ítem en el carrito y el total real del POS.
+    await expect(page.locator('.pos-lines')).toContainText(new RegExp(testProduct, "i"));
+    await expect(page.locator('.pos-total')).toBeVisible();
     
     // 6. Cobrar
     const btnCobrar = page.locator('button', { hasText: /Cobrar/i });
