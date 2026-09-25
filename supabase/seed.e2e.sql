@@ -1,4 +1,6 @@
 -- Deterministic fixture for the local Playwright sale flow only.
+do $$
+begin
 insert into public.branches (id, name)
 values ('10000000-0000-0000-0000-000000000001', 'Central')
 on conflict (id) do nothing;
@@ -10,6 +12,9 @@ values (
   'Caja E2E'
 )
 on conflict (id) do nothing;
+
+end
+$$;
 
 insert into public.products (id, name, brand_id, base_unit)
 select
@@ -44,3 +49,6 @@ values (
   now()
 )
 on conflict (id) do nothing;
+
+end
+$$;
