@@ -80,6 +80,7 @@ export function downloadFile(content: string, filename: string, mimeType: string
  * Guarda el backup automaticamente en el disco mediante File System Access API (RF-42)
  */
 export async function saveBackupToDisk(backup: BackupData, directoryHandle?: FileSystemDirectoryHandle): Promise<boolean> {
+  let writable: FileSystemWritableFileStream | undefined;
   try {
     const jsonString = JSON.stringify(backup, null, 2);
     
@@ -87,7 +88,7 @@ export async function saveBackupToDisk(backup: BackupData, directoryHandle?: Fil
     if (directoryHandle && directoryHandle.getFileHandle) {
       const filename = `alverde-backup-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
       const fileHandle = await directoryHandle.getFileHandle(filename, { create: true });
-      const writable = await fileHandle.createWritable();
+      writable = await fileHandle.createWritable();
       await writable.write(jsonString);
       await writable.close();
       return true;
@@ -97,6 +98,13 @@ export async function saveBackupToDisk(backup: BackupData, directoryHandle?: Fil
     downloadFile(jsonString, `alverde-backup-manual.json`, "application/json");
     return true;
   } catch (error) {
+    if (writable) {
+      try {
+        await writable.abort();
+      } catch {
+        // Mantener el error original y evitar que un fallo de limpieza lo oculte.
+      }
+    }
     console.error("Error al guardar backup:", error);
     return false;
   }
