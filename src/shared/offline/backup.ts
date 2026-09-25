@@ -3,7 +3,11 @@ import type { QueuedOperation } from "./types";
 type DirectoryHandle = {
   queryPermission(options: { mode: "readwrite" }): Promise<PermissionState>;
   getFileHandle(name: string, options: { create: boolean }): Promise<{
-    createWritable(): Promise<{ write(content: string): Promise<void>; close(): Promise<void> }>;
+    createWritable(): Promise<{
+      write(content: string): Promise<void>;
+      close(): Promise<void>;
+      abort(): Promise<void>;
+    }>;
   }>;
 };
 
@@ -72,6 +76,25 @@ function payload(operations: QueuedOperation[]): string {
   }, null, 2);
 }
 
+export async function writePendingOperationsBackup(
+  directory: DirectoryHandle,
+  operations: QueuedOperation[]
+): Promise<void> {
+  const file = await directory.getFileHandle("alverde-operaciones-pendientes.json", { create: true });
+  const stream = await file.createWritable();
+  try {
+    await stream.write(payload(operations));
+    await stream.close();
+  } catch (error) {
+    try {
+      await stream.abort();
+    } catch {
+      // Preservar el error original de escritura/cierre.
+    }
+    throw error;
+  }
+}
+
 export async function chooseBackupDirectory(): Promise<void> {
   if (!window.showDirectoryPicker) {
     throw new Error("Este navegador no permite elegir una carpeta de respaldo.");
@@ -89,10 +112,7 @@ export async function tryWritePendingOperationsBackup(
     return "permission-needed";
   }
 
-  const file = await directory.getFileHandle("alverde-operaciones-pendientes.json", { create: true });
-  const stream = await file.createWritable();
-  await stream.write(payload(operations));
-  await stream.close();
+  await writePendingOperationsBackup(directory, operations);
   return "written";
 }
 

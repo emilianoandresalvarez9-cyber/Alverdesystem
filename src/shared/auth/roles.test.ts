@@ -4,7 +4,7 @@ import { canAccess, homeFor, parseRole } from "./roles";
 describe("roles", () => {
   it("envía a cada rol a su inicio", () => {
     expect(homeFor("administrator")).toBe("/admin.html");
-    expect(homeFor("employee")).toBe("/catalog.html");
+    expect(homeFor("employee")).toBe("/pos.html");
   });
 
   it("un empleado no accede a páginas de administrador", () => {
