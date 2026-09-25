@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { getSupabase } from "../../shared/supabase/client";
 import { Button, TextField, SelectField, GlassCard, Badge, EmptyState } from "../../shared/ui";
+import { normalizeManufacturerBarcode } from "../catalog/manufacturerBarcode";
 
 import type { Product, Presentation, Brand, Category } from "../../shared/types";
 
@@ -20,6 +21,7 @@ export function ProductsManager() {
 
   // Form states (simplified)
   const [productName, setProductName] = useState("");
+  const [productBarcode, setProductBarcode] = useState("");
   const [productBrandId, setProductBrandId] = useState("");
   const [productCategoryId, setProductCategoryId] = useState("");
   const [productBaseUnit, setProductBaseUnit] = useState("unit");
@@ -47,6 +49,7 @@ export function ProductsManager() {
     if (!prod) return setSelectedProduct(null);
     setSelectedProduct(prod);
     setProductName(prod.name);
+    setProductBarcode(prod.manufacturer_barcode ?? "");
     setProductBrandId(prod.brand_id || "");
     setProductCategoryId(prod.category_id || "");
     setProductBaseUnit(prod.base_unit || "unit");
@@ -59,6 +62,7 @@ export function ProductsManager() {
     if (!productName) return setErrorMsg("Nombre obligatorio");
     const payload = {
       name: productName,
+      manufacturer_barcode: normalizeManufacturerBarcode(productBarcode),
       brand_id: productBrandId || null,
       category_id: productCategoryId || null,
       base_unit: productBaseUnit,
@@ -133,7 +137,7 @@ export function ProductsManager() {
       <GlassCard>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--esp-m)" }}>
           <h2 style={{ margin: 0 }}>Productos</h2>
-          <Button onClick={() => { setSelectedProduct(null); setProductName(""); setProductBrandId(""); setProductCategoryId(""); }}>
+          <Button onClick={() => { setSelectedProduct(null); setProductName(""); setProductBarcode(""); setProductBrandId(""); setProductCategoryId(""); }}>
             + Nuevo Producto
           </Button>
         </div>
@@ -156,6 +160,14 @@ export function ProductsManager() {
         
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--esp-s)" }}>
           <TextField label="Nombre" value={productName} onChange={e => setProductName(e.target.value)} />
+          <TextField
+            label="Código de barras del fabricante (EAN/UPC)"
+            value={productBarcode}
+            onChange={e => setProductBarcode(e.target.value)}
+            help="Escaneá o escribí el código impreso en el envase. Dejalo vacío si el producto no tiene uno."
+            inputMode="numeric"
+            autoComplete="off"
+          />
           
           <SelectField label="Marca" value={productBrandId} onChange={e => setProductBrandId(e.target.value)}>
             <option value="">Sin Marca</option>

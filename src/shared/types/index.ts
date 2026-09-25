@@ -11,6 +11,7 @@ export interface Category {
 export interface Product {
   id: string;
   name: string;
+  manufacturer_barcode?: string | null;
   brand_id?: string | null;
   category_id?: string | null;
   base_unit?: string;
