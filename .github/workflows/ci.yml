@@ -65,7 +65,7 @@ jobs:
       - run: supabase start
       - run: supabase db reset
       - name: Seed E2E sale fixture
-        run: supabase db query --local "$(cat supabase/seed.e2e.sql)"
+        run: supabase db query --local --file supabase/seed.e2e.sql
       # Create .env.local for e2e tests
       - run: echo "VITE_SUPABASE_URL=http://localhost:54321" > .env.local
       - run: echo "VITE_SUPABASE_ANON_KEY=$(supabase status -o json | jq -r .ANON_KEY)" >> .env.local
