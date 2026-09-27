@@ -81,7 +81,7 @@ BEGIN
     RAISE EXCEPTION 'Proveedor inexistente o inactivo.' USING errcode = 'P0002';
   END IF;
 
-  SELECT p_is_primary OR NOT EXISTS (
+  SELECT coalesce(p_is_primary, false) OR NOT EXISTS (
     SELECT 1 FROM public.supplier_products
     WHERE product_id = p_product_id AND supplier_id <> p_supplier_id AND is_primary
   ) INTO v_is_primary;
