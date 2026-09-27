@@ -14,15 +14,16 @@ with branch as (
   on conflict (id) do update set name = excluded.name
   returning id
 ), product as (
-  insert into public.products (id, name, brand_id, base_unit)
+  insert into public.products (id, name, brand_id, base_unit, manufacturer_barcode)
   select
     '10000000-0000-0000-0000-000000000003',
     'Almendra E2E',
     brands.id,
-    'unit'::public.base_unit
+    'unit'::public.base_unit,
+    '7790000000007'
   from public.brands
   where brands.name = 'Del local'
-  on conflict (id) do update set name = excluded.name
+  on conflict (id) do update set name = excluded.name, manufacturer_barcode = excluded.manufacturer_barcode
   returning id
 ), presentation as (
   insert into public.product_presentations (id, product_id, name, base_quantity, sale_price)
