@@ -15,6 +15,7 @@ export interface Product {
   brand_id?: string | null;
   category_id?: string | null;
   base_unit?: string;
+  price_multiplier?: number | null;
   active: boolean;
 }
 
@@ -27,6 +28,7 @@ export interface Presentation {
   barcode?: string;
   status: string;
   base_quantity?: number;
+  sold_by_weight?: boolean;
 }
 
 export interface StockLot {
