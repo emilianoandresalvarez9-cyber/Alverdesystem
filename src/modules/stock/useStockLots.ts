@@ -112,13 +112,9 @@ export function useStockLots() {
 
       if (err) throw err;
       await fetchLots();
-    } catch (e: SupabaseAny) {
-      const msg = e.message || "";
-      if (msg.includes("Regla de oro")) {
-        console.log(msg); // Muestra el error estructurado de la base de datos
-      } else {
-        console.log(`Error al abrir lote: ${msg}`);
-      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Error al abrir el lote.";
+      setError(msg.includes("Regla de oro") ? msg : `No se pudo abrir el lote: ${msg}`);
     }
   };
 
@@ -134,7 +130,7 @@ export function useStockLots() {
       if (err) throw err;
       await fetchLots();
     } catch (e) {
-      console.log(e instanceof Error ? `Error al archivar: ${e.message}` : "Error al archivar producto");
+      setError(e instanceof Error ? `No se pudo archivar el producto: ${e.message}` : "No se pudo archivar el producto.");
     }
   };
 

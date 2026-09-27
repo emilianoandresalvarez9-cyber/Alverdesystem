@@ -10,17 +10,22 @@ export function BarcodeDashboard() {
   const [activeTab, setActiveTab] = useState<"sheet" | "tester" | "generator">("sheet");
   const [lookupResult, setLookupResult] = useState<BarcodeScanLookup | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [feedback, setFeedback] = useState<{ kind: "success" | "error"; message: string } | null>(null);
 
   // Simulador de búsqueda cuando el Nictom LCB3100 dispara un escaneo
   const handleScan = async (scannedCode: string) => {
-    const sb = getSupabase();
+    setFeedback(null);
+    try {
+      const sb = getSupabase();
     
     // 1. Buscar en presentaciones internas
-    const { data: presData } = await sb
+    const { data: presData, error: presentationError } = await sb
       .from("product_presentations")
       .select("id, name, base_quantity, internal_barcode, sale_price, product:products(id, name, base_unit, active)")
       .eq("internal_barcode", scannedCode)
-      .single();
+      .maybeSingle();
+
+    if (presentationError) throw presentationError;
 
     if (presData && presData.product) {
       type ProductRelation = { id: string; name: string; base_unit: string; active: boolean };
@@ -48,19 +53,19 @@ export function BarcodeDashboard() {
 
       // Flujo RF-22: si es granel, simulamos pedir peso
       if (isBulk) {
-        setTimeout(() => {
-          console.log(`⚖️ Producto a granel detectado: Ingrese el peso en gramos (balanza) para ${prod.name}`);
-        }, 150);
+        setFeedback({ kind: "success", message: `Producto a granel: ingresá el peso en gramos para ${prod.name}.` });
       }
       return;
     }
 
     // 2. Si no, buscar en manufacturer_barcode
-    const { data: prodData } = await sb
+    const { data: prodData, error: productError } = await sb
       .from("products")
       .select("id, name, base_unit, active")
       .eq("manufacturer_barcode", scannedCode)
-      .single();
+      .maybeSingle();
+
+    if (productError) throw productError;
 
     if (prodData) {
       setLookupResult({
@@ -78,35 +83,39 @@ export function BarcodeDashboard() {
 
     // No encontrado
     setLookupResult({ found: false, barcode: scannedCode, isBulk: false });
+    } catch (error) {
+      setLookupResult({ found: false, barcode: scannedCode, isBulk: false });
+      setFeedback({ kind: "error", message: error instanceof Error ? `No se pudo consultar el código: ${error.message}` : "No se pudo consultar el código." });
+    }
   };
 
   // Generador batch de códigos faltantes
   const handleGenerateMissing = async () => {
-    
-    
     setIsGenerating(true);
-    const sb = getSupabase();
+    setFeedback(null);
+    let successCount = 0;
+    try {
+      const sb = getSupabase();
     
     // Obtener presentaciones de productos en gramos sin código interno
-    const { data } = await sb
+    const { data, error: listError } = await sb
       .from("product_presentations")
       .select("id, product:products!inner(base_unit)")
       .is("internal_barcode", null)
       .eq("products.base_unit", "gram");
 
+    if (listError) throw listError;
+
     if (!data || data.length === 0) {
-      console.log("No hay productos a granel pendientes de código.");
-      setIsGenerating(false);
+      setFeedback({ kind: "success", message: "No hay productos a granel pendientes de código." });
       return;
     }
 
-    let successCount = 0;
     for (const row of data) {
       // 1. Obtenemos el ID único de la secuencia en la base de datos
       const { data: seq, error: seqError } = await sb.rpc("get_next_internal_code_seq");
       if (seqError) {
-        console.log("Error al obtener la secuencia para el código interno: " + seqError.message);
-        break; // Detenemos la generación
+        throw new Error(`No se pudo obtener la secuencia para el código interno: ${seqError.message}`);
       }
 
       // 2. Generamos el EAN-13 interno usando el prefijo 20
@@ -119,15 +128,22 @@ export function BarcodeDashboard() {
         .eq("id", row.id);
 
       if (updateError) {
-        console.log(`Error al guardar el código interno para el producto ${row.id}: ${updateError.message}`);
-        break; // Detenemos la generación
+        throw new Error(`No se pudo guardar el código para el producto ${row.id}: ${updateError.message}`);
       }
       
       successCount++;
     }
     
-    console.log(`Se generaron ${successCount} códigos de barras nuevos (Prefijo 20).`);
-    setIsGenerating(false);
+      setFeedback({ kind: "success", message: `Se generaron ${successCount} códigos de barras nuevos (Prefijo 20).` });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Error al generar códigos de barras.";
+      setFeedback({
+        kind: "error",
+        message: successCount > 0 ? `Se generaron ${successCount} códigos antes del error. ${message}` : message
+      });
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   return (
@@ -143,6 +159,8 @@ export function BarcodeDashboard() {
           ⚙️ Generación de Códigos
         </Button>
       </div>
+
+      {feedback && <p role={feedback.kind === "error" ? "alert" : "status"} style={{ color: feedback.kind === "error" ? "var(--color-error)" : "var(--color-exito)" }}>{feedback.message}</p>}
 
       {activeTab === "sheet" && (
         <div className="glass" style={{ padding: "var(--esp-m)", borderRadius: "var(--radio-carta)" }}>
