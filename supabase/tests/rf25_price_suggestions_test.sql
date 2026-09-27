@@ -9,7 +9,9 @@ update public.profiles set role = 'administrator' where id = '00000000-0000-0000
 insert into public.categories (id, name) values ('00000000-0000-0000-0000-00000000f253', 'RF25 rubro');
 insert into public.products (id, name, base_unit, category_id)
   values ('00000000-0000-0000-0000-00000000f254', 'RF25 lentejas', 'gram', '00000000-0000-0000-0000-00000000f253');
-insert into public.suppliers (id, name) values\n  ('00000000-0000-0000-0000-00000000f255', 'RF25 proveedor'),\n  ('00000000-0000-0000-0000-00000000f257', 'RF25 segundo proveedor');
+insert into public.suppliers (id, name) values
+  ('00000000-0000-0000-0000-00000000f255', 'RF25 proveedor'),
+  ('00000000-0000-0000-0000-00000000f257', 'RF25 segundo proveedor');
 
 select is(has_table_privilege('anon', 'public.pricing_settings', 'select'), false,
   'anon no tiene privilegio de lectura de multiplicadores generales');
@@ -62,6 +64,19 @@ select is((select cost / purchase_quantity from public.supplier_products
   where product_id = '00000000-0000-0000-0000-00000000f254'
     and supplier_id = '00000000-0000-0000-0000-00000000f255'), 1.600::numeric,
   'El costo por unidad base se deriva del costo del envase / su contenido');
+select is((select count(*)::int from public.supplier_products
+  where product_id = '00000000-0000-0000-0000-00000000f254' and is_primary), 1,
+  'Guardar el primer proveedor lo marca como principal');
+select lives_ok($select public.save_supplier_product_cost(
+  '00000000-0000-0000-0000-00000000f254', '00000000-0000-0000-0000-00000000f257', 42000, 25000, 'L-25-B', true)$,
+  'Administradora puede cambiar el proveedor principal');
+select is((select count(*)::int from public.supplier_products
+  where product_id = '00000000-0000-0000-0000-00000000f254' and is_primary), 1,
+  'Cambiar el principal conserva exactamente uno por producto');
+select throws_ok($update public.supplier_products set is_primary = true
+  where product_id = '00000000-0000-0000-0000-00000000f254'
+    and supplier_id = '00000000-0000-0000-0000-00000000f255'$,
+  '23505', null, 'El índice único impide dos proveedores principales');
 
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000f252';
 set role authenticated;
