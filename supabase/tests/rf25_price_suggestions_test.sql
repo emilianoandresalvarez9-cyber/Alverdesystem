@@ -28,7 +28,7 @@ select is((select count(*)::int from public.category_price_multipliers), 0,
   'Empleado no puede leer multiplicadores por rubro');
 select is((select count(*)::int from public.supplier_products), 0,
   'Empleado no puede leer costos ni cantidades de compra');
-select throws_ok($$select public.save_supplier_product_cost(
+select throws_ok($$$select public.save_supplier_product_cost(
   '00000000-0000-0000-0000-00000000f254', '00000000-0000-0000-0000-00000000f255', 40000, 25000, 'L-25', true)$$,
   '42501', null, 'Empleado no puede escribir costo o cantidad de compra');
 reset role;
@@ -37,7 +37,7 @@ set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000f256';
 set role authenticated;
 select is((select count(*)::int from public.supplier_products), 0,
   'Un segundo empleado tampoco puede leer costos ni cantidades de compra');
-select throws_ok($$select public.save_supplier_product_cost(
+select throws_ok($$$select public.save_supplier_product_cost(
   '00000000-0000-0000-0000-00000000f254', '00000000-0000-0000-0000-00000000f255', 40000, 25000, 'L-25', true)$$,
   '42501', null, 'Un segundo empleado tampoco puede guardar costos');
 reset role;
@@ -57,7 +57,7 @@ select lives_ok($$update public.products set price_multiplier = 3
 select is((select price_multiplier from public.products
   where id = '00000000-0000-0000-0000-00000000f254'), 3.000::numeric,
   'El override por producto queda persistido');
-select lives_ok($$select public.save_supplier_product_cost(
+select lives_ok($$$select public.save_supplier_product_cost(
   '00000000-0000-0000-0000-00000000f254', '00000000-0000-0000-0000-00000000f255', 40000, 25000, 'L-25', true)$$,
   'Administradora puede guardar costo del envase y su cantidad base');
 select is((select cost / purchase_quantity from public.supplier_products
@@ -67,15 +67,15 @@ select is((select cost / purchase_quantity from public.supplier_products
 select is((select count(*)::int from public.supplier_products
   where product_id = '00000000-0000-0000-0000-00000000f254' and is_primary), 1,
   'Guardar el primer proveedor lo marca como principal');
-select lives_ok($select public.save_supplier_product_cost(
-  '00000000-0000-0000-0000-00000000f254', '00000000-0000-0000-0000-00000000f257', 42000, 25000, 'L-25-B', true)$,
+select lives_ok($$select public.save_supplier_product_cost(
+  '00000000-0000-0000-0000-00000000f254', '00000000-0000-0000-0000-00000000f257', 42000, 25000, 'L-25-B', true)$$,
   'Administradora puede cambiar el proveedor principal');
 select is((select count(*)::int from public.supplier_products
   where product_id = '00000000-0000-0000-0000-00000000f254' and is_primary), 1,
   'Cambiar el principal conserva exactamente uno por producto');
-select throws_ok($update public.supplier_products set is_primary = true
+select throws_ok($$update public.supplier_products set is_primary = true
   where product_id = '00000000-0000-0000-0000-00000000f254'
-    and supplier_id = '00000000-0000-0000-0000-00000000f255'$,
+    and supplier_id = '00000000-0000-0000-0000-00000000f255'$$,
   '23505', null, 'El índice único impide dos proveedores principales');
 
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000f252';
