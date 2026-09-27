@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { getSupabase } from "../../shared/supabase/client";
 import { Button, TextField, SelectField, GlassCard, Badge, EmptyState, Modal } from "../../shared/ui";
 import { normalizeManufacturerBarcode } from "./manufacturerBarcode";
+import { ProductPricing } from "./ProductPricing";
 
 import type { Product, Presentation, Brand, Category } from "../../shared/types";
 
@@ -25,6 +26,7 @@ export function ProductsManager() {
   const [productBrandId, setProductBrandId] = useState("");
   const [productCategoryId, setProductCategoryId] = useState("");
   const [productBaseUnit, setProductBaseUnit] = useState("unit");
+  const [productMultiplier, setProductMultiplier] = useState("");
 
   const sb = getSupabase();
 
@@ -53,6 +55,7 @@ export function ProductsManager() {
     setProductBrandId(prod.brand_id || "");
     setProductCategoryId(prod.category_id || "");
     setProductBaseUnit(prod.base_unit || "unit");
+    setProductMultiplier(prod.price_multiplier == null ? "" : String(prod.price_multiplier));
 
     const { data } = await sb.from("product_presentations").select("*").eq("product_id", prod.id).order("name");
     setPresentations(data || []);
@@ -62,19 +65,24 @@ export function ProductsManager() {
     setErrorMsg("");
     setSuccessMsg("");
     if (!productName.trim()) return setErrorMsg("Nombre obligatorio");
+    const parsedMultiplier = productMultiplier.trim() === "" ? null : Number(productMultiplier);
+    if (parsedMultiplier !== null && (!Number.isFinite(parsedMultiplier) || parsedMultiplier <= 0)) {
+      return setErrorMsg("El multiplicador propio debe ser mayor que cero o quedar vacío para heredar.");
+    }
     const payload = {
       name: productName.trim(),
       manufacturer_barcode: normalizeManufacturerBarcode(productBarcode),
       brand_id: productBrandId || null,
       category_id: productCategoryId || null,
       base_unit: productBaseUnit,
+      price_multiplier: parsedMultiplier,
       active: true
     };
 
     if (selectedProduct) {
-      const { error } = await sb.from("products").update(payload).eq("id", selectedProduct.id);
+      const { data, error } = await sb.from("products").update(payload).eq("id", selectedProduct.id).select().single();
       if (error) setErrorMsg(error.message);
-      else { setSuccessMsg("Producto actualizado"); void loadData(); }
+      else { setSuccessMsg("Producto actualizado"); setSelectedProduct(data as Product); void loadData(); }
     } else {
       const { error, data } = await sb.from("products").insert(payload).select().single();
       if (error) setErrorMsg(error.message);
@@ -153,6 +161,7 @@ export function ProductsManager() {
             setProductBrandId("");
             setProductCategoryId("");
             setProductBaseUnit("unit");
+            setProductMultiplier("");
             setErrorMsg("");
             setSuccessMsg("");
           }}>
@@ -206,6 +215,9 @@ export function ProductsManager() {
             <option value="gram">Gramos</option>
             <option value="millilitre">Mililitros</option>
           </SelectField>
+          <TextField label="Multiplicador propio (opcional)" type="number" min="0.001" step="0.001"
+            value={productMultiplier} onChange={e => setProductMultiplier(e.target.value)}
+            help="Vacío: usa el multiplicador del rubro y luego el general." />
 
           <div style={{ display: "flex", gap: "var(--esp-s)" }}>
             <Button onClick={handleSaveProduct}>Guardar Producto</Button>
@@ -217,6 +229,8 @@ export function ProductsManager() {
 
         {selectedProduct && (
           <div style={{ marginTop: "var(--esp-l)", borderTop: "1px solid var(--glass-borde)", paddingTop: "var(--esp-m)" }}>
+            <ProductPricing key={selectedProduct.id} product={selectedProduct} presentations={presentations}
+              onPricesSaved={() => { void handleSelectProduct(selectedProduct); }} />
             <h3>Presentaciones</h3>
             <ul style={{ listStyle: "none", padding: 0, margin: 0, marginBottom: "var(--esp-s)" }}>
               {presentations.map(pr => (
