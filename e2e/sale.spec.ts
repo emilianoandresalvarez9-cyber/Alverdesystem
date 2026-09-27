@@ -7,6 +7,7 @@ test.describe('Flujo de Venta E2E', () => {
     const testEmail = process.env.TEST_EMPLOYEE_EMAIL || 'empleado@alverde.local';
     const testPass = process.env.TEST_EMPLOYEE_PASSWORD || 'empleado123';
     const testProduct = process.env.TEST_PRODUCT_NAME || 'almendra';
+    const testBarcode = process.env.TEST_PRODUCT_BARCODE || '7790000000007';
 
     // 1. Ir a la raiz y asegurar que el login carga
     await page.goto('/');
@@ -38,19 +39,13 @@ test.describe('Flujo de Venta E2E', () => {
     await btnAbrirTurno.click();
     await expect(btnAbrirTurno).toBeHidden({ timeout: 5000 });
     
-    // 4. Buscar un producto real
+    // 4. Escanear el código de fabricante del producto sembrado
     const searchInput = page.getByLabel(/código o nombre del producto/i);
     await expect(searchInput).toBeVisible();
-    await searchInput.fill(testProduct);
+    await searchInput.fill(testBarcode);
+    await page.getByRole('button', { name: 'Agregar' }).click();
     
-    // Esperar resultados de la busqueda
-    const resultItem = page.locator('.pos-results button').filter({ hasText: new RegExp(testProduct, "i") }).first();
-    await expect(resultItem).toBeVisible({ timeout: 5000 });
-    
-    // 5. Agregar al carrito
-    await resultItem.click();
-    
-    // Validar el ítem en el carrito y el total real del POS.
+    // Validar que el código encontró el producto y lo agregó al carrito.
     await expect(page.locator('.pos-lines')).toContainText(new RegExp(testProduct, "i"));
     await expect(page.locator('.pos-total')).toBeVisible();
     

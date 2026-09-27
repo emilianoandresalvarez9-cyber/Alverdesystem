@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { getSupabase } from "../../shared/supabase/client";
-import { Button, TextField, SelectField, GlassCard, Badge, EmptyState } from "../../shared/ui";
+import { Button, TextField, SelectField, GlassCard, Badge, EmptyState, Modal } from "../../shared/ui";
+import { normalizeManufacturerBarcode } from "./manufacturerBarcode";
 
 import type { Product, Presentation, Brand, Category } from "../../shared/types";
 
@@ -20,6 +21,7 @@ export function ProductsManager() {
 
   // Form states (simplified)
   const [productName, setProductName] = useState("");
+  const [productBarcode, setProductBarcode] = useState("");
   const [productBrandId, setProductBrandId] = useState("");
   const [productCategoryId, setProductCategoryId] = useState("");
   const [productBaseUnit, setProductBaseUnit] = useState("unit");
@@ -47,6 +49,7 @@ export function ProductsManager() {
     if (!prod) return setSelectedProduct(null);
     setSelectedProduct(prod);
     setProductName(prod.name);
+    setProductBarcode(prod.manufacturer_barcode ?? "");
     setProductBrandId(prod.brand_id || "");
     setProductCategoryId(prod.category_id || "");
     setProductBaseUnit(prod.base_unit || "unit");
@@ -56,9 +59,12 @@ export function ProductsManager() {
   };
 
   const handleSaveProduct = async () => {
-    if (!productName) return setErrorMsg("Nombre obligatorio");
+    setErrorMsg("");
+    setSuccessMsg("");
+    if (!productName.trim()) return setErrorMsg("Nombre obligatorio");
     const payload = {
-      name: productName,
+      name: productName.trim(),
+      manufacturer_barcode: normalizeManufacturerBarcode(productBarcode),
       brand_id: productBrandId || null,
       category_id: productCategoryId || null,
       base_unit: productBaseUnit,
@@ -68,14 +74,14 @@ export function ProductsManager() {
     if (selectedProduct) {
       const { error } = await sb.from("products").update(payload).eq("id", selectedProduct.id);
       if (error) setErrorMsg(error.message);
-      else { setSuccessMsg("Actualizado"); loadData(); }
+      else { setSuccessMsg("Producto actualizado"); void loadData(); }
     } else {
       const { error, data } = await sb.from("products").insert(payload).select().single();
       if (error) setErrorMsg(error.message);
       else {
-        setSuccessMsg("Creado");
-        loadData();
-        handleSelectProduct(data);
+        setSuccessMsg("Producto creado");
+        void loadData();
+        await handleSelectProduct(data);
       }
     }
   };
@@ -112,19 +118,26 @@ export function ProductsManager() {
   };
 
   const handleUpdatePrice = (presId: string, oldPrice: number) => {
+    setErrorMsg("");
+    setSuccessMsg("");
     setPricePrompt({presId, oldPrice});
     setNewPriceInput(oldPrice.toString());
   };
 
   const confirmUpdatePrice = async () => {
     if (!pricePrompt) return;
-    const { error } = await sb.from("product_presentations").update({ sale_price: parseFloat(newPriceInput) }).eq("id", pricePrompt.presId);
+    const newPrice = Number(newPriceInput);
+    if (!Number.isFinite(newPrice) || newPrice < 0) {
+      setErrorMsg("Ingresá un precio válido mayor o igual a 0.");
+      return;
+    }
+    const { error } = await sb.from("product_presentations").update({ sale_price: newPrice }).eq("id", pricePrompt.presId);
     if (error) setErrorMsg(error.message);
     else {
       setSuccessMsg("Precio actualizado");
       handleSelectProduct(selectedProduct);
+      setPricePrompt(null);
     }
-    setPricePrompt(null);
   };
 
   return (
@@ -133,7 +146,16 @@ export function ProductsManager() {
       <GlassCard>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--esp-m)" }}>
           <h2 style={{ margin: 0 }}>Productos</h2>
-          <Button onClick={() => { setSelectedProduct(null); setProductName(""); setProductBrandId(""); setProductCategoryId(""); }}>
+          <Button onClick={() => {
+            setSelectedProduct(null);
+            setProductName("");
+            setProductBarcode("");
+            setProductBrandId("");
+            setProductCategoryId("");
+            setProductBaseUnit("unit");
+            setErrorMsg("");
+            setSuccessMsg("");
+          }}>
             + Nuevo Producto
           </Button>
         </div>
@@ -153,9 +175,21 @@ export function ProductsManager() {
         <h2 style={{ margin: 0, marginBottom: "var(--esp-m)" }}>
           {selectedProduct ? "Editar Producto" : "Nuevo Producto"}
         </h2>
+
+        {errorMsg && <p role="alert" style={{ color: "var(--color-error)" }}>{errorMsg}</p>}
+        {successMsg && <p role="status" style={{ color: "var(--color-exito)" }}>{successMsg}</p>}
         
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--esp-s)" }}>
           <TextField label="Nombre" value={productName} onChange={e => setProductName(e.target.value)} />
+          <TextField
+            label="Código de barras del fabricante"
+            value={productBarcode}
+            onChange={e => setProductBarcode(e.target.value)}
+            inputMode="numeric"
+            autoComplete="off"
+            placeholder="Escaneá o escribí el código"
+            help="Se usa para encontrar este producto al escanearlo en Caja. Conserva los ceros iniciales."
+          />
           
           <SelectField label="Marca" value={productBrandId} onChange={e => setProductBrandId(e.target.value)}>
             <option value="">Sin Marca</option>
@@ -170,7 +204,7 @@ export function ProductsManager() {
           <SelectField label="Unidad Base" value={productBaseUnit} onChange={e => setProductBaseUnit(e.target.value)}>
             <option value="unit">Unidad</option>
             <option value="gram">Gramos</option>
-            <option value="ml">Mililitros</option>
+            <option value="millilitre">Mililitros</option>
           </SelectField>
 
           <div style={{ display: "flex", gap: "var(--esp-s)" }}>
@@ -202,6 +236,30 @@ export function ProductsManager() {
           </div>
         )}
       </GlassCard>
+
+      <Modal
+        open={pricePrompt !== null}
+        title="Cambiar precio"
+        onClose={() => setPricePrompt(null)}
+        footer={(
+          <>
+            <Button variant="fantasma" onClick={() => setPricePrompt(null)}>Cancelar</Button>
+            <Button onClick={confirmUpdatePrice} disabled={!newPriceInput.trim() || !Number.isFinite(Number(newPriceInput)) || Number(newPriceInput) < 0}>
+              Guardar precio
+            </Button>
+          </>
+        )}
+      >
+        <TextField
+          label="Precio nuevo ($)"
+          type="number"
+          min="0"
+          step="0.01"
+          value={newPriceInput}
+          onChange={e => setNewPriceInput(e.target.value)}
+          autoFocus
+        />
+      </Modal>
     </div>
   );
 }

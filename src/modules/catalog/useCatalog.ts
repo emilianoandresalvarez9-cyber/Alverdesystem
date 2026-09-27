@@ -111,11 +111,19 @@ export function useCatalog(): UseCatalogReturn {
   useEffect(() => {
     const onOnline = () => { setIsOffline(false); refresh(); };
     const onOffline = () => setIsOffline(true);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible" && navigator.onLine) {
+        setIsOffline(false);
+        void refresh();
+      }
+    };
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
+    document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [refresh]);
 
