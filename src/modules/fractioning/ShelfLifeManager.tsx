@@ -16,6 +16,7 @@ export function ShelfLifeManager() {
   const [products, setProducts] = useState<ShelfLifeProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   
   const [search, setSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -80,12 +81,14 @@ export function ShelfLifeManager() {
 
   const applyBulkUpdate = async (clear: boolean = false) => {
     if (selectedIds.size === 0) return;
+    setError(null);
+    setSuccess(null);
     
     let days: number | null = null;
     if (!clear) {
       days = parseInt(bulkDays, 10);
       if (!validateShelfLifeDays(days)) {
-        console.log("Ingresá un número válido de días mayor a 0.");
+        setError("Ingresá un número válido de días mayor a 0.");
         return;
       }
     }
@@ -108,9 +111,9 @@ export function ShelfLifeManager() {
       
       setSelectedIds(new Set());
       setBulkDays("");
-      console.log(`Vida útil ${clear ? "borrada" : "asignada"} a ${selectedIds.size} producto(s).`);
+      setSuccess(`Vida útil ${clear ? "borrada" : "asignada"} a ${selectedIds.size} producto(s).`);
     } catch (e) {
-      console.log(e instanceof Error ? `Error: ${e.message}` : "Error aplicando vida útil.");
+      setError(e instanceof Error ? `No se pudo aplicar la vida útil: ${e.message}` : "No se pudo aplicar la vida útil.");
     } finally {
       setLoading(false);
     }
@@ -125,7 +128,8 @@ export function ShelfLifeManager() {
         </p>
       </header>
 
-      {error && <p style={{ color: "var(--color-error)" }}>{error}</p>}
+      {error && <p role="alert" style={{ color: "var(--color-error)" }}>{error}</p>}
+      {success && <p role="status" style={{ color: "var(--color-exito)" }}>{success}</p>}
 
       {/* Barra de Herramientas Masiva */}
       <div style={{ display: "flex", gap: "var(--esp-m)", alignItems: "flex-end", marginBottom: "var(--esp-l)", flexWrap: "wrap", padding: "var(--esp-s)", background: "var(--glass-fondo-lite)", borderRadius: "var(--radio-panel)" }}>
