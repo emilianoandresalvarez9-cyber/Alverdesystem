@@ -162,7 +162,7 @@ export function ProductPricing({ product, presentations, onPricesSaved }: {
       )}
 
       <h4>Sugerencias para las presentaciones</h4>
-      <p>Se usa el último costo registrado, el multiplicador efectivo y redondeo hacia arriba a centenas para no reducir el recargo configurado.</p>
+      <p>Se usa el último costo registrado, el multiplicador efectivo y redondeo hacia arriba al próximo múltiplo de $100 (según el requisito del proyecto).</p>
       {!usableCost ? <p>Registrá costo y contenido de compra para generar sugerencias.</p> : (
         <p>Base de cálculo: {formatMoney(Number(usableCost.cost))} / {usableCost.purchase_quantity} {baseUnitLabel} · {multiplier}×.</p>
       )}
