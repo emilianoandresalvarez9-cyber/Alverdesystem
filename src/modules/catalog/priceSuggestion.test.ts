@@ -20,9 +20,16 @@ describe("getEffectiveMultiplier", () => {
 });
 
 describe("suggestPresentationPrice", () => {
-  it("normaliza costo del envase y multiplica por la presentación al centavo", () => {
+  it("normaliza costo del envase y redondea hacia arriba al múltiplo de $100", () => {
     expect(suggestPresentationPrice({ packageCost: 40_000, packageQuantity: 25_000,
-      presentationQuantity: 150, multiplier: 2 })).toEqual({ salePrice: 480, displayPrice: 480 });
+      presentationQuantity: 150, multiplier: 2 })).toEqual({ salePrice: 500, displayPrice: 500 });
+  });
+
+  it("conserva los múltiplos exactos de $100 y redondea hacia arriba cuando hace falta", () => {
+    expect(suggestPresentationPrice({ packageCost: 40_000, packageQuantity: 25_000,
+      presentationQuantity: 125, multiplier: 2 })).toEqual({ salePrice: 400, displayPrice: 400 });
+    expect(suggestPresentationPrice({ packageCost: 40_000, packageQuantity: 25_000,
+      presentationQuantity: 151, multiplier: 2 })).toEqual({ salePrice: 500, displayPrice: 500 });
   });
 
   it("sugiere precio por kilo y devuelve el precio interno por gramo para balanza", () => {
