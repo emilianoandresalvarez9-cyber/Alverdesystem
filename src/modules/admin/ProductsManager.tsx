@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { getSupabase } from "../../shared/supabase/client";
-import { Button, TextField, SelectField, GlassCard, Badge, EmptyState } from "../../shared/ui";
+import { Button, TextField, SelectField, GlassCard, Badge, EmptyState, Modal } from "../../shared/ui";
 
 import type { Product, Presentation, Brand, Category } from "../../shared/types";
 
@@ -112,19 +112,26 @@ export function ProductsManager() {
   };
 
   const handleUpdatePrice = (presId: string, oldPrice: number) => {
+    setErrorMsg("");
+    setSuccessMsg("");
     setPricePrompt({presId, oldPrice});
     setNewPriceInput(oldPrice.toString());
   };
 
   const confirmUpdatePrice = async () => {
     if (!pricePrompt) return;
-    const { error } = await sb.from("product_presentations").update({ sale_price: parseFloat(newPriceInput) }).eq("id", pricePrompt.presId);
+    const newPrice = Number(newPriceInput);
+    if (!Number.isFinite(newPrice) || newPrice < 0) {
+      setErrorMsg("Ingresá un precio válido mayor o igual a 0.");
+      return;
+    }
+    const { error } = await sb.from("product_presentations").update({ sale_price: newPrice }).eq("id", pricePrompt.presId);
     if (error) setErrorMsg(error.message);
     else {
       setSuccessMsg("Precio actualizado");
       handleSelectProduct(selectedProduct);
+      setPricePrompt(null);
     }
-    setPricePrompt(null);
   };
 
   return (
@@ -153,6 +160,9 @@ export function ProductsManager() {
         <h2 style={{ margin: 0, marginBottom: "var(--esp-m)" }}>
           {selectedProduct ? "Editar Producto" : "Nuevo Producto"}
         </h2>
+
+        {errorMsg && <p role="alert" style={{ color: "var(--color-error)" }}>{errorMsg}</p>}
+        {successMsg && <p role="status" style={{ color: "var(--color-exito)" }}>{successMsg}</p>}
         
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--esp-s)" }}>
           <TextField label="Nombre" value={productName} onChange={e => setProductName(e.target.value)} />
@@ -170,7 +180,7 @@ export function ProductsManager() {
           <SelectField label="Unidad Base" value={productBaseUnit} onChange={e => setProductBaseUnit(e.target.value)}>
             <option value="unit">Unidad</option>
             <option value="gram">Gramos</option>
-            <option value="ml">Mililitros</option>
+            <option value="millilitre">Mililitros</option>
           </SelectField>
 
           <div style={{ display: "flex", gap: "var(--esp-s)" }}>
@@ -202,6 +212,30 @@ export function ProductsManager() {
           </div>
         )}
       </GlassCard>
+
+      <Modal
+        open={pricePrompt !== null}
+        title="Cambiar precio"
+        onClose={() => setPricePrompt(null)}
+        footer={(
+          <>
+            <Button variant="fantasma" onClick={() => setPricePrompt(null)}>Cancelar</Button>
+            <Button onClick={confirmUpdatePrice} disabled={!newPriceInput.trim() || !Number.isFinite(Number(newPriceInput)) || Number(newPriceInput) < 0}>
+              Guardar precio
+            </Button>
+          </>
+        )}
+      >
+        <TextField
+          label="Precio nuevo ($)"
+          type="number"
+          min="0"
+          step="0.01"
+          value={newPriceInput}
+          onChange={e => setNewPriceInput(e.target.value)}
+          autoFocus
+        />
+      </Modal>
     </div>
   );
 }
