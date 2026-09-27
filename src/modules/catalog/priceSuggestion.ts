@@ -47,8 +47,10 @@ export function suggestPresentationPrice(input: {
 
   const quantityToPrice = input.soldByWeight ? 1000 : input.presentationQuantity;
   const unrounded = (input.packageCost / input.packageQuantity) * quantityToPrice * input.multiplier;
-  // Currency is stored with two decimal places; keep the computed price to cents.
-  const displayPrice = Math.round((unrounded + Number.EPSILON) * 100) / 100;
+  // Requirements specify rounding up to the next $100 increment.
+  // Convert to cents first so floating point noise cannot skip a whole increment.
+  const cents = Math.round((unrounded + Number.EPSILON) * 100);
+  const displayPrice = Math.ceil(cents / 10_000) * 100;
   return {
     displayPrice,
     salePrice: input.soldByWeight ? displayPrice / 1000 : displayPrice
