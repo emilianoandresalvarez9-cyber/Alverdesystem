@@ -146,6 +146,7 @@ export function QuickRestock({ onSuccess }: QuickRestockProps) {
   return (
     <GlassCard>
       <h3 style={{ margin: "0 0 var(--esp-m)" }}>Ingreso Rápido de Mercadería (RF-51)</h3>
+      <p>El costo del lote se calcula con el costo por envase y contenido del proveedor principal del producto. Si falta esa información, el lote queda sin costo y no se muestra un margen desactualizado.</p>
       <form onSubmit={handleSearch} style={{ display: "flex", gap: "var(--esp-s)", flexWrap: "wrap", alignItems: "flex-end" }}>
         <TextField
           label="Escanear código de barras"

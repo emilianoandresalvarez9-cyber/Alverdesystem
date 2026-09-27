@@ -2,6 +2,7 @@ import type { SupabaseAny } from "../../shared/types";
 import { useEffect, useState } from "react";
 import { getSupabase } from "../../shared/supabase/client";
 import { GlassCard, Badge, EmptyState } from "../../shared/ui";
+import { grossMarginPercentage, latestLotCost, marginTone } from "./marginCalculations";
 
 export function MarginDashboard() {
   const [margins, setMargins] = useState<SupabaseAny[]>([]);
@@ -26,7 +27,7 @@ export function MarginDashboard() {
 
     const { data: lots, error: lotErr } = await sb
       .from("stock_lots")
-      .select("presentation_id, purchase_cost")
+      .select("presentation_id, purchase_cost, received_at, portioned_at")
       .order("received_at", { ascending: false });
 
     if (lotErr) {
@@ -36,12 +37,12 @@ export function MarginDashboard() {
     }
 
     // Calcular el margen para cada presentación basado en su ÚLTIMO lote
-    const marginData = presentations!.map(pres => {
-      const latestLot = lots!.find(l => l.presentation_id === pres.id && l.purchase_cost > 0);
-      const cost = latestLot ? latestLot.purchase_cost : 0;
+    const marginData = (presentations ?? []).flatMap(pres => {
+      const cost = latestLotCost(lots ?? [], pres.id);
+      if (cost === null) return [];
       const price = pres.sale_price;
       const profit = price - cost;
-      const marginPercentage = cost > 0 ? (profit / cost) * 100 : 0;
+      const marginPercentage = grossMarginPercentage(cost, price);
 
       return {
         id: pres.id,
@@ -52,7 +53,7 @@ export function MarginDashboard() {
         profit,
         marginPercentage
       };
-    }).filter(m => m.cost > 0); // Solo mostrar los que tienen costo registrado
+    }); // Un lote más reciente sin costo significa que el margen aún es desconocido.
 
     // Ordenar por margen (de menor a mayor) para detectar los que dan perdida o poco margen
     marginData.sort((a, b) => a.marginPercentage - b.marginPercentage);
@@ -68,7 +69,7 @@ export function MarginDashboard() {
   return (
     <GlassCard>
       <h2>Panel de Márgenes</h2>
-      <p>Muestra el margen de ganancia de cada presentación en base al último costo de compra registrado.</p>
+      <p>Muestra la ganancia bruta y el margen sobre el precio de venta de cada presentación, usando el costo del lote más reciente.</p>
       
       {error && <Badge tone="error" style={{ marginBottom: "1rem" }}>{error}</Badge>}
 
@@ -84,8 +85,8 @@ export function MarginDashboard() {
               <th>Presentación</th>
               <th>Último Costo</th>
               <th>Precio Venta</th>
-              <th>Ganancia Neta</th>
-              <th>Margen (%)</th>
+              <th>Ganancia bruta</th>
+              <th>Margen bruto (%)</th>
             </tr>
           </thead>
           <tbody>
@@ -99,7 +100,7 @@ export function MarginDashboard() {
                   ${m.profit.toFixed(2)}
                 </td>
                 <td>
-                  <Badge tone={m.marginPercentage < 20 ? "aviso" : m.marginPercentage < 0 ? "error" : "exito"}>
+                  <Badge tone={marginTone(m.marginPercentage)}>
                     {m.marginPercentage.toFixed(1)}%
                   </Badge>
                 </td>
