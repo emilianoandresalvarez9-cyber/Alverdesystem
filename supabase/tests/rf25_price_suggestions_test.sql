@@ -1,5 +1,5 @@
 begin;
-select plan(20);
+select plan(21);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-00000000f251', 'rf25-admin@test'),
