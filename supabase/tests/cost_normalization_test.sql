@@ -1,5 +1,5 @@
 BEGIN;
-SELECT plan(14);
+SELECT plan(15);
 
 INSERT INTO auth.users (id, email) VALUES
   ('00000000-0000-0000-0000-00000000f261', 'cost-admin@test'),
@@ -50,6 +50,20 @@ SELECT is((SELECT supplier_id FROM public.stock_lots WHERE id = (SELECT id FROM 
 SELECT is((SELECT current_quantity FROM public.stock_lots WHERE id = (SELECT id FROM bulk_lot)),
   23500::numeric, 'Fraccionamiento conserva la cantidad restante del lote origen');
 
+CREATE TEMP TABLE second_bulk_lot AS
+SELECT public.quick_restock(
+  '00000000-0000-0000-0000-00000000f264',
+  '00000000-0000-0000-0000-00000000f263',
+  1000, current_date
+) AS id;
+SELECT throws_ok(
+  format('UPDATE public.stock_lots SET opened_at = now() WHERE id = %L::uuid',
+    (SELECT id FROM second_bulk_lot)),
+  'P0001',
+  format('Regla de oro del granel: Ya existe una bolsa abierta activa para este producto (Lote: %s). No se puede abrir una segunda bolsa mientras la anterior siga activa (RF-11, RF-12).',
+    (SELECT id FROM bulk_lot)),
+  'Fraccionar en bolsitas no permite abrir una segunda bolsa de granel');
+
 CREATE TEMP TABLE fixed_lot AS
 SELECT public.quick_restock(
   '00000000-0000-0000-0000-00000000f265',
@@ -74,7 +88,7 @@ SELECT throws_ok($$SELECT public.quick_restock(
   1, current_date)$$,
   '42501', 'Solo la administradora puede ingresar stock.',
   'Empleado no puede ejecutar ingreso rápido ni consultar el costo almacenado');
-SELECT is((SELECT count(*)::int FROM public.employee_stock_lots), 3,
+SELECT is((SELECT count(*)::int FROM public.employee_stock_lots), 4,
   'Empleado ve los lotes operativos sin acceso a la tabla base de costos');
 SELECT ok((SELECT bool_and(NOT (to_jsonb(lot) ? 'purchase_cost'))
   FROM public.employee_stock_lots lot),

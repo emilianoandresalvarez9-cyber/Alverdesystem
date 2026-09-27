@@ -6,6 +6,58 @@
 COMMENT ON COLUMN public.stock_lots.purchase_cost IS
   'Cost of one stock unit in this lot presentation: one base unit for weight sales, otherwise one presentation.';
 
+-- RF-12 serializes open bulk lots, not the sealed package lots created by
+-- fractioning. A package can carry opened_at for its shelf-life calculation;
+-- treating it as another open bulk bag blocks valid partial fractioning.
+CREATE OR REPLACE FUNCTION public.check_single_open_lot_per_product()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+DECLARE
+  v_product_id uuid;
+  v_conflict_lot_id uuid;
+BEGIN
+  IF NEW.opened_at IS NULL OR NEW.status <> 'open' OR COALESCE(NEW.current_quantity, 0) <= 0 THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT pp.product_id
+    INTO v_product_id
+  FROM public.product_presentations pp
+  WHERE pp.id = NEW.presentation_id
+    AND pp.sold_by_weight;
+
+  -- RF-12 concerns the source bag sold by weight. Fractioned presentations
+  -- sold by package are independent inventory, as specified by RF-13.
+  IF v_product_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  -- Serialize concurrent attempts to open two bulk lots for the same product.
+  PERFORM pg_advisory_xact_lock(hashtextextended(v_product_id::text, 0));
+
+  SELECT sl.id
+    INTO v_conflict_lot_id
+  FROM public.stock_lots sl
+  JOIN public.product_presentations pp ON pp.id = sl.presentation_id
+  WHERE pp.product_id = v_product_id
+    AND pp.sold_by_weight
+    AND sl.id <> NEW.id
+    AND sl.opened_at IS NOT NULL
+    AND sl.status = 'open'
+    AND sl.current_quantity > 0
+  LIMIT 1;
+
+  IF v_conflict_lot_id IS NOT NULL THEN
+    RAISE EXCEPTION 'Regla de oro del granel: Ya existe una bolsa abierta activa para este producto (Lote: %). No se puede abrir una segunda bolsa mientras la anterior siga activa (RF-11, RF-12).', v_conflict_lot_id
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION public.quick_restock(
   p_presentation_id uuid,
   p_product_id uuid,
