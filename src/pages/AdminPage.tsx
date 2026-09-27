@@ -17,6 +17,7 @@ import { ScalePresentations } from "../modules/admin/ScalePresentations";
 import { ScaleManager } from "../modules/admin/ScaleManager";
 import { ProductsManager } from "../modules/admin/ProductsManager";
 import { BulkPriceUpdate } from "../modules/admin/BulkPriceUpdate";
+import { PriceMultiplierSettings } from "../modules/admin/PriceMultiplierSettings";
 import { SuppliersManager } from "../modules/admin/SuppliersManager";
 import { MarginDashboard } from "../modules/reports/MarginDashboard";
 import "../styles/pos.css";
@@ -75,6 +76,20 @@ export function AdminPage() {
             onClick={() => setActiveTab("products")}
           >
             📦 Productos ABM
+          </Button>
+
+          <Button
+            variant={activeTab === "prices" ? "primario" : "fantasma"}
+            onClick={() => setActiveTab("prices")}
+          >
+            💲 Precios sugeridos
+          </Button>
+
+          <Button
+            variant={activeTab === "suppliers" ? "primario" : "fantasma"}
+            onClick={() => setActiveTab("suppliers")}
+          >
+            Proveedores
           </Button>
 
           <Button
@@ -173,7 +188,12 @@ export function AdminPage() {
         )}
 
         {/* Productos y Presentaciones ABM */}
-        {activeTab === "prices" && <BulkPriceUpdate />}
+        {activeTab === "prices" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--esp-m)" }}>
+            <PriceMultiplierSettings />
+            <BulkPriceUpdate />
+          </div>
+        )}
           {activeTab === "products" && <ProductsManager />}
 
         {/* Venta con balanza (ADR-001) */}
