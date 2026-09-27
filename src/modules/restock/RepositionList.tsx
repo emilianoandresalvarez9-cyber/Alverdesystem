@@ -2,6 +2,7 @@ import type { SupabaseAny } from "../../shared/types";
 import { useEffect, useState, useCallback } from "react";
 import { getSupabase } from "../../shared/supabase/client";
 import { Button, GlassCard, Badge, EmptyState } from "../../shared/ui";
+import { preferredSupplier } from "./preferredSupplier";
 import type { MissingItem } from "./types";
 
 interface RepositionListProps {
@@ -23,10 +24,10 @@ export function RepositionList({ refreshTrigger, onResolve }: RepositionListProp
         .from("missing_items")
         .select(`
           id, product_id, reported_by, note, resolved, created_at,
-          product:products(
-            id, name, manufacturer_barcode, base_unit,
+            product:products(
+              id, name, manufacturer_barcode, base_unit,
             supplier_products(
-              is_preferred,
+              is_primary,
               supplier:suppliers(id, name, contact)
             )
           )
@@ -38,11 +39,7 @@ export function RepositionList({ refreshTrigger, onResolve }: RepositionListProp
 
       const mapped: MissingItem[] = (data ?? []).map((row: SupabaseAny) => {
         const prod = row.product;
-        let preferredSupplier = null;
-        if (prod?.supplier_products && prod.supplier_products.length > 0) {
-          const pref = prod.supplier_products.find((sp: SupabaseAny) => sp.is_preferred);
-          preferredSupplier = pref?.supplier ?? prod.supplier_products[0]?.supplier ?? null;
-        }
+        const productSupplier = preferredSupplier(prod?.supplier_products ?? []);
 
         return {
           id: row.id,
@@ -57,7 +54,7 @@ export function RepositionList({ refreshTrigger, onResolve }: RepositionListProp
             manufacturer_barcode: prod.manufacturer_barcode,
             base_unit: prod.base_unit,
           } : undefined,
-          supplier: preferredSupplier,
+          supplier: productSupplier,
         };
       });
 
@@ -86,7 +83,7 @@ export function RepositionList({ refreshTrigger, onResolve }: RepositionListProp
       setItems(prev => prev.filter(i => i.id !== itemId));
       if (onResolve) onResolve();
     } catch (e) {
-      console.log(e instanceof Error ? `Error al resolver: ${e.message}` : "Error al resolver faltante");
+      setError(e instanceof Error ? `No se pudo marcar como resuelto: ${e.message}` : "No se pudo marcar como resuelto.");
     }
   };
 
