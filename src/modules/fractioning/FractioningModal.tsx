@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { Modal, Button, TextField, SelectField, GlassCard, Badge } from "../../shared/ui";
 import { getSupabase } from "../../shared/supabase/client";
+import { loadCatalogSnapshot } from "../../shared/offline/queue";
+import { queueStockOperation, watchStockOperationSync } from "../stock/offlineStock";
 import type { StockLot } from "../stock/types";
 import { calculateFractioning } from "./fractioningLogic";
 
@@ -27,6 +29,8 @@ export function FractioningModal({ originLot, open, onClose, onSuccess }: Fracti
   const [realRemainingQuantity, setRealRemainingQuantity] = useState("0");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [pendingFeedbackId, setPendingFeedbackId] = useState<string | null>(null);
 
   // Cargar presentaciones del mismo producto
   useEffect(() => {
@@ -64,8 +68,21 @@ export function FractioningModal({ originLot, open, onClose, onSuccess }: Fracti
         }
       } catch (err) {
         if (active) {
-          setTargetPresentations([]);
-          setError(err instanceof Error ? `No se pudieron cargar las presentaciones: ${err.message}` : "No se pudieron cargar las presentaciones.");
+          const snapshot = await loadCatalogSnapshot();
+          const product = (snapshot?.rows as Array<{ id: string; presentations: Array<{ id: string; name: string; base_quantity: number; sold_by_weight: boolean }> }> | undefined)
+            ?.find((row) => row.id === originLot.product_id);
+          const cached = product?.presentations
+            .filter((presentation) => !presentation.sold_by_weight && presentation.id !== originLot.presentation_id)
+            .map((presentation) => ({
+              presentation_id: presentation.id,
+              presentation_name: presentation.name,
+              product_id: originLot.product_id,
+              base_quantity: presentation.base_quantity,
+              base_unit: originLot.base_unit,
+            })) ?? [];
+          setTargetPresentations(cached);
+          setError(cached.length ? null : err instanceof Error ? `No se pudieron cargar las presentaciones: ${err.message}` : "No se pudieron cargar las presentaciones.");
+          if (cached[0]) setSelectedPresentationId(cached[0].presentation_id);
         }
       }
     };
@@ -81,8 +98,17 @@ export function FractioningModal({ originLot, open, onClose, onSuccess }: Fracti
       setBagFinished(false);
       setRealRemainingQuantity("0");
       setError(null);
+      setStatusMessage(null);
     }
   }, [open]);
+
+  useEffect(() => {
+    if (!pendingFeedbackId) return;
+    return watchStockOperationSync(pendingFeedbackId, () => {
+      setStatusMessage("Fraccionamiento sincronizado correctamente.");
+      setPendingFeedbackId(null);
+    });
+  }, [pendingFeedbackId]);
 
   const targetPresentation = targetPresentations.find((p) => p.presentation_id === selectedPresentationId);
   const packetsNum = parseInt(packetsToProduce || "0", 10);
@@ -122,21 +148,31 @@ export function FractioningModal({ originLot, open, onClose, onSuccess }: Fracti
     setError(null);
 
     try {
-      const supabase = getSupabase();
-      const { error: rpcErr } = await supabase.rpc('fraction_stock', {
-        p_origin_lot_id: originLot.id,
-        p_target_presentation_id: targetPresentation.presentation_id,
-        p_packets_num: packetsNum,
-        p_grams_needed: calc.gramsNeeded,
-        p_merma: calc.merma,
-        p_new_origin_quantity: calc.newOriginQuantity,
-        p_origin_lot_status: calc.originLotStatus
+      const result = await queueStockOperation({
+        action: "fraction_stock",
+        originLotId: originLot.id,
+        targetPresentationId: targetPresentation.presentation_id,
+        packetsNum,
+        gramsNeeded: calc.gramsNeeded,
+        merma: calc.merma,
+        newOriginQuantity: calc.newOriginQuantity,
+        originLotStatus: calc.originLotStatus,
+        productId: originLot.product_id,
+        productName: originLot.product_name,
+        presentationName: targetPresentation.presentation_name,
+        baseUnit: originLot.base_unit,
+        baseQuantity: targetPresentation.base_quantity,
+        soldByWeight: false,
+        openShelfLifeDays: originLot.open_shelf_life_days,
+        expiryDate: originLot.manufacturer_expiry_date,
       });
 
-      if (rpcErr) throw rpcErr;
-
       onSuccess();
-      onClose();
+      if (result.synchronized) onClose();
+      else {
+        setPendingFeedbackId(result.localId);
+        setStatusMessage(`Fraccionamiento guardado en este dispositivo; queda pendiente de sincronización.${result.failureMessage ? ` Motivo: ${result.failureMessage}` : ""}`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al registrar el fraccionamiento.");
     } finally {
@@ -159,9 +195,9 @@ export function FractioningModal({ originLot, open, onClose, onSuccess }: Fracti
           <Button
             variant="primario"
             onClick={handleSubmit}
-            disabled={loading || !calc || overCapacity || emptyButMarkedOpen || invalidRealRemaining || targetPresentations.length === 0}
+            disabled={loading || Boolean(statusMessage) || !calc || overCapacity || emptyButMarkedOpen || invalidRealRemaining || targetPresentations.length === 0}
           >
-            {loading ? "Registrando..." : "Confirmar Fraccionamiento"}
+            {loading ? "Guardando..." : statusMessage ? "Fraccionamiento guardado" : "Confirmar Fraccionamiento"}
           </Button>
         </>
       }
@@ -180,6 +216,7 @@ export function FractioningModal({ originLot, open, onClose, onSuccess }: Fracti
         {error && (
           <p role="alert" style={{ color: "var(--color-error)", margin: 0 }}>{error}</p>
         )}
+        {statusMessage && <p role="status" style={{ color: "var(--color-aviso)", margin: 0 }}>{statusMessage}</p>}
 
         {targetPresentations.length === 0 ? (
           <GlassCard style={{ padding: "var(--esp-m)" }}>
@@ -279,4 +316,5 @@ export function FractioningModal({ originLot, open, onClose, onSuccess }: Fracti
     </Modal>
   );
 }
+
 

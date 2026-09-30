@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Modal, Button, TextField, SelectField } from "../../shared/ui";
-import { getSupabase } from "../../shared/supabase/client";
+import { queueStockOperation, watchStockOperationSync } from "./offlineStock";
 import type { StockLot } from "./types";
 
 interface StockAdjustmentModalProps {
@@ -22,6 +22,26 @@ export function StockAdjustmentModal({
   const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [pendingFeedbackId, setPendingFeedbackId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setKind("waste");
+    setAdjustmentDirection("remove");
+    setQuantity("");
+    setReason("");
+    setError(null);
+    setStatusMessage(null);
+  }, [open, lot?.id]);
+
+  useEffect(() => {
+    if (!pendingFeedbackId) return;
+    return watchStockOperationSync(pendingFeedbackId, () => {
+      setStatusMessage("Movimiento sincronizado correctamente.");
+      setPendingFeedbackId(null);
+    });
+  }, [pendingFeedbackId]);
 
   if (!lot) return null;
 
@@ -44,31 +64,25 @@ export function StockAdjustmentModal({
 
     setLoading(true);
     setError(null);
+    setStatusMessage(null);
 
     try {
-      const supabase = getSupabase();
-      const { data: userData } = await supabase.auth.getUser();
-      const userId = userData.user?.id;
-      if (!userId) throw new Error("Sesión requerida");
-
       const signedQuantity = kind === "adjustment" && adjustmentDirection === "add" ? qty : -qty;
-      const newLotQuantity = Number(Math.max(0, lot.current_quantity + signedQuantity).toFixed(3));
-      const shouldClose = newLotQuantity <= 0.0001;
-
-      const { error: rpcErr } = await supabase.rpc('adjust_stock', {
-        p_lot_id: lot.id,
-        p_product_id: lot.product_id,
-        p_kind: kind,
-        p_quantity: signedQuantity,
-        p_reason: reason.trim(),
-        p_new_lot_quantity: newLotQuantity,
-        p_should_close_lot: shouldClose
+      const result = await queueStockOperation({
+        action: "adjust_stock",
+        lotId: lot.id,
+        productId: lot.product_id,
+        movementKind: kind,
+        quantity: signedQuantity,
+        reason: reason.trim(),
       });
 
-      if (rpcErr) throw rpcErr;
-
       onSuccess();
-      onClose();
+      if (result.synchronized) onClose();
+      else {
+        setPendingFeedbackId(result.localId);
+        setStatusMessage(`Guardado en este dispositivo; queda pendiente de sincronización.${result.failureMessage ? ` Motivo: ${result.failureMessage}` : ""}`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al registrar el movimiento.");
     } finally {
@@ -86,8 +100,8 @@ export function StockAdjustmentModal({
           <Button variant="fantasma" onClick={onClose} disabled={loading}>
             Cancelar
           </Button>
-          <Button variant="peligro" onClick={handleSubmit} disabled={loading || !quantity || !reason.trim()}>
-            {loading ? "Registrando..." : "Confirmar Movimiento"}
+          <Button variant="peligro" onClick={handleSubmit} disabled={loading || Boolean(statusMessage) || !quantity || !reason.trim()}>
+            {loading ? "Guardando..." : statusMessage ? "Movimiento guardado" : "Confirmar Movimiento"}
           </Button>
         </>
       }
@@ -105,6 +119,7 @@ export function StockAdjustmentModal({
             {error}
           </p>
         )}
+        {statusMessage && <p role="status" style={{ color: "var(--color-aviso)", margin: 0 }}>{statusMessage}</p>}
 
         <SelectField
           label="Tipo de movimiento (RF-57)"
@@ -148,4 +163,5 @@ export function StockAdjustmentModal({
     </Modal>
   );
 }
+
 

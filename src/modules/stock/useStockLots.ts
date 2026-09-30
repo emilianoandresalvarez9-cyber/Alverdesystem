@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { getSupabase } from "../../shared/supabase/client";
+import { loadStockLotsSnapshot, pendingOperations, saveStockLotsSnapshot, subscribeToQueueChanges } from "../../shared/offline/queue";
 import { getDaysUntilExpiry, evaluateExpiryStatus } from "./expiry";
+import { queueStockOperation, withPendingStockOperations } from "./offlineStock";
 import type { StockLot, StockLotFilters, LotExpiryStatus } from "./types";
 
 interface EmployeeStockLotRow {
@@ -94,9 +96,18 @@ export function useStockLots() {
         };
       });
 
-      setLots(normalized);
+      await saveStockLotsSnapshot(normalized);
+      const pending = await pendingOperations();
+      setLots(withPendingStockOperations(normalized, pending));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error al cargar los lotes.");
+      const snapshot = await loadStockLotsSnapshot();
+      if (snapshot) {
+        const pending = await pendingOperations();
+        setLots(withPendingStockOperations(snapshot.rows as StockLot[], pending));
+        setError("Sin conexión: se muestran los últimos lotes guardados y las operaciones pendientes de este dispositivo.");
+      } else {
+        setError(e instanceof Error ? e.message : "Error al cargar los lotes.");
+      }
     } finally {
       setLoading(false);
     }
@@ -105,6 +116,8 @@ export function useStockLots() {
   useEffect(() => {
     fetchLots();
   }, [fetchLots]);
+
+  useEffect(() => subscribeToQueueChanges(() => { void fetchLots(); }), [fetchLots]);
 
   const hasActiveOpenBag = useCallback((productId: string) => {
     return lots.some(
@@ -115,10 +128,7 @@ export function useStockLots() {
   // RF-08 / RF-11: Abrir lote (registra opened_at)
   const markLotOpened = async (lotId: string) => {
     try {
-      const supabase = getSupabase();
-      const { error: err } = await supabase.rpc("open_stock_lot", { p_lot_id: lotId });
-
-      if (err) throw err;
+      await queueStockOperation({ action: "open_lot", lotId });
       await fetchLots();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Error al abrir el lote.";
@@ -209,3 +219,4 @@ export function useStockLots() {
     hasActiveOpenBag,
   };
 }
+

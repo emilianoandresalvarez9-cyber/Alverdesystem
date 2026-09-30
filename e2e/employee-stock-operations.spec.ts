@@ -26,7 +26,14 @@ test("Empleado puede ingresar, fraccionar y ajustar stock desde Stock", async ({
   await page.getByLabel("Dirección del ajuste").selectOption("add");
   await page.getByLabel("Cantidad a agregar (gram)").fill("25");
   await page.getByLabel("Motivo obligatorio").fill("Conteo físico E2E");
+  await page.context().setOffline(true);
   await page.getByRole("button", { name: "Confirmar Movimiento" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Guardado en este dispositivo" })).toContainText("pendiente de sincronización");
+  await expect(page.locator(".sync-status")).toContainText("1 operación pendiente");
+  await expect(sourceLot).toContainText("825 / 1000 gram");
+  await page.getByRole("button", { name: "Cancelar" }).click();
+  await page.context().setOffline(false);
+  await expect(page.locator(".sync-status")).toContainText("0 operaciones pendientes", { timeout: 15000 });
   await expect(sourceLot).toContainText("825 / 1000 gram");
 
   await page.getByLabel("Escanear código de barras").fill("7790000000008");
@@ -34,5 +41,6 @@ test("Empleado puede ingresar, fraccionar y ajustar stock desde Stock", async ({
   await expect(page.getByText("Lenteja E2E", { exact: false }).last()).toBeVisible();
   await page.getByLabel("Cantidad a ingresar").fill("2");
   await page.getByRole("button", { name: "Ingresar Lote" }).click();
-  await expect(page.getByRole("status")).toContainText("Lote ingresado exitosamente");
+  await expect(page.getByRole("status").filter({ hasText: "Lote ingresado" })).toContainText("Lote ingresado:");
 });
+
