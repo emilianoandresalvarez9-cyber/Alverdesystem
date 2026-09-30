@@ -135,6 +135,7 @@ export async function deviceId(): Promise<string> {
 }
 
 export async function enqueueOperation<TPayload>(input: NewQueuedOperation<TPayload>): Promise<QueuedOperation<TPayload>> {
+  console.info("[offline queue] buscando ID de dispositivo");
   const operation: QueuedOperation<TPayload> = {
     ...input,
     localId: uuid(),
@@ -142,7 +143,9 @@ export async function enqueueOperation<TPayload>(input: NewQueuedOperation<TPayl
     createdAt: new Date().toISOString()
   };
 
+  console.info("[offline queue] escribiendo operación en IndexedDB");
   await putRecord(OPERATION_STORE, operation);
+  console.info("[offline queue] escritura IndexedDB confirmada");
   emitQueueChange();
   // Fire-and-forget en produccion, pero trackeado para que resetOfflineStorageForTests()
   // pueda hacer await antes de cerrar la DB.

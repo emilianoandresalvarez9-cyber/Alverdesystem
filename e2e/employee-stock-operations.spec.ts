@@ -1,6 +1,8 @@
 import { test, expect } from "@playwright/test";
 
 test("Empleado puede ingresar, fraccionar y ajustar stock desde Stock", async ({ page }) => {
+  page.on("console", (message) => console.log(`[browser:${message.type()}] ${message.text()}`));
+  page.on("pageerror", (error) => console.log(`[browser:error] ${error.message}`));
   const testEmail = process.env.TEST_EMPLOYEE_EMAIL || "empleado@alverde.local";
   const testPass = process.env.TEST_EMPLOYEE_PASSWORD || "empleado123";
 

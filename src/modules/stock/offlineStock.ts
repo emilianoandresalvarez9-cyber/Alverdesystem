@@ -14,10 +14,12 @@ export async function queueStockOperation(payload: StockOfflinePayload, userId: 
 }> {
   if (!userId) throw new Error("Sesión requerida para registrar stock.");
 
+  console.info("[offline stock] antes de encolar");
   const operation = await enqueueOperation({
     kind: "stock_movement",
     payload: { ...payload, userId },
   });
+  console.info("[offline stock] encolado", operation.localId);
 
   if (navigator.onLine) {
     // Do not make the UI wait for a network request after the durable local write.
@@ -27,6 +29,7 @@ export async function queueStockOperation(payload: StockOfflinePayload, userId: 
 
   // The IndexedDB transaction is the durable acceptance point. Avoid a second
   // read here: queue listeners report whether the background sync later succeeds.
+  console.info("[offline stock] retorno del guardado local");
   return { localId: operation.localId };
 }
 
