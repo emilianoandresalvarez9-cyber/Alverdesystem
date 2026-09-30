@@ -1,6 +1,9 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useCurrentProfile } from "../../shared/auth/AuthGate";
 import { getSupabase } from "../../shared/supabase/client";
+import { loadStockLotsSnapshot, pendingOperations, saveStockLotsSnapshot, subscribeToQueueChanges } from "../../shared/offline/queue";
 import { getDaysUntilExpiry, evaluateExpiryStatus } from "./expiry";
+import { queueStockOperation, withPendingStockOperations } from "./offlineStock";
 import type { StockLot, StockLotFilters, LotExpiryStatus } from "./types";
 
 interface EmployeeStockLotRow {
@@ -34,8 +37,10 @@ const DEFAULT_FILTERS: StockLotFilters = {
 };
 
 export function useStockLots() {
+  const profile = useCurrentProfile();
   const [lots, setLots] = useState<StockLot[]>([]);
   const [loading, setLoading] = useState(true);
+  const hasLoadedLots = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFiltersState] = useState<StockLotFilters>(DEFAULT_FILTERS);
 
@@ -44,8 +49,26 @@ export function useStockLots() {
   }, []);
 
   const fetchLots = useCallback(async () => {
-    setLoading(true);
+    if (!hasLoadedLots.current) setLoading(true);
     setError(null);
+
+    if (!navigator.onLine) {
+      try {
+        const [snapshot, pending] = await Promise.all([loadStockLotsSnapshot(), pendingOperations()]);
+        if (snapshot) {
+          setLots(withPendingStockOperations(snapshot.rows as StockLot[], pending));
+          setError("Sin conexión: se muestran los últimos lotes guardados y las operaciones pendientes de este dispositivo.");
+        } else {
+          setError("Sin conexión y todavía no hay lotes guardados en este dispositivo.");
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "No se pudieron leer los lotes guardados en este dispositivo.");
+      } finally {
+        hasLoadedLots.current = true;
+        setLoading(false);
+      }
+      return;
+    }
 
     try {
       const supabase = getSupabase();
@@ -94,10 +117,20 @@ export function useStockLots() {
         };
       });
 
-      setLots(normalized);
+      await saveStockLotsSnapshot(normalized);
+      const pending = await pendingOperations();
+      setLots(withPendingStockOperations(normalized, pending));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error al cargar los lotes.");
+      const snapshot = await loadStockLotsSnapshot();
+      if (snapshot) {
+        const pending = await pendingOperations();
+        setLots(withPendingStockOperations(snapshot.rows as StockLot[], pending));
+        setError("Sin conexión: se muestran los últimos lotes guardados y las operaciones pendientes de este dispositivo.");
+      } else {
+        setError(e instanceof Error ? e.message : "Error al cargar los lotes.");
+      }
     } finally {
+      hasLoadedLots.current = true;
       setLoading(false);
     }
   }, []);
@@ -105,6 +138,8 @@ export function useStockLots() {
   useEffect(() => {
     fetchLots();
   }, [fetchLots]);
+
+  useEffect(() => subscribeToQueueChanges(() => { void fetchLots(); }), [fetchLots]);
 
   const hasActiveOpenBag = useCallback((productId: string) => {
     return lots.some(
@@ -115,10 +150,7 @@ export function useStockLots() {
   // RF-08 / RF-11: Abrir lote (registra opened_at)
   const markLotOpened = async (lotId: string) => {
     try {
-      const supabase = getSupabase();
-      const { error: err } = await supabase.rpc("open_stock_lot", { p_lot_id: lotId });
-
-      if (err) throw err;
+      await queueStockOperation({ action: "open_lot", lotId }, profile.id);
       await fetchLots();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Error al abrir el lote.";
@@ -209,3 +241,4 @@ export function useStockLots() {
     hasActiveOpenBag,
   };
 }
+

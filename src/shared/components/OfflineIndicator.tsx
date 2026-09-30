@@ -23,7 +23,8 @@ export function OfflineIndicator() {
   return (
     <p className={online ? "sync-status online" : "sync-status offline"} role="status">
       <span aria-hidden="true">●</span>
-      {online ? "Conectado" : "Sin conexión"} · {pending} operación{pending === 1 ? "" : "es"} pendiente{pending === 1 ? "" : "s"}
+      {online ? "Conectado" : "Sin conexión"} · {pending === 1 ? "1 operación pendiente" : `${pending} operaciones pendientes`}
     </p>
   );
 }
+

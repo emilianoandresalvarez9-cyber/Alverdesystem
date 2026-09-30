@@ -60,7 +60,8 @@ export function StockLotsTable({
           <tbody>
             {lots.map((lot) => {
               const isClosed = lot.status === "closed";
-              const canOpen = !isClosed && !lot.opened_at;
+              const isPending = lot.id.startsWith("pending:");
+              const canOpen = !isPending && !isClosed && !lot.opened_at;
               const hasActiveBag = hasActiveOpenBag ? hasActiveOpenBag(lot.product_id) : false;
               
               return (
@@ -70,6 +71,7 @@ export function StockLotsTable({
                     <div style={{ fontSize: "var(--texto-xs)", color: "var(--color-tinta-suave)" }}>
                       {lot.presentation_name}
                       {lot.supplier_name && ` • Prov: ${lot.supplier_name}`}
+                      {isPending && <div><Badge tone="aviso">Pendiente de sincronización</Badge></div>}
                     </div>
                   </td>
 
@@ -129,7 +131,7 @@ export function StockLotsTable({
 
                   <td style={{ textAlign: "right" }}>
                     <div style={{ display: "flex", gap: "var(--esp-xs)", justifyContent: "flex-end" }}>
-                      {enableFractioning && lot.sold_by_weight && !isClosed && (
+                      {enableFractioning && !isPending && lot.sold_by_weight && !isClosed && (
                         <Button
                           variant="primario"
                           onClick={() => onFraction && onFraction(lot)}
@@ -137,7 +139,7 @@ export function StockLotsTable({
                           Fraccionar
                         </Button>
                       )}
-                      {!isClosed && (
+                      {!isPending && !isClosed && (
                         <Button
                           variant="fantasma"
                           onClick={() => setSelectedLotForAdjustment(lot)}
@@ -163,3 +165,4 @@ export function StockLotsTable({
     </>
   );
 }
+

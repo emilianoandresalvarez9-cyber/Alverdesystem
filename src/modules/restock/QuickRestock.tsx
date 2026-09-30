@@ -1,7 +1,11 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { useCurrentProfile } from "../../shared/auth/AuthGate";
 import { getSupabase } from "../../shared/supabase/client";
+import { loadCatalogSnapshot } from "../../shared/offline/queue";
+import { queueStockOperation, watchStockOperationSync } from "../stock/offlineStock";
 import { Button, TextField, GlassCard, Badge } from "../../shared/ui";
 import type { PresentationLookupResult } from "./types";
+import type { CatalogProduct } from "../catalog/types";
 
 interface QuickRestockProps {
   onSuccess?: () => void;
@@ -16,9 +20,37 @@ interface EmployeeCatalogRow {
   sale_price: number;
   internal_barcode: string | null;
   manufacturer_barcode: string | null;
+  base_unit: "gram" | "millilitre" | "unit";
+  sold_by_weight: boolean;
+  open_shelf_life_days: number | null;
+}
+
+function findCachedPresentation(rows: unknown[], code: string): PresentationLookupResult | null {
+  const products = rows as CatalogProduct[];
+  const entries = products.flatMap((product) => product.presentations.map((presentation) => ({ product, presentation })));
+  const internal = entries.find(({ presentation }) => presentation.internal_barcode === code);
+  const manufacturer = entries
+    .filter(({ product }) => product.manufacturer_barcode === code)
+    .sort((left, right) => left.presentation.base_quantity - right.presentation.base_quantity)[0];
+  const match = internal ?? manufacturer;
+  if (!match) return null;
+  return {
+    presentation_id: match.presentation.id,
+    presentation_name: match.presentation.name,
+    product_id: match.product.id,
+    product_name: match.product.name,
+    base_quantity: match.presentation.base_quantity,
+    sale_price: match.presentation.sale_price,
+    internal_barcode: match.presentation.internal_barcode,
+    manufacturer_barcode: match.product.manufacturer_barcode,
+    base_unit: match.product.base_unit,
+    sold_by_weight: match.presentation.sold_by_weight,
+    open_shelf_life_days: match.product.open_shelf_life_days,
+  };
 }
 
 export function QuickRestock({ onSuccess }: QuickRestockProps) {
+  const profile = useCurrentProfile();
   const [barcode, setBarcode] = useState("");
   const [searching, setSearching] = useState(false);
   const [foundPresentation, setFoundPresentation] = useState<PresentationLookupResult | null>(null);
@@ -27,6 +59,15 @@ export function QuickRestock({ onSuccess }: QuickRestockProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [pendingFeedbackId, setPendingFeedbackId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!pendingFeedbackId) return;
+    return watchStockOperationSync(pendingFeedbackId, () => {
+      setSuccessMsg("Ingreso sincronizado correctamente.");
+      setPendingFeedbackId(null);
+    });
+  }, [pendingFeedbackId]);
 
   const handleSearch = async (e?: FormEvent) => {
     if (e) e.preventDefault();
@@ -45,7 +86,7 @@ export function QuickRestock({ onSuccess }: QuickRestockProps) {
       // presentaciones queda restringida para Empleado por RLS.
       const { data: internalMatches, error: internalErr } = await supabase
         .from("employee_catalog")
-        .select("presentation_id, presentation_name, product_id, product_name, base_quantity, sale_price, internal_barcode, manufacturer_barcode")
+        .select("presentation_id, presentation_name, product_id, product_name, base_quantity, sale_price, internal_barcode, manufacturer_barcode, base_unit, sold_by_weight, open_shelf_life_days")
         .eq("internal_barcode", code)
         .limit(1);
 
@@ -62,7 +103,7 @@ export function QuickRestock({ onSuccess }: QuickRestockProps) {
       // presentaciones; usar la unidad de menor contenido como opción rápida.
       const { data: manufacturerMatches, error: manufacturerErr } = await supabase
         .from("employee_catalog")
-        .select("presentation_id, presentation_name, product_id, product_name, base_quantity, sale_price, internal_barcode, manufacturer_barcode")
+        .select("presentation_id, presentation_name, product_id, product_name, base_quantity, sale_price, internal_barcode, manufacturer_barcode, base_unit, sold_by_weight, open_shelf_life_days")
         .eq("manufacturer_barcode", code)
         .order("base_quantity", { ascending: true })
         .limit(1);
@@ -78,7 +119,14 @@ export function QuickRestock({ onSuccess }: QuickRestockProps) {
 
       setError(`No se encontró ningún producto activo con el código: ${code}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al buscar producto");
+      const snapshot = await loadCatalogSnapshot();
+      const cached = snapshot ? findCachedPresentation(snapshot.rows, code) : null;
+      if (cached) {
+        setFoundPresentation(cached);
+        setQuantity("1");
+      } else {
+        setError(err instanceof Error ? `${err.message} No hay un catálogo local que incluya ese código.` : "Error al buscar producto");
+      }
     } finally {
       setSearching(false);
     }
@@ -97,17 +145,23 @@ export function QuickRestock({ onSuccess }: QuickRestockProps) {
     setSuccessMsg(null);
 
     try {
-      const supabase = getSupabase();
-      const { error: rpcErr } = await supabase.rpc('quick_restock', {
-        p_presentation_id: foundPresentation.presentation_id,
-        p_product_id: foundPresentation.product_id,
-        p_quantity: qty,
-        p_expiry_date: expiryDate || null
-      });
+      const result = await queueStockOperation({
+        action: "quick_restock",
+        presentationId: foundPresentation.presentation_id,
+        targetPresentationId: foundPresentation.presentation_id,
+        productId: foundPresentation.product_id,
+        quantity: qty,
+        expiryDate: expiryDate || null,
+        productName: foundPresentation.product_name,
+        presentationName: foundPresentation.presentation_name,
+        baseUnit: foundPresentation.base_unit ?? "unit",
+        baseQuantity: foundPresentation.base_quantity,
+        soldByWeight: foundPresentation.sold_by_weight ?? false,
+        openShelfLifeDays: foundPresentation.open_shelf_life_days ?? null,
+      }, profile.id);
 
-      if (rpcErr) throw rpcErr;
-
-      setSuccessMsg(`Lote ingresado exitosamente: ${qty} unidad(es) de ${foundPresentation.product_name} (${foundPresentation.presentation_name})`);
+      setSuccessMsg(`Ingreso guardado en este dispositivo. Se sincronizará al reconectar.`);
+      setPendingFeedbackId(result.localId);
       setFoundPresentation(null);
       setBarcode("");
       setQuantity("");
@@ -174,5 +228,6 @@ export function QuickRestock({ onSuccess }: QuickRestockProps) {
     </GlassCard>
   );
 }
+
 
 

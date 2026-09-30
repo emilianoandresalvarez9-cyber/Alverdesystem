@@ -212,6 +212,15 @@ export async function loadCatalogSnapshot(): Promise<CatalogSnapshot | undefined
   return record && { refreshedAt: record.refreshedAt, rows: record.rows };
 }
 
+/** Última proyección de lotes sin costos; permite operar sobre una copia offline. */
+export async function saveStockLotsSnapshot(rows: unknown[]): Promise<void> {
+  await writeSetting("employee-stock-lots", { refreshedAt: new Date().toISOString(), rows });
+}
+
+export async function loadStockLotsSnapshot(): Promise<CatalogSnapshot | undefined> {
+  return readSetting<CatalogSnapshot>("employee-stock-lots");
+}
+
 export function subscribeToQueueChanges(listener: () => void): () => void {
   queueEvents.addEventListener("change", listener);
   return () => queueEvents.removeEventListener("change", listener);
@@ -235,3 +244,4 @@ export async function resetOfflineStorageForTests(): Promise<void> {
     request.onblocked = () => reject(new Error("IndexedDB quedo bloqueada durante la limpieza."));
   });
 }
+

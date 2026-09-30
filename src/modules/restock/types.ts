@@ -31,4 +31,8 @@ export interface PresentationLookupResult {
   sale_price: number;
   internal_barcode: string | null;
   manufacturer_barcode: string | null;
+  base_unit?: "gram" | "millilitre" | "unit";
+  sold_by_weight?: boolean;
+  open_shelf_life_days?: number | null;
 }
+
