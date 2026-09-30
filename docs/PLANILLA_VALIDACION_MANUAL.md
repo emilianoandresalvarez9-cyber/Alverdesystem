@@ -1,46 +1,71 @@
-# Planilla de Validación Manual QA (Fase 4)
+# Planilla de validación manual QA
 
-Este documento contiene los escenarios físicos y end-to-end requeridos por el equipo de QA (T-03) que no pueden ser verificados únicamente mediante CI o unit tests.
+**Estado al 30/09/2026: pendiente de ejecución.** Dejar las casillas sin marcar hasta observar y registrar el resultado. La suite automática no sustituye esta planilla.
 
-### Preparación del Entorno
-- [ ] Ejecutar el entorno local conectando tanto el frontend como el backend (Supabase local).
-- [ ] Disponer de un usuario Administrador y un usuario Empleado (creados desde auth/seed).
+## Datos de la ejecución
 
-### Escenarios de Prueba
+- Entorno / URL (sin secretos): ______________________________
+- Commit desplegado: _________________________________________
+- Supabase (local/staging/producción): _______________________
+- Fecha y hora: ______________________________________________
+- Dispositivo / sistema / navegador: __________________________
+- Usuario QA y roles usados: __________________________________
 
-#### Autenticación y Autorización
-- [ ] Iniciar sesión como `Administrador`.
-- [ ] Iniciar sesión como `Empleado` (en pestaña incógnito o sesión separada).
-- [ ] Verificar que el empleado NO tenga acceso a costos/margen de ganancia en el catálogo (RNF-04).
-- [ ] Verificar que el empleado no pueda exportar el CSV de productos con el precio de compra visible (T-14).
+## Preparación
 
-#### Ventas y Catálogo
-- [ ] Buscar y escanear (ingreso por input) un código de barras de un producto existente.
-- [ ] Registrar venta normal pagando con efectivo.
-- [ ] Registrar venta por peso (báscula manual, T-02) ingresando el gramaje; validar cálculo de precio final.
-- [ ] Registrar una venta "fiada" a un cliente existente. Verificar que el monto impacte en el saldo de su cuenta corriente.
-- [ ] Intentar enviar cantidad = 0 o importe negativo y comprobar que el sistema lo prohíbe.
+- [ ] Usar entorno aislado con datos de prueba; no ejecutar escenarios destructivos en datos reales.
+- [ ] Registrar versión del frontend y confirmar conexión con Supabase.
+- [ ] Crear una cuenta Administrador y una Empleado.
+- [ ] Preparar productos, presentaciones, lotes, stock y cliente de prueba.
+- [ ] Confirmar que se puede inspeccionar la base y la cola local sin capturar secretos.
 
-#### Resiliencia y Modo Offline (T-03)
-- [ ] Simular corte de red (apagar Wi-Fi o tildar `Offline` en DevTools).
-- [ ] Registrar 3 ventas en modo offline.
-- [ ] Apagar abruptamente la pestaña o el servidor local.
-- [ ] Reabrir la aplicación (sin red).
-- [ ] Comprobar que las 3 ventas pendientes siguen en la cola de sincronización.
-- [ ] Restaurar la red. Comprobar que la cola se vacía progresivamente y las ventas impactan la DB.
-- [ ] Comprobar idempotencia: intentar enviar dos veces el mismo request offline, la base de datos debe ignorar el duplicado.
+## Autenticación, permisos y catálogo
 
-#### Casos Límite y Conflictos Offline
-- [ ] **Fraude de Precio (P0-03):** Interceptar el payload offline (usando Burp Suite o modificando el IndexedDB a mano) bajando el `unitPrice` de un producto a la mitad. Sincronizar.
-- [ ] Verificar que la venta impacta (para no frenar la caja), pero que el sistema arroja una alerta automática de diferencia de precios en la tabla `stock_warnings`.
-- [ ] **Conflicto Concurrente:** Dos cajas en modo offline venden la última unidad del mismo producto. Al sincronizar, la base de datos permite stock negativo pero levanta alerta (RF-38).
+- [ ] Inicio/cierre de sesión correcto para Administrador.
+- [ ] Inicio/cierre de sesión correcto para Empleado en sesión independiente.
+- [ ] El empleado no recibe costos, márgenes ni multiplicadores desde la API/vistas ni en almacenamiento local.
+- [ ] Empleado consulta y filtra productos desde móvil.
+- [ ] Administrador crea/edita producto, presentación, marca/rubro/etiqueta y precio.
+- [ ] Exportaciones respetan permisos y el conjunto filtrado.
+- Resultado / defecto / evidencia: ____________________________________________
 
-#### Backups y Restauración
-- [ ] Cierre de caja. Descargar archivo de backup JSON local.
-- [ ] Utilizar la vista de Configuración -> Respaldos para "Restaurar" el JSON guardado previamente.
-- [ ] Comprobar que los lotes, precios y operaciones offline pendientes en ese dispositivo fueron recuperados.
+## Stock, caja, ventas y fiado
 
-### Aprobación Final
-- **Firma QA Independiente:** ____________
-- **Fecha:** ____________
-- **Veredicto:** [APROBADO / RECHAZADO]
+- [ ] Escaneo del código con lector configurado como teclado.
+- [ ] Venta en efectivo y otros medios permitidos; importes persistidos correctamente.
+- [ ] Venta por peso manual: peso y precio calculados correctamente.
+- [ ] Descuento del lote esperado y actualización del stock.
+- [ ] Operación de fraccionamiento/granel y merma esperada.
+- [ ] Cantidades o precios inválidos se rechazan.
+- [ ] Fiado y pago actualizan el saldo desde movimientos sin duplicar.
+- [ ] Empleado no puede anular venta ni ajustar/perdonar deuda.
+- Resultado / defecto / evidencia: ____________________________________________
+
+## Offline, recuperación y conflictos
+
+- [ ] Abrir la app desde localhost o HTTPS y esperar que el Service Worker esté activo.
+- [ ] Desconectar red, registrar operaciones admitidas y verificar persistencia en cola local.
+- [ ] Cerrar abruptamente el navegador/dispositivo, reabrir sin red y comprobar recuperación de operaciones.
+- [ ] Reconectar y verificar sincronización, resultado en base y cola sin duplicados.
+- [ ] Reenviar un mismo identificador local y verificar idempotencia.
+- [ ] Probar dos puestos sobre stock limitado y confirmar el resultado/alerta previsto.
+- [ ] Revisar el respaldo secundario autorizado por el navegador y recuperación del permiso.
+- Resultado / defecto / evidencia: ____________________________________________
+
+## Respaldo, restauración y operación
+
+- [ ] Generar backup/exportación y confirmar contenido y permisos.
+- [ ] Restaurar en una base/dispositivo de prueba limpio.
+- [ ] Comparar productos, lotes, movimientos, clientes y operaciones pendientes antes/después.
+- [ ] Documentar despliegue, configuración de entorno y procedimiento de recuperación.
+- [ ] Confirmar con la dueña continuidad del negocio ante corte de energía (la app requiere equipo alimentado).
+- Resultado / defecto / evidencia: ____________________________________________
+
+## Cierre QA
+
+- Defectos / enlaces a issues: _______________________________________________
+- Reejecución y commit: ______________________________________________________
+- Firma QA independiente: _______________________ Fecha: ____________________
+- Veredicto: [ ] Aprobado para el alcance comprobado  [ ] Rechazado  [ ] Bloqueado
+
+El veredicto no debe generalizarse a escenarios o requisitos que no se hayan ejecutado.
