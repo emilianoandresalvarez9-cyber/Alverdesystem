@@ -54,7 +54,7 @@ SELECT ok((SELECT bool_and(NOT (to_jsonb(lot) ? 'purchase_cost'))
 SELECT ok((SELECT bool_and(to_jsonb(lot) ? 'created_at')
   FROM public.employee_stock_lots lot),
   'La proyección incluye created_at para ordenar los lotes');
-SELECT ok(NOT (to_jsonb(catalog_row) ? 'price_multiplier')
+SELECT ok((SELECT NOT (to_jsonb(catalog_row) ? 'price_multiplier')
   FROM public.employee_catalog catalog_row
   WHERE presentation_id = '00000000-0000-0000-0000-00000000e111'),
   'El catálogo operativo no incluye price_multiplier');
