@@ -2,7 +2,7 @@
 
 **Corte:** 30 de septiembre de 2026  
 **Rama y commit revisados:** `main`, `4b551c6368b4f469e4615717fa0dd4a7620039e5`  
-**Estimación:** **75% de implementación**. **No aprobado para producción**: queda validación manual y operativa.
+**Estimación:** **77% de implementación**. **No aprobado para producción**: queda validación manual y operativa.
 
 ## Cómo leer el porcentaje
 
@@ -13,7 +13,7 @@ Es una estimación de avance del alcance (no de calidad ni de líneas de código
 | Funcionalidades previstas | 55% | 85% | Módulos de interfaz, lógica y migraciones presentes para catálogo, inventario, ventas, offline, clientes/fiado, administración y reportes. La presencia en el repo no demuestra aceptación de cada RF. |
 | Controles técnicos automatizados | 25% | 90% | El workflow de CI del commit revisado terminó en `success`; configura guard, tipos, tests, build, base de datos y Playwright. |
 | Validación operativa y liberación | 20% | 40% | Existe plan de despliegue e inicio local; la planilla manual está sin firmar, no hay evidencia de validación física ni de restauración real. |
-| **Total ponderado** | **100%** | **74.75% ≈ 75%** | Estimación redondeada. |
+| **Total ponderado** | **100%** | **74.77% ≈ 77%** | Estimación redondeada. |
 
 La puntuación es orientativa y debe reducirse si la comprobación requisito por requisito encuentra faltantes. No mide uso, adopción ni éxito comercial.
 
