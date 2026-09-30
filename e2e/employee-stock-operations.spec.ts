@@ -42,6 +42,7 @@ test("Empleado puede ingresar, fraccionar y ajustar stock desde Stock", async ({
   await expect(page.getByText("Lenteja E2E", { exact: false }).last()).toBeVisible();
   await page.getByLabel("Cantidad a ingresar").fill("2");
   await page.getByRole("button", { name: "Ingresar Lote" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Lote ingresado" })).toContainText("Lote ingresado:");
+  await expect(page.getByRole("status").filter({ hasText: "Ingreso sincronizado correctamente" }))
+    .toContainText("Ingreso sincronizado correctamente");
 });
 
