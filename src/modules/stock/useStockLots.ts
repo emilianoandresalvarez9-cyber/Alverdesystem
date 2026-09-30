@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { useCurrentProfile } from "../../shared/auth/AuthGate";
 import { getSupabase } from "../../shared/supabase/client";
 import { loadStockLotsSnapshot, pendingOperations, saveStockLotsSnapshot, subscribeToQueueChanges } from "../../shared/offline/queue";
 import { getDaysUntilExpiry, evaluateExpiryStatus } from "./expiry";
@@ -36,6 +37,7 @@ const DEFAULT_FILTERS: StockLotFilters = {
 };
 
 export function useStockLots() {
+  const profile = useCurrentProfile();
   const [lots, setLots] = useState<StockLot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -128,7 +130,7 @@ export function useStockLots() {
   // RF-08 / RF-11: Abrir lote (registra opened_at)
   const markLotOpened = async (lotId: string) => {
     try {
-      await queueStockOperation({ action: "open_lot", lotId });
+      await queueStockOperation({ action: "open_lot", lotId }, profile.id);
       await fetchLots();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Error al abrir el lote.";

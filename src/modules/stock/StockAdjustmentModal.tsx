@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useCurrentProfile } from "../../shared/auth/AuthGate";
 import { Modal, Button, TextField, SelectField } from "../../shared/ui";
 import { queueStockOperation, watchStockOperationSync } from "./offlineStock";
 import type { StockLot } from "./types";
@@ -16,6 +17,7 @@ export function StockAdjustmentModal({
   onClose,
   onSuccess,
 }: StockAdjustmentModalProps) {
+  const profile = useCurrentProfile();
   const [kind, setKind] = useState<"waste" | "discard" | "adjustment">("waste");
   const [adjustmentDirection, setAdjustmentDirection] = useState<"add" | "remove">("remove");
   const [quantity, setQuantity] = useState("");
@@ -76,7 +78,7 @@ export function StockAdjustmentModal({
         movementKind: kind,
         quantity: signedQuantity,
         reason: reason.trim(),
-      });
+      }, profile.id);
 
       onSuccess();
       if (result.synchronized) onClose();

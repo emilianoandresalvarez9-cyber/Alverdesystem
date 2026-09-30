@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { useCurrentProfile } from "../../shared/auth/AuthGate";
 import { getSupabase } from "../../shared/supabase/client";
 import { loadCatalogSnapshot } from "../../shared/offline/queue";
 import { queueStockOperation, watchStockOperationSync } from "../stock/offlineStock";
@@ -49,6 +50,7 @@ function findCachedPresentation(rows: unknown[], code: string): PresentationLook
 }
 
 export function QuickRestock({ onSuccess }: QuickRestockProps) {
+  const profile = useCurrentProfile();
   const [barcode, setBarcode] = useState("");
   const [searching, setSearching] = useState(false);
   const [foundPresentation, setFoundPresentation] = useState<PresentationLookupResult | null>(null);
@@ -156,7 +158,7 @@ export function QuickRestock({ onSuccess }: QuickRestockProps) {
         baseQuantity: foundPresentation.base_quantity,
         soldByWeight: foundPresentation.sold_by_weight ?? false,
         openShelfLifeDays: foundPresentation.open_shelf_life_days ?? null,
-      });
+      }, profile.id);
 
       setSuccessMsg(result.synchronized
         ? `Lote ingresado: ${qty} unidad(es) de ${foundPresentation.product_name} (${foundPresentation.presentation_name}).`

@@ -1,4 +1,3 @@
-import { getSupabase } from "../../shared/supabase/client";
 import {
   enqueueOperation,
   pendingOperations,
@@ -10,14 +9,11 @@ import type { StockLot } from "./types";
 
 export type StockOfflinePayload = Record<string, unknown> & { action: string };
 
-export async function queueStockOperation(payload: StockOfflinePayload): Promise<{
+export async function queueStockOperation(payload: StockOfflinePayload, userId: string): Promise<{
   localId: string;
   synchronized: boolean;
   failureMessage?: string;
 }> {
-  const { data, error } = await getSupabase().auth.getSession();
-  if (error) throw error;
-  const userId = data.session?.user.id;
   if (!userId) throw new Error("Sesión requerida para registrar stock.");
 
   const operation = await enqueueOperation({

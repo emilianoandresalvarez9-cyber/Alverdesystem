@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useCurrentProfile } from "../../shared/auth/AuthGate";
 import { Modal, Button, TextField, SelectField, GlassCard, Badge } from "../../shared/ui";
 import { getSupabase } from "../../shared/supabase/client";
 import { loadCatalogSnapshot } from "../../shared/offline/queue";
@@ -22,6 +23,7 @@ interface FractioningModalProps {
 }
 
 export function FractioningModal({ originLot, open, onClose, onSuccess }: FractioningModalProps) {
+  const profile = useCurrentProfile();
   const [targetPresentations, setTargetPresentations] = useState<PresentationOption[]>([]);
   const [selectedPresentationId, setSelectedPresentationId] = useState<string>("");
   const [packetsToProduce, setPacketsToProduce] = useState<string>("");
@@ -166,7 +168,7 @@ export function FractioningModal({ originLot, open, onClose, onSuccess }: Fracti
         soldByWeight: false,
         openShelfLifeDays: originLot.open_shelf_life_days,
         expiryDate: originLot.manufacturer_expiry_date,
-      });
+      }, profile.id);
 
       onSuccess();
       if (result.synchronized) onClose();
