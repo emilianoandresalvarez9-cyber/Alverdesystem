@@ -103,7 +103,7 @@ function run(command, args) {
     const child = spawn(command, args, {
       cwd: root,
       stdio: "inherit",
-      shell: process.platform === "win32"
+      shell: process.platform === "win32" && command.toLowerCase().endsWith(".cmd")
     });
     child.on("error", (error) => {
       console.error("No se pudo iniciar " + command + ": " + error.message);
