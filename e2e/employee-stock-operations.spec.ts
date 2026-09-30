@@ -29,6 +29,8 @@ test("Empleado puede ingresar, fraccionar y ajustar stock desde Stock", async ({
   await page.context().setOffline(true);
   await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
   await page.getByRole("button", { name: "Confirmar Movimiento" }).click();
+  console.log("[offline stock] navegador conectado:", await page.evaluate(() => navigator.onLine));
+  console.log("[offline stock] interfaz tras guardar:", await page.locator("body").innerText());
   await expect(page.getByRole("status").filter({ hasText: "Guardado en este dispositivo" })).toContainText("pendiente de sincronización");
   await expect(page.locator(".sync-status")).toContainText("1 operación pendiente");
   await expect(sourceLot).toContainText("825 / 1000 gram");
