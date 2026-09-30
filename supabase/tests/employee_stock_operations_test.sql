@@ -143,7 +143,8 @@ SELECT is((SELECT status::text FROM public.employee_stock_lots
 SELECT is((SELECT count(*)::int FROM public.stock_movements
   WHERE lot_id = (SELECT id FROM public.employee_stock_lots
     WHERE presentation_id = '00000000-0000-0000-0000-00000000e111')
-    AND kind = 'waste'), 1,
+    AND kind = 'waste'
+    AND reason = 'Merma por cierre de bolsa en fraccionamiento'), 1,
   'La diferencia entre remanente teórico y real queda registrada como merma');
 SELECT is((SELECT current_quantity FROM public.employee_stock_lots
   WHERE presentation_id = '00000000-0000-0000-0000-00000000e112'), 2::numeric,
@@ -191,3 +192,4 @@ SELECT throws_ok($$SELECT public.open_stock_lot(
 RESET role;
 SELECT * FROM finish();
 ROLLBACK;
+
