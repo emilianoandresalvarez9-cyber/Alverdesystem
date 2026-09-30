@@ -113,7 +113,7 @@ SELECT throws_ok($$SELECT public.apply_offline_operation(pg_temp.envelope(
   '00000000-0000-0000-0000-00000000f132','00000000-0000-0000-0000-00000000f102',
   jsonb_build_object('action','adjust_stock','lotId',(SELECT id FROM pg_temp.offline_test_origin_lot LIMIT 1),
     'productId','00000000-0000-0000-0000-00000000f110','movementKind','adjustment',
-    'quantity',5,'reason','Suplantación'))))$$,
+    'quantity',5,'reason','Suplantación')))$$,
   '42501', 'La operación de stock pertenece a otro usuario.',
   'La operación offline no se puede sincronizar con la cuenta de otro empleado');
 

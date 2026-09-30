@@ -26,11 +26,9 @@ export async function queueStockOperation(payload: StockOfflinePayload): Promise
   });
 
   if (navigator.onLine) {
-    try {
-      await synchronizePendingOperations();
-    } catch {
-      // La operación ya está persistida localmente. El sincronizador global reintenta.
-    }
+    // Do not make the UI wait for a network request after the durable local write.
+    // Slow or flaky connections leave the item queued and the global sync retries it.
+    void synchronizePendingOperations().catch(() => {});
   }
 
   const pending = (await pendingOperations()).find((candidate) => candidate.localId === operation.localId);
