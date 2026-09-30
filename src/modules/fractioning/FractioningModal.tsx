@@ -107,8 +107,9 @@ export function FractioningModal({ originLot, open, onClose, onSuccess }: Fracti
     return watchStockOperationSync(pendingFeedbackId, () => {
       setStatusMessage("Fraccionamiento sincronizado correctamente.");
       setPendingFeedbackId(null);
+      onClose();
     });
-  }, [pendingFeedbackId]);
+  }, [pendingFeedbackId, onClose]);
 
   const targetPresentation = targetPresentations.find((p) => p.presentation_id === selectedPresentationId);
   const packetsNum = parseInt(packetsToProduce || "0", 10);

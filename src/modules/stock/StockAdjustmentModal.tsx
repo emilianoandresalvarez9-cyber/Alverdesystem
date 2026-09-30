@@ -40,8 +40,9 @@ export function StockAdjustmentModal({
     return watchStockOperationSync(pendingFeedbackId, () => {
       setStatusMessage("Movimiento sincronizado correctamente.");
       setPendingFeedbackId(null);
+      onClose();
     });
-  }, [pendingFeedbackId]);
+  }, [pendingFeedbackId, onClose]);
 
   if (!lot) return null;
 
