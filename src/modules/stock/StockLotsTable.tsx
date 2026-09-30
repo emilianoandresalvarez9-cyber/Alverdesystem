@@ -60,7 +60,6 @@ export function StockLotsTable({
           <tbody>
             {lots.map((lot) => {
               const isClosed = lot.status === "closed";
-              const isBaseUnit = lot.base_unit === "gram" || lot.base_unit === "millilitre";
               const canOpen = !isClosed && !lot.opened_at;
               const hasActiveBag = hasActiveOpenBag ? hasActiveOpenBag(lot.product_id) : false;
               
@@ -130,7 +129,7 @@ export function StockLotsTable({
 
                   <td style={{ textAlign: "right" }}>
                     <div style={{ display: "flex", gap: "var(--esp-xs)", justifyContent: "flex-end" }}>
-                      {enableFractioning && isBaseUnit && !isClosed && (
+                      {enableFractioning && lot.sold_by_weight && !isClosed && (
                         <Button
                           variant="primario"
                           onClick={() => onFraction && onFraction(lot)}

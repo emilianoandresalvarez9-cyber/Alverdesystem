@@ -37,6 +37,31 @@ describe("fractioningLogic", () => {
       expect(result.originLotStatus).toBe("closed");
     });
 
+    it("conserva el remanente real y registra solo la diferencia como merma", () => {
+      const result = calculateFractioning({
+        originLotQuantity: 1000,
+        targetBaseQuantity: 150,
+        packetsToProduce: 6,
+        bagFinished: true,
+        realRemainingGrams: 40
+      });
+
+      expect(result.theoreticalRemaining).toBe(100);
+      expect(result.newOriginQuantity).toBe(40);
+      expect(result.merma).toBe(60);
+      expect(result.originLotStatus).toBe("closed");
+    });
+
+    it("rechaza un remanente físico mayor que el remanente teórico", () => {
+      expect(() => calculateFractioning({
+        originLotQuantity: 1000,
+        targetBaseQuantity: 150,
+        packetsToProduce: 6,
+        bagFinished: true,
+        realRemainingGrams: 101
+      })).toThrowError(/remanente real/);
+    });
+
     it("debe arrojar error si no hay stock suficiente", () => {
       expect(() => calculateFractioning({
         originLotQuantity: 1000,

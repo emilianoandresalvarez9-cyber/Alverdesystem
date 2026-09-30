@@ -3,7 +3,7 @@ import { AuthGate, useCurrentProfile } from "../auth/AuthGate";
 import { signOut } from "../auth/session";
 import type { AppRole } from "../auth/roles";
 
-export type ShellSection = "catalog" | "pos" | "customers" | "admin";
+export type ShellSection = "catalog" | "pos" | "customers" | "stock" | "admin";
 
 type AppShellProps = PropsWithChildren<{
   active: ShellSection;
@@ -35,6 +35,7 @@ function ShellLayout({ active, title, children }: PropsWithChildren<{ active: Sh
           <a className={active === "catalog" ? "active" : ""} href="/catalog.html">Catálogo</a>
           <a className={active === "pos" ? "active" : ""} href="/pos.html">Caja</a>
           <a className={active === "customers" ? "active" : ""} href="/customers.html">Clientes</a>
+          <a className={active === "stock" ? "active" : ""} href="/stock.html">Stock</a>
           {isAdmin && <a className={active === "admin" ? "active" : ""} href="/admin.html">Administración</a>}
         </nav>
         <button className="button button-secondary" onClick={() => void signOut().then(() => location.assign("/"))}>

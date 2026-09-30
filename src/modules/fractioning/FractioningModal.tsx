@@ -1,4 +1,3 @@
-import type { SupabaseAny } from "../../shared/types";
 import { useState, useEffect, useMemo } from "react";
 import { Modal, Button, TextField, SelectField, GlassCard, Badge } from "../../shared/ui";
 import { getSupabase } from "../../shared/supabase/client";
@@ -6,8 +5,9 @@ import type { StockLot } from "../stock/types";
 import { calculateFractioning } from "./fractioningLogic";
 
 interface PresentationOption {
-  id: string;
-  name: string;
+  presentation_id: string;
+  presentation_name: string;
+  product_id: string;
   base_quantity: number;
   base_unit: string;
 }
@@ -24,6 +24,7 @@ export function FractioningModal({ originLot, open, onClose, onSuccess }: Fracti
   const [selectedPresentationId, setSelectedPresentationId] = useState<string>("");
   const [packetsToProduce, setPacketsToProduce] = useState<string>("");
   const [bagFinished, setBagFinished] = useState<boolean>(false);
+  const [realRemainingQuantity, setRealRemainingQuantity] = useState("0");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,30 +38,35 @@ export function FractioningModal({ originLot, open, onClose, onSuccess }: Fracti
         const supabase = getSupabase();
         // Buscar otras presentaciones de este producto
         const { data, error: err } = await supabase
-          .from("product_presentations")
-          .select("id, name, base_quantity, product:products(base_unit)")
+          .from("employee_catalog")
+          .select("presentation_id, presentation_name, product_id, base_quantity, base_unit")
           .eq("product_id", originLot.product_id)
-          .eq("active", true)
-          .neq("id", originLot.presentation_id) // Excluir la propia presentación origen
+          .eq("sold_by_weight", false)
+          .neq("presentation_id", originLot.presentation_id) // Excluir la propia presentación origen
           .order("base_quantity", { ascending: true });
 
         if (err) throw err;
         
         if (active && data) {
-          const options: PresentationOption[] = data.map((d: SupabaseAny) => ({
-            id: d.id,
-            name: d.name,
+          const options: PresentationOption[] = (data as unknown as PresentationOption[]).map((d) => ({
+            presentation_id: d.presentation_id,
+            presentation_name: d.presentation_name,
+            product_id: d.product_id,
             base_quantity: d.base_quantity,
-            base_unit: (Array.isArray(d.product) ? d.product[0]?.base_unit : d.product?.base_unit) || "gram"
+            base_unit: d.base_unit
           }));
+          setError(null);
           setTargetPresentations(options);
           const firstOpt = options[0];
           if (firstOpt) {
-            setSelectedPresentationId(firstOpt.id);
+            setSelectedPresentationId(firstOpt.presentation_id);
           }
         }
       } catch (err) {
-        console.error("Error cargando presentaciones", err);
+        if (active) {
+          setTargetPresentations([]);
+          setError(err instanceof Error ? `No se pudieron cargar las presentaciones: ${err.message}` : "No se pudieron cargar las presentaciones.");
+        }
       }
     };
 
@@ -73,12 +79,20 @@ export function FractioningModal({ originLot, open, onClose, onSuccess }: Fracti
     if (open) {
       setPacketsToProduce("");
       setBagFinished(false);
+      setRealRemainingQuantity("0");
       setError(null);
     }
   }, [open]);
 
-  const targetPresentation = targetPresentations.find((p) => p.id === selectedPresentationId);
+  const targetPresentation = targetPresentations.find((p) => p.presentation_id === selectedPresentationId);
   const packetsNum = parseInt(packetsToProduce || "0", 10);
+  const theoreticalRemaining = originLot && targetPresentation && packetsNum > 0
+    ? Number((originLot.current_quantity - packetsNum * targetPresentation.base_quantity).toFixed(3))
+    : 0;
+  const realRemaining = Number(realRemainingQuantity);
+  const invalidRealRemaining = bagFinished && (
+    !Number.isFinite(realRemaining) || realRemaining < 0 || realRemaining > theoreticalRemaining
+  );
 
   // Cálculo en vivo
   const calc = useMemo(() => {
@@ -89,15 +103,16 @@ export function FractioningModal({ originLot, open, onClose, onSuccess }: Fracti
         targetBaseQuantity: targetPresentation.base_quantity,
         packetsToProduce: packetsNum,
         bagFinished,
-        realRemainingGrams: 0
+        realRemainingGrams: realRemaining
       });
     } catch (e) {
       return null;
     }
-  }, [originLot, targetPresentation, packetsNum, bagFinished]);
+  }, [originLot, targetPresentation, packetsNum, bagFinished, realRemaining]);
 
   const overCapacity =
     originLot && targetPresentation && packetsNum * targetPresentation.base_quantity > originLot.current_quantity;
+  const emptyButMarkedOpen = !bagFinished && calc?.newOriginQuantity === 0;
 
   const handleSubmit = async () => {
     if (!originLot || !targetPresentation || packetsNum <= 0) return;
@@ -108,16 +123,9 @@ export function FractioningModal({ originLot, open, onClose, onSuccess }: Fracti
 
     try {
       const supabase = getSupabase();
-      const { data: userData } = await supabase.auth.getUser();
-      const userId = userData.user?.id;
-      if (!userId) throw new Error("Sesión requerida");
-
-      // Transacción emulada secuencial (o RPC si estuviera, pero no hay RPC en Fase 0 para esto, hacemos insert y update)
-      // Asegurar que el lote origen esté abierto si no lo estaba
-      const originOpenedAt = originLot.opened_at || new Date().toISOString();
       const { error: rpcErr } = await supabase.rpc('fraction_stock', {
         p_origin_lot_id: originLot.id,
-        p_target_presentation_id: targetPresentation.id,
+        p_target_presentation_id: targetPresentation.presentation_id,
         p_packets_num: packetsNum,
         p_grams_needed: calc.gramsNeeded,
         p_merma: calc.merma,
@@ -151,7 +159,7 @@ export function FractioningModal({ originLot, open, onClose, onSuccess }: Fracti
           <Button
             variant="primario"
             onClick={handleSubmit}
-            disabled={loading || !calc || overCapacity || targetPresentations.length === 0}
+            disabled={loading || !calc || overCapacity || emptyButMarkedOpen || invalidRealRemaining || targetPresentations.length === 0}
           >
             {loading ? "Registrando..." : "Confirmar Fraccionamiento"}
           </Button>
@@ -187,8 +195,8 @@ export function FractioningModal({ originLot, open, onClose, onSuccess }: Fracti
               onChange={(e) => setSelectedPresentationId(e.target.value)}
             >
               {targetPresentations.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name} ({p.base_quantity} {p.base_unit}/u)
+                <option key={p.presentation_id} value={p.presentation_id}>
+                {p.presentation_name} ({p.base_quantity} {p.base_unit}/u)
                 </option>
               ))}
             </SelectField>
@@ -208,6 +216,11 @@ export function FractioningModal({ originLot, open, onClose, onSuccess }: Fracti
                 Stock insuficiente en el lote origen para esta cantidad.
               </p>
             )}
+            {emptyButMarkedOpen && (
+              <p role="alert" style={{ color: "var(--color-error)", fontSize: "var(--texto-s)", margin: 0 }}>
+                La bolsa quedaría vacía. Marcala como terminada para cerrar el lote.
+              </p>
+            )}
 
             {/* RF-15: Pregunta de cierre */}
             <SelectField
@@ -218,6 +231,20 @@ export function FractioningModal({ originLot, open, onClose, onSuccess }: Fracti
               <option value="abierta">Queda abierta (tiene más stock utilizable)</option>
               <option value="terminada">Se terminó (vacía / descartada)</option>
             </SelectField>
+
+            {bagFinished && (
+              <TextField
+                label={`Cantidad real que quedó en la bolsa (${originLot.base_unit})`}
+                type="number"
+                min="0"
+                max={Math.max(0, theoreticalRemaining)}
+                step="0.001"
+                value={realRemainingQuantity}
+                onChange={(e) => setRealRemainingQuantity(e.target.value)}
+                error={invalidRealRemaining ? `Ingresá un remanente entre 0 y ${Math.max(0, theoreticalRemaining)} ${originLot.base_unit}.` : undefined}
+                help="La diferencia con el remanente teórico queda registrada como merma (RF-16)."
+              />
+            )}
 
             {/* Vista previa de cálculos (RF-14, RF-16) */}
             {calc && !overCapacity && (

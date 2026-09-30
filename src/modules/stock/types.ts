@@ -16,7 +16,6 @@ export interface StockLot {
   supplier_id: string | null;
   initial_quantity: number;
   current_quantity: number;
-  purchase_cost: number;
   received_at: string;
   manufacturer_expiry_date: string | null;
   opened_at: string | null;
@@ -30,6 +29,7 @@ export interface StockLot {
   presentation_name: string;
   base_unit: string;
   base_quantity: number;
+  sold_by_weight: boolean;
   open_shelf_life_days: number | null;
   supplier_name: string | null;
 
