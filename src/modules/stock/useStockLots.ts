@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useCurrentProfile } from "../../shared/auth/AuthGate";
 import { getSupabase } from "../../shared/supabase/client";
 import { loadStockLotsSnapshot, pendingOperations, saveStockLotsSnapshot, subscribeToQueueChanges } from "../../shared/offline/queue";
@@ -40,6 +40,7 @@ export function useStockLots() {
   const profile = useCurrentProfile();
   const [lots, setLots] = useState<StockLot[]>([]);
   const [loading, setLoading] = useState(true);
+  const hasLoadedLots = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFiltersState] = useState<StockLotFilters>(DEFAULT_FILTERS);
 
@@ -48,7 +49,7 @@ export function useStockLots() {
   }, []);
 
   const fetchLots = useCallback(async () => {
-    setLoading(true);
+    if (!hasLoadedLots.current) setLoading(true);
     setError(null);
 
     try {
@@ -111,6 +112,7 @@ export function useStockLots() {
         setError(e instanceof Error ? e.message : "Error al cargar los lotes.");
       }
     } finally {
+      hasLoadedLots.current = true;
       setLoading(false);
     }
   }, []);
