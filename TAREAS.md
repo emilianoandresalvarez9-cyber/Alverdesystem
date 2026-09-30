@@ -1,7 +1,7 @@
 # Estado y tareas pendientes — Alverde System
 
 > Corte de revisión: 30 de septiembre de 2026, rama `main`, commit `4b551c6`.
-> Avance estimado de implementación: **75%**. No equivale a aprobación de QA ni a aptitud para producción.
+> Avance estimado de implementación: **77%**. No equivale a aprobación de QA ni a aptitud para producción.
 
 ## Criterio del porcentaje
 
