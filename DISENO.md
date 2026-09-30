@@ -114,4 +114,4 @@ Activas en `global.css`:
 ```css
 @view-transition { navigation: auto; }
 ```
-Funciona automáticamente en Edge/Chrome al navegar entre las 3 páginas HTML.
+Funciona automáticamente en navegadores compatibles al navegar entre las páginas HTML de entrada configuradas en Vite.
