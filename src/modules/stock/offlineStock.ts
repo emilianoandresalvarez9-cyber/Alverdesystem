@@ -11,8 +11,6 @@ export type StockOfflinePayload = Record<string, unknown> & { action: string };
 
 export async function queueStockOperation(payload: StockOfflinePayload, userId: string): Promise<{
   localId: string;
-  synchronized: boolean;
-  failureMessage?: string;
 }> {
   if (!userId) throw new Error("Sesión requerida para registrar stock.");
 
@@ -27,12 +25,9 @@ export async function queueStockOperation(payload: StockOfflinePayload, userId: 
     void synchronizePendingOperations().catch(() => {});
   }
 
-  const pending = (await pendingOperations()).find((candidate) => candidate.localId === operation.localId);
-  return {
-    localId: operation.localId,
-    synchronized: !pending,
-    failureMessage: pending?.failureMessage,
-  };
+  // The IndexedDB transaction is the durable acceptance point. Avoid a second
+  // read here: queue listeners report whether the background sync later succeeds.
+  return { localId: operation.localId };
 }
 
 /** Notify a form when the server acknowledges its queued operation. */

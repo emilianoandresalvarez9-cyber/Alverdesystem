@@ -81,11 +81,8 @@ export function StockAdjustmentModal({
       }, profile.id);
 
       onSuccess();
-      if (result.synchronized) onClose();
-      else {
-        setPendingFeedbackId(result.localId);
-        setStatusMessage(`Guardado en este dispositivo; queda pendiente de sincronización.${result.failureMessage ? ` Motivo: ${result.failureMessage}` : ""}`);
-      }
+      setPendingFeedbackId(result.localId);
+      setStatusMessage("Guardado en este dispositivo; queda pendiente de sincronización.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al registrar el movimiento.");
     } finally {

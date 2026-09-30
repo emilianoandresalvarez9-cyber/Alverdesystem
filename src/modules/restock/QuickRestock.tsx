@@ -160,10 +160,8 @@ export function QuickRestock({ onSuccess }: QuickRestockProps) {
         openShelfLifeDays: foundPresentation.open_shelf_life_days ?? null,
       }, profile.id);
 
-      setSuccessMsg(result.synchronized
-        ? `Lote ingresado: ${qty} unidad(es) de ${foundPresentation.product_name} (${foundPresentation.presentation_name}).`
-        : `Ingreso guardado en este dispositivo. Se sincronizará al reconectar.${result.failureMessage ? ` Motivo: ${result.failureMessage}` : ""}`);
-      setPendingFeedbackId(result.synchronized ? null : result.localId);
+      setSuccessMsg(`Ingreso guardado en este dispositivo. Se sincronizará al reconectar.`);
+      setPendingFeedbackId(result.localId);
       setFoundPresentation(null);
       setBarcode("");
       setQuantity("");
