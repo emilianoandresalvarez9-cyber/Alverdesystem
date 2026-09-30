@@ -1,5 +1,5 @@
 BEGIN;
-SELECT plan(30);
+SELECT plan(34);
 
 INSERT INTO auth.users (id, email) VALUES
   ('00000000-0000-0000-0000-00000000e101', 'stock-employee@test'),
@@ -40,6 +40,11 @@ SELECT throws_ok($$SELECT public.quick_restock(
   '00000000-0000-0000-0000-00000000e110', 1, current_date, 0.01)$$,
   '42501', 'Solo la administradora puede indicar un costo manual.',
   'Empleado no puede alterar el costo calculado por la base');
+SELECT throws_ok($$SELECT public.quick_restock(
+  '00000000-0000-0000-0000-00000000e111',
+  '00000000-0000-0000-0000-00000000e110', 'NaN'::numeric, current_date)$$,
+  '22023', 'La cantidad debe ser mayor que cero.',
+  'La base rechaza cantidades no finitas al ingresar stock');
 SELECT is((SELECT count(*)::int FROM public.employee_stock_lots
   WHERE presentation_id = '00000000-0000-0000-0000-00000000e111'), 1,
   'Empleado ve el lote recién recibido en la proyección segura');
@@ -85,6 +90,13 @@ SELECT throws_ok($$SELECT public.adjust_stock(
   'adjustment', -999, 'Intento excedido', 0, true)$$,
   '22023', 'La cantidad a quitar supera el stock disponible.',
   'La base rechaza ajustes que harían el stock negativo');
+SELECT throws_ok($$SELECT public.adjust_stock(
+  (SELECT id FROM public.employee_stock_lots
+   WHERE presentation_id = '00000000-0000-0000-0000-00000000e111'),
+  '00000000-0000-0000-0000-00000000e110',
+  'adjustment', 'NaN'::numeric, 'Conteo inválido', 0, false)$$,
+  '22023', 'La cantidad debe ser distinta de cero y tener hasta tres decimales.',
+  'La base rechaza cantidades no finitas en ajustes');
 
 -- RF-14/16: recompute fractioning from locked server state and preserve actual
 -- remnant, recording the difference as waste.
@@ -95,6 +107,20 @@ SELECT throws_ok($$SELECT public.fraction_stock(
   'open'::public.stock_lot_status)$$,
   '22023', 'La cantidad a descontar no coincide con el peso de las presentaciones generadas.',
   'La base rechaza un total de fraccionamiento manipulado');
+SELECT throws_ok($$SELECT public.fraction_stock(
+  (SELECT id FROM public.employee_stock_lots
+   WHERE presentation_id = '00000000-0000-0000-0000-00000000e111'),
+  '00000000-0000-0000-0000-00000000e112', 'NaN'::numeric, 10, 0, 93,
+  'open'::public.stock_lot_status)$$,
+  '22023', 'La cantidad de paquetes debe ser un entero mayor que cero.',
+  'La base rechaza cantidades no finitas de paquetes');
+SELECT throws_ok($$SELECT public.fraction_stock(
+  (SELECT id FROM public.employee_stock_lots
+   WHERE presentation_id = '00000000-0000-0000-0000-00000000e111'),
+  '00000000-0000-0000-0000-00000000e112', 1, 10, 'NaN'::numeric, 93,
+  'open'::public.stock_lot_status)$$,
+  '22023', 'Las cantidades del fraccionamiento deben ser finitas.',
+  'La base rechaza mermas no finitas');
 SELECT throws_ok($$SELECT public.fraction_stock(
   (SELECT id FROM public.employee_stock_lots
    WHERE presentation_id = '00000000-0000-0000-0000-00000000e111'),

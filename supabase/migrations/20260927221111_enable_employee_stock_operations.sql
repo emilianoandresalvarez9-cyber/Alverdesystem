@@ -112,7 +112,8 @@ BEGIN
   IF p_kind NOT IN ('waste', 'discard', 'adjustment') THEN
     RAISE EXCEPTION 'Tipo de movimiento inválido para un ajuste.' USING ERRCODE = '22023';
   END IF;
-  IF p_quantity IS NULL OR p_quantity = 0 OR p_quantity <> round(p_quantity, 3) THEN
+  IF p_quantity IS NULL OR p_quantity::text IN ('NaN', 'Infinity', '-Infinity')
+     OR p_quantity = 0 OR p_quantity <> round(p_quantity, 3) THEN
     RAISE EXCEPTION 'La cantidad debe ser distinta de cero y tener hasta tres decimales.' USING ERRCODE = '22023';
   END IF;
   IF p_kind IN ('waste', 'discard') AND p_quantity > 0 THEN
@@ -186,7 +187,7 @@ BEGIN
   IF v_user_id IS NULL OR v_role IS NULL OR v_role NOT IN ('administrator', 'employee') THEN
     RAISE EXCEPTION 'Authentication required' USING ERRCODE = '42501';
   END IF;
-  IF p_quantity IS NULL OR p_quantity <= 0 THEN
+  IF p_quantity IS NULL OR p_quantity::text IN ('NaN', 'Infinity', '-Infinity') OR p_quantity <= 0 THEN
     RAISE EXCEPTION 'La cantidad debe ser mayor que cero.' USING ERRCODE = '22023';
   END IF;
   IF p_purchase_cost IS NOT NULL AND p_purchase_cost < 0 THEN
@@ -292,8 +293,14 @@ BEGIN
   IF v_user_id IS NULL OR v_role IS NULL OR v_role NOT IN ('administrator', 'employee') THEN
     RAISE EXCEPTION 'Authentication required' USING ERRCODE = '42501';
   END IF;
-  IF p_packets_num IS NULL OR p_packets_num <= 0 OR p_packets_num <> trunc(p_packets_num) THEN
+  IF p_packets_num IS NULL OR p_packets_num::text IN ('NaN', 'Infinity', '-Infinity')
+     OR p_packets_num <= 0 OR p_packets_num <> trunc(p_packets_num) THEN
     RAISE EXCEPTION 'La cantidad de paquetes debe ser un entero mayor que cero.' USING ERRCODE = '22023';
+  END IF;
+  IF p_grams_needed::text IN ('NaN', 'Infinity', '-Infinity')
+     OR p_merma::text IN ('NaN', 'Infinity', '-Infinity')
+     OR p_new_origin_quantity::text IN ('NaN', 'Infinity', '-Infinity') THEN
+    RAISE EXCEPTION 'Las cantidades del fraccionamiento deben ser finitas.' USING ERRCODE = '22023';
   END IF;
   IF p_origin_lot_status IS NULL THEN
     RAISE EXCEPTION 'Debe indicar si la bolsa de origen queda abierta o terminada.' USING ERRCODE = '22023';
