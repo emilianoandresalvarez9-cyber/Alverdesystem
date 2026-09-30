@@ -7,6 +7,17 @@ interface QuickRestockProps {
   onSuccess?: () => void;
 }
 
+interface EmployeeCatalogRow {
+  presentation_id: string;
+  presentation_name: string;
+  product_id: string;
+  product_name: string;
+  base_quantity: number;
+  sale_price: number;
+  internal_barcode: string | null;
+  manufacturer_barcode: string | null;
+}
+
 export function QuickRestock({ onSuccess }: QuickRestockProps) {
   const [barcode, setBarcode] = useState("");
   const [searching, setSearching] = useState(false);
@@ -30,69 +41,39 @@ export function QuickRestock({ onSuccess }: QuickRestockProps) {
     try {
       const supabase = getSupabase();
 
-      // 1. Buscar en presentaciones por código interno
-      const { data: presData, error: presErr } = await supabase
-        .from("product_presentations")
-        .select(`
-          id, name, base_quantity, sale_price, internal_barcode,
-          product:products(id, name, manufacturer_barcode, active)
-        `)
+      // Buscar sobre la proyección operativa. La tabla base de productos y
+      // presentaciones queda restringida para Empleado por RLS.
+      const { data: internalMatches, error: internalErr } = await supabase
+        .from("employee_catalog")
+        .select("presentation_id, presentation_name, product_id, product_name, base_quantity, sale_price, internal_barcode, manufacturer_barcode")
         .eq("internal_barcode", code)
-        .eq("active", true)
-        .maybeSingle();
+        .limit(1);
 
-      if (presErr) throw presErr;
+      if (internalErr) throw internalErr;
 
-      if (presData && presData.product) {
-        const prod = presData.product as unknown as { id: string; name: string; manufacturer_barcode: string | null; active: boolean };
-        if (prod.active) {
-          setFoundPresentation({
-            presentation_id: presData.id,
-            presentation_name: presData.name,
-            product_id: prod.id,
-            product_name: prod.name,
-            base_quantity: presData.base_quantity,
-            sale_price: presData.sale_price,
-            internal_barcode: presData.internal_barcode,
-            manufacturer_barcode: prod.manufacturer_barcode,
-          });
-          setQuantity("1");
-          return;
-        }
+      const internalMatch = (internalMatches ?? [])[0] as EmployeeCatalogRow | undefined;
+      if (internalMatch) {
+        setFoundPresentation(internalMatch);
+        setQuantity("1");
+        return;
       }
 
-      // 2. Si no encontró en presentación, buscar en producto por código de fabricante
-      const { data: prodData, error: prodErr } = await supabase
-        .from("products")
-        .select(`
-          id, name, manufacturer_barcode, active,
-          presentations:product_presentations(id, name, base_quantity, sale_price, internal_barcode, active)
-        `)
+      // El código de fabricante pertenece al producto y puede tener varias
+      // presentaciones; usar la unidad de menor contenido como opción rápida.
+      const { data: manufacturerMatches, error: manufacturerErr } = await supabase
+        .from("employee_catalog")
+        .select("presentation_id, presentation_name, product_id, product_name, base_quantity, sale_price, internal_barcode, manufacturer_barcode")
         .eq("manufacturer_barcode", code)
-        .eq("active", true)
-        .maybeSingle();
+        .order("base_quantity", { ascending: true })
+        .limit(1);
 
-      if (prodErr) throw prodErr;
+      if (manufacturerErr) throw manufacturerErr;
 
-      if (prodData && prodData.presentations && prodData.presentations.length > 0) {
-        const activePres = (prodData.presentations as unknown as Array<{
-          id: string; name: string; base_quantity: number; sale_price: number; internal_barcode: string | null; active: boolean
-        }>).find(p => p.active);
-
-        if (activePres) {
-          setFoundPresentation({
-            presentation_id: activePres.id,
-            presentation_name: activePres.name,
-            product_id: prodData.id,
-            product_name: prodData.name,
-            base_quantity: activePres.base_quantity,
-            sale_price: activePres.sale_price,
-            internal_barcode: activePres.internal_barcode,
-            manufacturer_barcode: prodData.manufacturer_barcode,
-          });
-          setQuantity("1");
-          return;
-        }
+      const manufacturerMatch = (manufacturerMatches ?? [])[0] as EmployeeCatalogRow | undefined;
+      if (manufacturerMatch) {
+        setFoundPresentation(manufacturerMatch);
+        setQuantity("1");
+        return;
       }
 
       setError(`No se encontró ningún producto activo con el código: ${code}`);
@@ -117,10 +98,6 @@ export function QuickRestock({ onSuccess }: QuickRestockProps) {
 
     try {
       const supabase = getSupabase();
-      const { data: userData } = await supabase.auth.getUser();
-      const userId = userData.user?.id;
-      if (!userId) throw new Error("Sesión requerida");
-
       const { error: rpcErr } = await supabase.rpc('quick_restock', {
         p_presentation_id: foundPresentation.presentation_id,
         p_product_id: foundPresentation.product_id,

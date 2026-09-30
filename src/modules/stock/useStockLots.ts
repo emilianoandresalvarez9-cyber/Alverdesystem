@@ -1,8 +1,30 @@
-import type { SupabaseAny } from "../../shared/types";
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { getSupabase } from "../../shared/supabase/client";
-import { calculateEffectiveExpiry, getDaysUntilExpiry, evaluateExpiryStatus } from "./expiry";
+import { getDaysUntilExpiry, evaluateExpiryStatus } from "./expiry";
 import type { StockLot, StockLotFilters, LotExpiryStatus } from "./types";
+
+interface EmployeeStockLotRow {
+  id: string;
+  presentation_id: string;
+  supplier_id: string | null;
+  initial_quantity: number;
+  current_quantity: number;
+  received_at: string;
+  manufacturer_expiry_date: string | null;
+  opened_at: string | null;
+  portioned_at: string | null;
+  status: "open" | "closed";
+  effective_expiry_date: string | null;
+  product_id: string;
+  product_name: string;
+  base_unit: string;
+  open_shelf_life_days: number | null;
+  presentation_name: string;
+  base_quantity: number;
+  sold_by_weight: boolean;
+  supplier_name: string | null;
+  created_at: string;
+}
 
 const DEFAULT_FILTERS: StockLotFilters = {
   search: "",
@@ -28,30 +50,20 @@ export function useStockLots() {
     try {
       const supabase = getSupabase();
       const { data, error: err } = await supabase
-        .from("stock_lots")
+        .from("employee_stock_lots")
         .select(`
           id, presentation_id, supplier_id, initial_quantity, current_quantity,
-          purchase_cost, received_at, manufacturer_expiry_date, opened_at, portioned_at,
-          status, created_at,
-          presentation:product_presentations(
-            id, name, base_quantity, internal_barcode,
-            product:products(id, name, base_unit, open_shelf_life_days, active)
-          ),
-          supplier:suppliers(id, name)
+          received_at, manufacturer_expiry_date, opened_at, portioned_at, status,
+          effective_expiry_date, product_id, product_name, base_unit,
+          open_shelf_life_days, presentation_name, base_quantity, sold_by_weight,
+          supplier_name, created_at
         `)
         .order("created_at", { ascending: false });
 
       if (err) throw err;
 
-      const normalized: StockLot[] = (data ?? []).map((row: SupabaseAny) => {
-        const pres = row.presentation;
-        const prod = pres?.product;
-        const mfgExpiry = row.manufacturer_expiry_date;
-        const openedAt = row.opened_at;
-        const shelfLife = prod?.open_shelf_life_days ?? null;
-
-        const effectiveExpiry = calculateEffectiveExpiry(mfgExpiry, openedAt, shelfLife);
-        const days = getDaysUntilExpiry(effectiveExpiry);
+      const normalized: StockLot[] = ((data ?? []) as unknown as EmployeeStockLotRow[]).map((row) => {
+        const days = getDaysUntilExpiry(row.effective_expiry_date);
         const status = evaluateExpiryStatus(days);
 
         return {
@@ -60,23 +72,23 @@ export function useStockLots() {
           supplier_id: row.supplier_id,
           initial_quantity: row.initial_quantity,
           current_quantity: row.current_quantity,
-          purchase_cost: row.purchase_cost,
           received_at: row.received_at,
-          manufacturer_expiry_date: mfgExpiry,
-          opened_at: openedAt,
+          manufacturer_expiry_date: row.manufacturer_expiry_date,
+          opened_at: row.opened_at,
           portioned_at: row.portioned_at,
           status: row.status,
           created_at: row.created_at,
 
-          product_id: prod?.id ?? "",
-          product_name: prod?.name ?? "Producto Desconocido",
-          presentation_name: pres?.name ?? "Presentación Única",
-          base_unit: prod?.base_unit ?? "unit",
-          base_quantity: pres?.base_quantity ?? 1,
-          open_shelf_life_days: shelfLife,
-          supplier_name: row.supplier?.name ?? null,
+          product_id: row.product_id,
+          product_name: row.product_name,
+          presentation_name: row.presentation_name,
+          base_unit: row.base_unit,
+          base_quantity: row.base_quantity,
+          sold_by_weight: row.sold_by_weight,
+          open_shelf_life_days: row.open_shelf_life_days,
+          supplier_name: row.supplier_name,
 
-          effective_expiry_date: effectiveExpiry,
+          effective_expiry_date: row.effective_expiry_date,
           days_until_expiry: days,
           expiry_status: status,
         };
@@ -96,7 +108,7 @@ export function useStockLots() {
 
   const hasActiveOpenBag = useCallback((productId: string) => {
     return lots.some(
-      (l) => l.product_id === productId && l.status === "open" && l.opened_at !== null && l.current_quantity > 0
+      (l) => l.product_id === productId && l.sold_by_weight && l.status === "open" && l.opened_at !== null && l.current_quantity > 0
     );
   }, [lots]);
 
@@ -104,33 +116,13 @@ export function useStockLots() {
   const markLotOpened = async (lotId: string) => {
     try {
       const supabase = getSupabase();
-      const now = new Date().toISOString();
-      const { error: err } = await supabase
-        .from("stock_lots")
-        .update({ opened_at: now })
-        .eq("id", lotId);
+      const { error: err } = await supabase.rpc("open_stock_lot", { p_lot_id: lotId });
 
       if (err) throw err;
       await fetchLots();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Error al abrir el lote.";
       setError(msg.includes("Regla de oro") ? msg : `No se pudo abrir el lote: ${msg}`);
-    }
-  };
-
-  // RF-56: Archivar producto sin borrar ventas históricas
-  const archiveProduct = async (productId: string) => {
-    try {
-      const supabase = getSupabase();
-      const { error: err } = await supabase
-        .from("products")
-        .update({ active: false })
-        .eq("id", productId);
-
-      if (err) throw err;
-      await fetchLots();
-    } catch (e) {
-      setError(e instanceof Error ? `No se pudo archivar el producto: ${e.message}` : "No se pudo archivar el producto.");
     }
   };
 
@@ -215,6 +207,5 @@ export function useStockLots() {
     refreshLots: fetchLots,
     markLotOpened,
     hasActiveOpenBag,
-    archiveProduct,
   };
 }

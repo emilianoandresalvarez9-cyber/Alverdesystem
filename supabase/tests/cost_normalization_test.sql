@@ -85,9 +85,9 @@ SET role authenticated;
 SELECT throws_ok($$SELECT public.quick_restock(
   '00000000-0000-0000-0000-00000000f264',
   '00000000-0000-0000-0000-00000000f263',
-  1, current_date)$$,
-  '42501', 'Solo la administradora puede ingresar stock.',
-  'Empleado no puede ejecutar ingreso rápido ni consultar el costo almacenado');
+  1, current_date, 0.01)$$,
+  '42501', 'Solo la administradora puede indicar un costo manual.',
+  'Empleado puede reponer pero no fijar manualmente el costo del lote');
 SELECT is((SELECT count(*)::int FROM public.employee_stock_lots), 4,
   'Empleado ve los lotes operativos sin acceso a la tabla base de costos');
 SELECT ok((SELECT bool_and(NOT (to_jsonb(lot) ? 'purchase_cost'))

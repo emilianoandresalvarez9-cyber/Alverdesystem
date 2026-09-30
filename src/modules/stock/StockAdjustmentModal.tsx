@@ -17,6 +17,7 @@ export function StockAdjustmentModal({
   onSuccess,
 }: StockAdjustmentModalProps) {
   const [kind, setKind] = useState<"waste" | "discard" | "adjustment">("waste");
+  const [adjustmentDirection, setAdjustmentDirection] = useState<"add" | "remove">("remove");
   const [quantity, setQuantity] = useState("");
   const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
@@ -30,9 +31,11 @@ export function StockAdjustmentModal({
       setError("Ingresá una cantidad mayor a 0.");
       return;
     }
-    if (qty > lot.current_quantity) {
+    if (kind !== "adjustment" || adjustmentDirection === "remove") {
+      if (qty > lot.current_quantity) {
       setError(`No podés descontar más del stock actual (${lot.current_quantity}).`);
       return;
+      }
     }
     if (!reason.trim()) {
       setError("El motivo del descarte/ajuste es obligatorio (RF-57).");
@@ -48,14 +51,15 @@ export function StockAdjustmentModal({
       const userId = userData.user?.id;
       if (!userId) throw new Error("Sesión requerida");
 
-      const newLotQuantity = Number(Math.max(0, lot.current_quantity - qty).toFixed(3));
+      const signedQuantity = kind === "adjustment" && adjustmentDirection === "add" ? qty : -qty;
+      const newLotQuantity = Number(Math.max(0, lot.current_quantity + signedQuantity).toFixed(3));
       const shouldClose = newLotQuantity <= 0.0001;
 
       const { error: rpcErr } = await supabase.rpc('adjust_stock', {
         p_lot_id: lot.id,
         p_product_id: lot.product_id,
         p_kind: kind,
-        p_quantity: -qty,
+        p_quantity: signedQuantity,
         p_reason: reason.trim(),
         p_new_lot_quantity: newLotQuantity,
         p_should_close_lot: shouldClose
@@ -112,15 +116,26 @@ export function StockAdjustmentModal({
           <option value="adjustment">Ajuste de inventario (error de conteo)</option>
         </SelectField>
 
+        {kind === "adjustment" && (
+          <SelectField
+            label="Dirección del ajuste"
+            value={adjustmentDirection}
+            onChange={(e) => setAdjustmentDirection(e.target.value as "add" | "remove")}
+          >
+            <option value="add">Agregar stock faltante</option>
+            <option value="remove">Descontar stock sobrante</option>
+          </SelectField>
+        )}
+
         <TextField
-          label={`Cantidad a descontar (${lot.base_unit})`}
+          label={`Cantidad a ${kind === "adjustment" && adjustmentDirection === "add" ? "agregar" : "descontar"} (${lot.base_unit})`}
           type="number"
           min="0.001"
-          max={lot.current_quantity}
+          max={kind === "adjustment" && adjustmentDirection === "add" ? undefined : lot.current_quantity}
           step={0.001}
           value={quantity}
           onChange={(e) => setQuantity(e.target.value)}
-          placeholder={`Máximo: ${lot.current_quantity}`}
+          placeholder={kind === "adjustment" && adjustmentDirection === "add" ? "Cantidad a sumar" : `Máximo: ${lot.current_quantity}`}
         />
 
         <TextField

@@ -22,8 +22,11 @@ export function calculateFractioning(params: FractioningParams): FractioningCalc
   let originLotStatus: "open" | "closed" = "open";
 
   if (bagFinished) {
-    // RF-15 y RF-16: Si la bolsa se terminó, calcular merma
-    const realRem = Math.max(0, realRemainingGrams); // No puede ser negativo
+    // RF-15 y RF-16: comparar el remanente físico con el teórico.
+    if (realRemainingGrams < 0 || realRemainingGrams > theoreticalRemaining) {
+      throw new Error("El remanente real debe estar entre cero y el remanente teórico.");
+    }
+    const realRem = Number(realRemainingGrams.toFixed(3));
     
     // La merma es lo que teóricamente debía quedar menos lo que realmente se recuperó
     merma = Number(Math.max(0, theoreticalRemaining - realRem).toFixed(3));
