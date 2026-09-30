@@ -134,7 +134,10 @@ if (!existsSync(join(root, "node_modules", "vite", "bin", "vite.js")) || install
   writeFileSync(markerPath, lockHash + "\n", "utf8");
 }
 
+const networkHost = process.argv.includes("--network");
+if (networkHost) console.warn("Acceso habilitado para otros dispositivos de la red local; úsalo solo en una red privada.");
 console.log("Abriendo Alverde en http://localhost:5173 (Ctrl+C para detener).");
 const vitePath = join(root, "node_modules", "vite", "bin", "vite.js");
-const serverCode = await run(process.execPath, [vitePath, "--host", "127.0.0.1"]);
+const host = networkHost ? "0.0.0.0" : "127.0.0.1";
+const serverCode = await run(process.execPath, [vitePath, "--host", host, "--open"]);
 process.exitCode = serverCode;
