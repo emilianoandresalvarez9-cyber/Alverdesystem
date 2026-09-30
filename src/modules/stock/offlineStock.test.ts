@@ -39,6 +39,15 @@ function operation(localId: string, payload: Record<string, unknown>): QueuedOpe
 }
 
 describe("operaciones de stock pendientes", () => {
+  it("refleja un ajuste aditivo pendiente sin tocar el stock del servidor", () => {
+    const result = withPendingStockOperations([lot], [
+      operation("adjustment-add-1", { action: "adjust_stock", lotId: "lot-1", quantity: 25 }),
+    ]);
+
+    expect(result[0]?.current_quantity).toBe(125);
+    expect(lot.current_quantity).toBe(100);
+  });
+
   it("muestra ajustes aditivos sin sobrescribir el lote y cierra al llegar a cero", () => {
     const result = withPendingStockOperations([lot], [
       operation("adjustment-1", { action: "adjust_stock", lotId: "lot-1", quantity: 5 }),

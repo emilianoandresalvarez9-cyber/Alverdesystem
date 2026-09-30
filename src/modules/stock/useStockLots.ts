@@ -52,6 +52,24 @@ export function useStockLots() {
     if (!hasLoadedLots.current) setLoading(true);
     setError(null);
 
+    if (!navigator.onLine) {
+      try {
+        const [snapshot, pending] = await Promise.all([loadStockLotsSnapshot(), pendingOperations()]);
+        if (snapshot) {
+          setLots(withPendingStockOperations(snapshot.rows as StockLot[], pending));
+          setError("Sin conexión: se muestran los últimos lotes guardados y las operaciones pendientes de este dispositivo.");
+        } else {
+          setError("Sin conexión y todavía no hay lotes guardados en este dispositivo.");
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "No se pudieron leer los lotes guardados en este dispositivo.");
+      } finally {
+        hasLoadedLots.current = true;
+        setLoading(false);
+      }
+      return;
+    }
+
     try {
       const supabase = getSupabase();
       const { data, error: err } = await supabase
