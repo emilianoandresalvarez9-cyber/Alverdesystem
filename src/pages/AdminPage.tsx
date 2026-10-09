@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { AppShell } from "../shared/components/AppShell";
-import { BackupSettings } from "../shared/components/BackupSettings";
-import { BackupManager } from "../modules/admin/BackupManager";
+import { BackupCenter } from "../modules/admin/BackupCenter";
 import { OfflineIndicator } from "../shared/components/OfflineIndicator";
 import { StockDashboard } from "../modules/stock";
 import { ClassifierManager } from "../modules/admin/ClassifierManager";
@@ -222,10 +221,7 @@ export function AdminPage() {
                 Esquema relacional, auditoría reactiva de cambios y cola offline idempotente instalados.
               </p>
             </section>
-            <BackupSettings />
-            <div style={{ gridColumn: "1 / -1" }}>
-              <BackupManager />
-            </div>
+            <BackupCenter />
           </div>
         )}
       </div>

@@ -1,5 +1,7 @@
 import { OFFLINE_DB_NAME } from "../offline/queue";
 
+const OPERATIONS_STORE = "operations";
+
 export interface BackupData {
   timestamp: string;
   version: number;
@@ -73,54 +75,64 @@ export class BackupService {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   }
-  /** Restaura un respaldo previamente generado (T-09). */
-  public async restoreData(fileContent: string): Promise<void> {
-    const backup = JSON.parse(fileContent) as BackupData;
-    if (!backup.data) throw new Error("Formato de respaldo invalido.");
+  /**
+   * Recupera operaciones pendientes desde un respaldo (T-09) SIN borrar nada del equipo.
+   * La versión anterior hacía store.clear() y reemplazaba toda la base local: en un equipo con
+   * ventas nuevas sin enviar, esas ventas se perdían, y además pisaba la caja asignada y el turno.
+   * Ahora solo agrega las operaciones cuyo localId no existe; la idempotencia en la nube evita
+   * duplicados al enviarlas. Se puede repetir con el mismo archivo sin efecto.
+   */
+  public async mergePendingOperations(fileContent: string): Promise<{ added: number; skipped: number }> {
+    let backup: BackupData;
+    try {
+      backup = JSON.parse(fileContent) as BackupData;
+    } catch {
+      throw new Error("El archivo no es un respaldo válido (no es JSON).");
+    }
+    const incoming = backup?.data?.[OPERATIONS_STORE];
+    if (!Array.isArray(incoming)) throw new Error("El archivo no contiene operaciones de la cola.");
+    const operations = incoming.filter(
+      (item): item is { localId: string } =>
+        typeof item === "object" && item !== null && typeof (item as { localId?: unknown }).localId === "string"
+    );
 
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.dbName);
-      
-      request.onerror = () => reject(new Error("No se pudo abrir el almacenamiento local para restaurar."));
-      
+      request.onerror = () => reject(new Error("No se pudo abrir el almacenamiento local."));
       request.onsuccess = () => {
         const db = request.result;
-        const storeNames = Object.keys(backup.data).filter(name => db.objectStoreNames.contains(name));
-        
-        if (storeNames.length === 0) {
+        if (!db.objectStoreNames.contains(OPERATIONS_STORE)) {
           db.close();
-          resolve();
+          reject(new Error("Este equipo todavía no tiene cola de operaciones. Abrí la caja una vez y reintentá."));
           return;
         }
-
-        const transaction = db.transaction(storeNames, "readwrite");
-        
-        for (const storeName of storeNames) {
-          const store = transaction.objectStore(storeName);
-          store.clear(); // Limpiar datos actuales
-          
-          const items = backup.data[storeName];
-          if (items) {
-            for (const item of items) {
-              store.put(item); // Restaurar registros
+        const transaction = db.transaction(OPERATIONS_STORE, "readwrite");
+        const store = transaction.objectStore(OPERATIONS_STORE);
+        let added = 0;
+        let skipped = 0;
+        for (const operation of operations) {
+          const check = store.getKey(operation.localId);
+          check.onsuccess = () => {
+            if (check.result === undefined) {
+              store.add(operation);
+              added += 1;
+            } else {
+              skipped += 1;
             }
-          }
+          };
         }
-        
         transaction.oncomplete = () => {
           db.close();
-          // Emitir un evento para que la app sepa que cambió la base local (ej. la cola de sincronización)
-          window.dispatchEvent(new Event("local-db-restored"));
-          resolve();
+          if (typeof window !== "undefined") window.dispatchEvent(new Event("local-db-restored"));
+          resolve({ added, skipped });
         };
         transaction.onerror = () => {
           db.close();
-          reject(new Error("Error al restaurar los datos: " + String(transaction.error)));
+          reject(new Error("No se pudieron recuperar las operaciones: " + String(transaction.error)));
         };
       };
     });
   }
-
 }
 
 export const backupService = new BackupService();
