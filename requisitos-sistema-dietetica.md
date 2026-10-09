@@ -1,7 +1,7 @@
 # Documento de Requisitos — Sistema de Gestión para Dietética
 Antes de que se queden sin tokens o capacidad de procesamiento indicar hasta que parte se quedaron para que otra IA continue y cualquier tipo de cambio deberan notificarlo en los commit en caso de que entre dentro de sus posibilidades
-**Estado:** Planificación cerrada, lista para pasar a desarrollo (Fase 1)
-**Última actualización:** 21 de septiembre de 2026
+**Estado:** Requisitos de alcance aprobados; implementación en desarrollo. Revisión documental al 30 de septiembre de 2026. Ver `docs/ESTADO_QA.md` para avance estimado y evidencia.
+**Última actualización:** 30 de septiembre de 2026
 
 > **Cómo usar este documento:** es la fuente de verdad del proyecto. Antes de pedirle a un agente de código (Claude Code, Codex, Antigravity, u otro) que construya algo, dale este archivo completo en vez de reexplicar el contexto. Cuando se tome una decisión nueva o cambie una regla, se actualiza acá primero.
 

@@ -2,7 +2,7 @@
 
 Sistema web de gestión para dietética, según `requisitos-sistema-dietetica.md`.
 
-**Estado:** en desarrollo, no apto para producción. Ver `docs/ESTADO_QA.md` y `TAREAS.md`.
+**Estado (30/09/2026):** aproximadamente **77% de avance de implementación**; todavía **no apto para producción**. La estimación, sus criterios y las validaciones pendientes están en [`docs/ESTADO_QA.md`](docs/ESTADO_QA.md) y [`TAREAS.md`](TAREAS.md).
 Reglas para agentes: `AGENTS.md`.
 
 Páginas: `/` (ingreso), `/catalog.html`, `/pos.html` (caja), `/customers.html` (clientes y fiado),
