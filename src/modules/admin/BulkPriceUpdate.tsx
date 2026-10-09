@@ -1,136 +1,239 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { getSupabase } from "../../shared/supabase/client";
-import type { Product, Presentation, Brand, Category, Sale, SaleItem, StockLot, Customer, Supplier } from "../../shared/types";
-import { GlassCard, Button, Badge, TextField, SelectField } from "../../shared/ui";
+import { exportToExcel } from "../../shared/export/excel";
+import { Badge, Button, EmptyState, GlassCard, SelectField, TextField } from "../../shared/ui";
+import { formatMoney } from "../pos/money";
+import {
+  RETAG_HEADERS, SCOPE_LABELS, formatDiff, parsePercent, retagMatrix, summarizePreview,
+  type PriceChange, type PriceScope, type RetagRow
+} from "./bulkPrices";
 
+type Option = { id: string; name: string };
+type Batch = { id: string; created_at: string; percent: number; scope: string; changed_count: number };
+
+/**
+ * RF-28: actualización masiva de precios con vista previa, por porcentaje y por marca,
+ * rubro o proveedor. Todo lo calcula y aplica la base (RPC bulk_update_prices), en una
+ * sola transacción. RF-30: después de aplicar queda la lista de lo que cambió, para
+ * reetiquetar, y se puede volver a ver cualquier lote anterior.
+ */
 export function BulkPriceUpdate() {
-  const [brands, setBrands] = useState<Brand[]>([]);;
-  const [categories, setCategories] = useState<Brand[]>([]);;
-  
-  const [filterType, setFilterType] = useState<"all" | "brand" | "category">("all");
-  const [filterId, setFilterId] = useState("");
-  const [percentage, setPercentage] = useState("10"); // +10% por defecto
-  
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-
   const sb = getSupabase();
+  const [brands, setBrands] = useState<Option[]>([]);
+  const [categories, setCategories] = useState<Option[]>([]);
+  const [suppliers, setSuppliers] = useState<Option[]>([]);
+
+  const [scope, setScope] = useState<PriceScope>("all");
+  const [scopeId, setScopeId] = useState("");
+  const [percentage, setPercentage] = useState("10");
+  const [roundTo100, setRoundTo100] = useState(true);
+
+  const [preview, setPreview] = useState<PriceChange[] | null>(null);
+  const [busy, setBusy] = useState<"preview" | "apply" | null>(null);
+  const [error, setError] = useState("");
+  const [applied, setApplied] = useState<{ batchId: string; count: number } | null>(null);
 
   useEffect(() => {
-    async function loadData() {
-      const [{ data: bData }, { data: cData }] = await Promise.all([
-        sb.from("brands").select("*").order("name"),
-        sb.from("categories").select("*").order("name")
-      ]);
-      setBrands(bData || []);
-      setCategories(cData || []);
-    }
-    loadData();
-  }, []);
+    void Promise.all([
+      sb.from("brands").select("id, name").is("archived_at", null).order("name"),
+      sb.from("categories").select("id, name").is("archived_at", null).order("name"),
+      sb.from("suppliers").select("id, name").eq("active", true).order("name")
+    ]).then(([b, c, s]) => {
+      setBrands(b.data ?? []);
+      setCategories(c.data ?? []);
+      setSuppliers(s.data ?? []);
+    });
+  }, [sb]);
 
-  const handleUpdate = async () => {
-    const p = parseFloat(percentage);
-    if (isNaN(p) || p === 0) return setError("Porcentaje inválido");
-    
-    
+  const scopeOptions = scope === "brand" ? brands : scope === "category" ? categories : scope === "supplier" ? suppliers : [];
+  const scopeName = scopeOptions.find((o) => o.id === scopeId)?.name;
 
-    setLoading(true);
+  async function run(apply: boolean) {
+    const parsed = parsePercent(percentage);
+    if (!parsed.ok) return setError(parsed.reason);
+    if (scope !== "all" && !scopeId) return setError("Elegí la marca, el rubro o el proveedor.");
+    setBusy(apply ? "apply" : "preview");
     setError("");
-    setMessage("Calculando productos afectados...");
-
     try {
-      // 1. Obtener los productos afectados
-      let query = sb.from("product_presentations").select("id, sale_price, products!inner(brand_id, category_id)");
-      
-      if (filterType === "brand" && filterId) {
-        query = query.eq("products.brand_id", filterId);
-      } else if (filterType === "category" && filterId) {
-        query = query.eq("products.category_id", filterId);
-      }
-      
-      const { data: presentations, error: presErr } = await query;
-      
-      if (presErr) throw new Error(presErr.message);
-      if (!presentations || presentations.length === 0) throw new Error("No hay productos que coincidan con el filtro.");
-      
-      setMessage(`Actualizando ${presentations.length} presentaciones...`);
-      
-      // 2. Modificar los precios
-      const factor = 1 + (p / 100);
-      
-      // Como no hay endpoint bulk RPC, lo hacemos iterando (en un sistema real seria mejor un RPC)
-      // Supabase limita a 1000 items por bulk update, pero aquí tenemos IDs y cada uno tiene precio distinto,
-      // la forma más fácil es usando un Promise.all en chunks o creando una RPC.
-      // Aquí haremos las actualizaciones individuales.
-      
-      const updates = presentations.map(pres => {
-        const newPrice = Math.round((pres.sale_price * factor) * 100) / 100; // Redondear a 2 decimales
-        return sb.from("product_presentations").update({ sale_price: newPrice }).eq("id", pres.id);
+      const { data, error: rpcError } = await sb.rpc("bulk_update_prices", {
+        p_percent: parsed.percent,
+        p_scope: scope,
+        ...(scope !== "all" ? { p_scope_id: scopeId } : {}),
+        p_apply: apply,
+        ...(roundTo100 ? { p_round_to: 100 } : {})
       });
-      
-      // Ejecutar en lotes de a 10 para no saturar la red
-      for (let i = 0; i < updates.length; i += 10) {
-        await Promise.all(updates.slice(i, i + 10));
+      if (rpcError) throw new Error(rpcError.message);
+      const rows = (data ?? []).map((row) => ({ ...row, old_price: Number(row.old_price), new_price: Number(row.new_price) }));
+      if (apply) {
+        setApplied({ batchId: rows[0]?.batch_id ?? "", count: rows.length });
+        setPreview(null);
+      } else {
+        setPreview(rows);
+        setApplied(null);
       }
-      
-      setMessage(`Se actualizaron exitosamente ${presentations.length} presentaciones.`);
     } catch (e: unknown) {
-      setError((e instanceof Error ? e.message : String(e)));
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setLoading(false);
+      setBusy(null);
     }
-  };
+  }
+
+  const summary = preview ? summarizePreview(preview) : null;
+
+  return (
+    <div style={{ display: "grid", gap: "var(--esp-m)" }}>
+      <GlassCard>
+        <h2>Actualización masiva de precios</h2>
+        <p className="field-help">
+          Primero se muestra qué cambiaría; nada se guarda hasta que confirmes. Los precios se aplican todos juntos:
+          si algo falla, no cambia ninguno.
+        </p>
+
+        <div style={{ display: "flex", gap: "var(--esp-m)", alignItems: "flex-end", flexWrap: "wrap" }}>
+          <SelectField label="Aplicar a" value={scope}
+            onChange={(e) => { setScope(e.target.value as PriceScope); setScopeId(""); setPreview(null); }}>
+            {(Object.keys(SCOPE_LABELS) as PriceScope[]).map((s) => <option key={s} value={s}>{SCOPE_LABELS[s]}</option>)}
+          </SelectField>
+          {scope !== "all" && (
+            <SelectField label={SCOPE_LABELS[scope].replace("Un ", "").replace("Una ", "")} value={scopeId}
+              onChange={(e) => { setScopeId(e.target.value); setPreview(null); }}>
+              <option value="">Elegí…</option>
+              {scopeOptions.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+            </SelectField>
+          )}
+          <TextField label="Porcentaje (%)" inputMode="decimal" value={percentage}
+            onChange={(e) => { setPercentage(e.target.value); setPreview(null); }} help="Negativo para bajar" />
+          <label style={{ display: "flex", gap: ".5rem", alignItems: "center", paddingBottom: ".6rem" }}>
+            <input type="checkbox" checked={roundTo100} onChange={(e) => { setRoundTo100(e.target.checked); setPreview(null); }} />
+            Redondear a múltiplo de $100 (RF-29)
+          </label>
+          <Button variant="secundario" onClick={() => void run(false)} loading={busy === "preview"} disabled={busy !== null}>
+            Ver qué cambiaría
+          </Button>
+        </div>
+        {error && <p className="form-error" role="alert" style={{ marginTop: "var(--esp-s)" }}>{error}</p>}
+      </GlassCard>
+
+      {preview && summary && (
+        <GlassCard>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--esp-m)", flexWrap: "wrap" }}>
+            <h3 style={{ margin: 0 }}>Revisá antes de confirmar</h3>
+            <Badge tone={summary.count ? "aviso" : "neutro"}>
+              {summary.count} cambio{summary.count === 1 ? "" : "s"} · {summary.increases} suben · {summary.decreases} bajan
+            </Badge>
+          </div>
+          <p className="field-help">
+            {SCOPE_LABELS[scope]}{scopeName ? ` · ${scopeName}` : ""} · {percentage.replace(".", ",")} %
+            {roundTo100 ? " · redondeado a $100" : ""}
+          </p>
+          {summary.count === 0 ? (
+            <EmptyState title="Ningún precio cambiaría">Con ese porcentaje y redondeo, todos quedan igual.</EmptyState>
+          ) : (
+            <>
+              <div className="table-wrap">
+                <table>
+                  <thead><tr><th>Producto</th><th>Presentación</th><th>Anterior</th><th>Nuevo</th><th>Diferencia</th></tr></thead>
+                  <tbody>
+                    {preview.map((row) => (
+                      <tr key={row.presentation_id}>
+                        <td>{row.product_name}</td>
+                        <td>{row.presentation_name}</td>
+                        <td>{formatMoney(row.old_price)}</td>
+                        <td><strong>{formatMoney(row.new_price)}</strong></td>
+                        <td>{formatDiff(row)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ display: "flex", gap: "var(--esp-s)", marginTop: "var(--esp-m)", flexWrap: "wrap" }}>
+                <Button onClick={() => void run(true)} loading={busy === "apply"} disabled={busy !== null}>
+                  Confirmar {summary.count} cambio{summary.count === 1 ? "" : "s"}
+                </Button>
+                <Button variant="fantasma" onClick={() => setPreview(null)} disabled={busy !== null}>Cancelar</Button>
+              </div>
+            </>
+          )}
+        </GlassCard>
+      )}
+
+      {applied && (
+        <p className="notice" role="status">
+          Listo: se actualizaron {applied.count} precio{applied.count === 1 ? "" : "s"} en una sola operación.
+          La lista para reetiquetar está abajo.
+        </p>
+      )}
+
+      <RetagList highlightBatchId={applied?.batchId ?? null} />
+    </div>
+  );
+}
+
+/** RF-30: lista de lo que cambió en un lote, para reetiquetar; exportable a Excel. */
+function RetagList({ highlightBatchId }: { highlightBatchId: string | null }) {
+  const sb = getSupabase();
+  const [batches, setBatches] = useState<Batch[]>([]);
+  const [selected, setSelected] = useState("");
+  const [rows, setRows] = useState<RetagRow[] | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    void sb.from("price_update_batches").select("id, created_at, percent, scope, changed_count")
+      .order("created_at", { ascending: false }).limit(20)
+      .then(({ data, error: err }) => {
+        if (err) return setError(err.message);
+        const list = (data ?? []).map((b) => ({ ...b, percent: Number(b.percent) }));
+        setBatches(list);
+        setSelected(highlightBatchId || list[0]?.id || "");
+      });
+  }, [sb, highlightBatchId]);
+
+  useEffect(() => {
+    if (!selected) return setRows(null);
+    void sb.rpc("price_batch_changes", { p_batch_id: selected }).then(({ data, error: err }) => {
+      if (err) return setError(err.message);
+      setRows((data ?? []).map((r) => ({ ...r, old_price: Number(r.old_price), new_price: Number(r.new_price) })));
+    });
+  }, [sb, selected]);
+
+  const batchLabel = (b: Batch) =>
+    `${new Date(b.created_at).toLocaleString("es-AR")} · ${b.percent > 0 ? "+" : ""}${b.percent} % · ${SCOPE_LABELS[b.scope as PriceScope] ?? b.scope} · ${b.changed_count} cambio${b.changed_count === 1 ? "" : "s"}`;
 
   return (
     <GlassCard>
-      <h2>Actualización Masiva de Precios</h2>
-      <p>Modificá los precios de venta en lote, aplicando un porcentaje de aumento o descuento.</p>
-      
-      {error && <Badge tone="error" style={{ marginBottom: "1rem" }}>{error}</Badge>}
-      {message && <Badge tone="aviso" style={{ marginBottom: "1rem" }}>{message}</Badge>}
-
-      <div style={{ display: "flex", gap: "1rem", alignItems: "flex-end", flexWrap: "wrap" }}>
-        <SelectField
-          label="Aplicar a"
-          value={filterType}
-          onChange={(e) => { setFilterType(e.target.value as "all" | "brand" | "category"); setFilterId(""); }}
-        >
-          <option value="all">Todo el catálogo</option>
-          <option value="brand">Una Marca específica</option>
-          <option value="category">Una Categoría específica</option>
-        </SelectField>
-
-        {filterType === "brand" && (
-          <SelectField label="Marca" value={filterId} onChange={e => setFilterId(e.target.value)}>
-            <option value="">Seleccione marca...</option>
-            {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: "var(--esp-m)", flexWrap: "wrap" }}>
+        <div>
+          <h3 style={{ margin: 0 }}>Para reetiquetar (RF-30)</h3>
+          <p className="field-help">Solo los productos cuyo precio cambió en la actualización elegida.</p>
+        </div>
+        {batches.length > 0 && (
+          <SelectField label="Actualización" value={selected} onChange={(e) => setSelected(e.target.value)}>
+            {batches.map((b) => <option key={b.id} value={b.id}>{batchLabel(b)}</option>)}
           </SelectField>
         )}
-
-        {filterType === "category" && (
-          <SelectField label="Categoría" value={filterId} onChange={e => setFilterId(e.target.value)}>
-            <option value="">Seleccione categoría...</option>
-            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </SelectField>
-        )}
-
-        <TextField
-          label="Porcentaje (%)"
-          type="number"
-          value={percentage}
-          onChange={(e) => setPercentage(e.target.value)}
-          required
-        />
-        
-        <Button 
-          variant="primario" 
-          onClick={handleUpdate} 
-          disabled={loading || (filterType !== 'all' && !filterId) || !percentage}
-        >
-          Aplicar Actualización
+        <Button variant="secundario" disabled={!rows || rows.length === 0}
+          onClick={() => rows && exportToExcel(RETAG_HEADERS, retagMatrix(rows), "reetiquetar")}>
+          Exportar a Excel
         </Button>
       </div>
+      {error && <p className="form-error" role="alert">{error}</p>}
+      {batches.length === 0 && <EmptyState title="Todavía no hubo actualizaciones masivas" />}
+      {rows && rows.length > 0 && (
+        <div className="table-wrap" style={{ marginTop: "var(--esp-m)" }}>
+          <table>
+            <thead><tr><th>Producto</th><th>Presentación</th><th>Código interno</th><th>Anterior</th><th>Nuevo</th></tr></thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.presentation_id}>
+                  <td>{r.product_name}</td><td>{r.presentation_name}</td>
+                  <td><code>{r.internal_barcode ?? "—"}</code></td>
+                  <td>{formatMoney(r.old_price)}</td><td><strong>{formatMoney(r.new_price)}</strong></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </GlassCard>
   );
 }
