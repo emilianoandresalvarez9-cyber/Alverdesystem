@@ -58,6 +58,19 @@ where id = 'UUID_DEL_USUARIO';
 
 La migración crea el perfil automáticamente al crear un usuario de Auth. No hay credenciales de Supabase en el repositorio.
 
+### Pruebas E2E (Playwright)
+
+Las pruebas E2E crean usuarios, ventas y movimientos de stock, así que **solo corren contra la base
+local**: `playwright.config.ts` corta si la URL no es `localhost`/`127.0.0.1`. Para no tocar tu
+`.env.local` (que `npm run local` deja apuntando a la nube), las pruebas leen `.env.e2e.local`:
+
+```bash
+npx supabase start && npx supabase db reset
+npx supabase db query --local --file supabase/seed.e2e.sql
+printf "VITE_SUPABASE_URL=http://127.0.0.1:54321\nVITE_SUPABASE_ANON_KEY=<anon key de supabase status>\n" > .env.e2e.local
+npm run test:e2e
+```
+
 ## Puesta en marcha cloud
 
 1. Crear el proyecto de Supabase de la dietética.

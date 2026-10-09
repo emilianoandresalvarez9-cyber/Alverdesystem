@@ -1,8 +1,17 @@
 import { defineConfig, devices } from '@playwright/test';
 import dotenv from 'dotenv';
+import { E2E_MODE, assertLocalE2ETarget } from './e2e/target';
 
-// Read from default ".env.local" file.
-dotenv.config({ path: '.env.local' });
+// Credenciales de prueba locales (TEST_EMPLOYEE_EMAIL, etc.), si las hay.
+dotenv.config({ path: '.env.e2e.local' });
+
+// Corta antes de levantar nada si la base no es local (los E2E escriben datos).
+assertLocalE2ETarget();
+
+// Puerto propio y servidor siempre nuevo: así nunca se reutiliza un `npm run dev` que esté
+// apuntando a la nube, y el servidor usa exactamente la configuración que se acaba de validar.
+const PORT = 5180;
+const BASE_URL = `http://127.0.0.1:${PORT}`;
 
 export default defineConfig({
   testDir: './e2e',
@@ -12,7 +21,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL: BASE_URL,
     trace: 'on-first-retry',
   },
 
@@ -24,8 +33,8 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:5173',
-    reuseExistingServer: !process.env.CI,
+    command: `npx vite --mode ${E2E_MODE} --host 127.0.0.1 --port ${PORT} --strictPort`,
+    url: BASE_URL,
+    reuseExistingServer: false,
   },
 });

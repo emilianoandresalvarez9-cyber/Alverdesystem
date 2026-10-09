@@ -15,3 +15,13 @@ export function isSupabaseConfigValid(url: string, anonKey: string): boolean {
   if (parsed.protocol === "https:") return true;
   return parsed.protocol === "http:" && LOCAL_HOSTS.has(parsed.hostname);
 }
+
+/** true si la URL apunta a la máquina local (Supabase CLI), nunca a un proyecto en la nube. */
+export function isLocalSupabaseUrl(url: string | undefined): boolean {
+  if (!url) return false;
+  try {
+    return LOCAL_HOSTS.has(new URL(url.trim()).hostname);
+  } catch {
+    return false;
+  }
+}
