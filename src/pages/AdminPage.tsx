@@ -14,7 +14,6 @@ import { ReportsDashboard } from "../modules/reports/ReportsDashboard";
 import { AuditHistoryPage } from "../modules/audit/AuditHistoryPage";
 import { BranchesManager } from "../modules/admin/BranchesManager";
 import { ScalePresentations } from "../modules/admin/ScalePresentations";
-import { ScaleManager } from "../modules/admin/ScaleManager";
 import { ProductsManager } from "../modules/admin/ProductsManager";
 import { BulkPriceUpdate } from "../modules/admin/BulkPriceUpdate";
 import { PriceMultiplierSettings } from "../modules/admin/PriceMultiplierSettings";
@@ -22,7 +21,7 @@ import { SuppliersManager } from "../modules/admin/SuppliersManager";
 import { MarginDashboard } from "../modules/reports/MarginDashboard";
 import "../styles/pos.css";
 
-type AdminTab = "reports" | "margins" | "stock" | "fractioning" | "classifiers" | "products" | "prices" | "suppliers" | "restock" | "barcodes" | "scale" | "scale_manager" | "branches" | "audit" | "settings";
+type AdminTab = "reports" | "margins" | "stock" | "fractioning" | "classifiers" | "products" | "prices" | "suppliers" | "restock" | "barcodes" | "scale" | "branches" | "audit" | "settings";
 
 export function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>("reports");
@@ -103,14 +102,7 @@ export function AdminPage() {
             variant={activeTab === "scale" ? "primario" : "fantasma"}
             onClick={() => setActiveTab("scale")}
           >
-            ⚖️ Balanza (Catálogo)
-          </Button>
-
-          <Button
-            variant={activeTab === "scale_manager" ? "primario" : "fantasma"}
-            onClick={() => setActiveTab("scale_manager")}
-          >
-            ⚙️ Configuración Balanza
+            ⚖️ Balanza
           </Button>
 
           <Button
@@ -198,7 +190,6 @@ export function AdminPage() {
 
         {/* Venta con balanza (ADR-001) */}
         {activeTab === "scale" && <ScalePresentations />}
-        {activeTab === "scale_manager" && <ScaleManager />}
 
         {/* Sucursales y cajas (RF-53, RF-55): la caja de /pos.html elige de esta lista */}
         {activeTab === "branches" && <BranchesManager />}
