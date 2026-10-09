@@ -1,11 +1,20 @@
-import type { SupabaseAny } from "../../shared/types";
 import { useEffect, useState } from "react";
 import { getSupabase } from "../../shared/supabase/client";
 import { GlassCard, Badge, EmptyState } from "../../shared/ui";
 import { grossMarginPercentage, latestLotCost, marginTone } from "./marginCalculations";
 
+type MarginRow = {
+  id: string;
+  productName: string;
+  presentationName: string;
+  cost: number;
+  price: number;
+  profit: number;
+  marginPercentage: number;
+};
+
 export function MarginDashboard() {
-  const [margins, setMargins] = useState<SupabaseAny[]>([]);
+  const [margins, setMargins] = useState<MarginRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -46,7 +55,7 @@ export function MarginDashboard() {
 
       return {
         id: pres.id,
-        productName: Array.isArray(pres.products) ? (pres.products[0] as SupabaseAny)?.name : (pres.products as SupabaseAny)?.name,
+        productName: pres.products?.name ?? "",
         presentationName: pres.name,
         cost,
         price,

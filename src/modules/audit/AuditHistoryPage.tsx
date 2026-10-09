@@ -1,4 +1,4 @@
-import type { SupabaseAny } from "../../shared/types";
+import type { Json } from "../../shared/supabase/database.types";
 import { useState, useEffect } from "react";
 import { GlassCard, EmptyState } from "../../shared/ui";
 import { getSupabase } from "../../shared/supabase/client";
@@ -8,8 +8,8 @@ interface AuditRecord {
   entity: string;
   entity_id: string;
   field: string;
-  old_value: SupabaseAny;
-  new_value: SupabaseAny;
+  old_value: Json | null;
+  new_value: Json | null;
   user_id: string;
   occurred_at: string;
   profiles?: {
@@ -57,7 +57,7 @@ export function AuditHistoryPage() {
       if (fetchError) {
         setError("Error al cargar el historial de auditoría.");
       } else {
-        setHistory(data as SupabaseAny);
+        setHistory((data ?? []) as AuditRecord[]);
       }
       setLoading(false);
     }

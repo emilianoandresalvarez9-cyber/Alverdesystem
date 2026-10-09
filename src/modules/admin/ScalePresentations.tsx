@@ -86,7 +86,7 @@ function ScaleRow({ row, onSaved }: { row: Row; onSaved: () => Promise<void> }) 
     const { error } = await getSupabase().rpc("set_presentation_scale", {
       p_presentation_id: row.id,
       p_sold_by_weight: enable,
-      p_price_per_kg: enable ? pricePerKg : null,
+      p_price_per_kg: enable ? pricePerKg : undefined,
       p_convert: convert
     });
     setBusy(false);

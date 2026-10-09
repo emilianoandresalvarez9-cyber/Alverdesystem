@@ -1,79 +1,19 @@
-export interface Brand {
-  id: string;
-  name: string;
-}
+/**
+ * Tipos de filas de la base. Salen de database.types.ts (generado desde las migraciones con
+ * `npm run gen:types`), así no pueden desincronizarse del esquema real.
+ *
+ * Antes eran interfaces escritas a mano con campos que no existen (Presentation.status,
+ * Presentation.internal_code, StockLot.cost, Customer.contact) y un `SupabaseAny` que era
+ * `any` con otro nombre (P20).
+ */
+import type { Tables } from "../supabase/database.types";
 
-export interface Category {
-  id: string;
-  name: string;
-}
-
-export interface Product {
-  id: string;
-  name: string;
-  manufacturer_barcode?: string | null;
-  brand_id?: string | null;
-  category_id?: string | null;
-  base_unit?: string;
-  price_multiplier?: number | null;
-  active: boolean;
-}
-
-export interface Presentation {
-  id: string;
-  product_id: string;
-  name: string;
-  sale_price: number;
-  internal_code?: string;
-  barcode?: string;
-  status: string;
-  base_quantity?: number;
-  sold_by_weight?: boolean;
-}
-
-export interface StockLot {
-  id: string;
-  presentation_id: string;
-  initial_quantity: number;
-  current_quantity: number;
-  cost: number;
-  received_at: string;
-  manufacturer_expiry_date?: string | null;
-  opened_at?: string | null;
-  status: string;
-}
-
-export interface Sale {
-  id: string;
-  local_id: string;
-  total_amount: number;
-  payment_method: string;
-  occurred_at: string;
-  status: string;
-  user_id?: string;
-  customer_id?: string;
-}
-
-export interface SaleItem {
-  id: string;
-  sale_id: string;
-  presentation_id: string;
-  quantity: number;
-  unit_price: number;
-  subtotal: number;
-}
-
-export interface Customer {
-  id: string;
-  name: string;
-  contact?: string;
-}
-
-export interface Supplier {
-  id: string;
-  name: string;
-  contact?: string;
-}
-
-
-export type SupabaseAny = ReturnType<typeof JSON.parse>;
+export type Brand = Tables<"brands">;
+export type Category = Tables<"categories">;
+export type Product = Tables<"products">;
+export type Presentation = Tables<"product_presentations">;
+export type StockLot = Tables<"stock_lots">;
+export type Sale = Tables<"sales">;
+export type SaleItem = Tables<"sale_items">;
+export type Customer = Tables<"customers">;
+export type Supplier = Tables<"suppliers">;
