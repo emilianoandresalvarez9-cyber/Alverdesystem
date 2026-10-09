@@ -433,6 +433,8 @@ dialog.modal::backdrop { background: var(--backdrop); }
 .app-heading { margin: 0; }
 .app-heading h1 { max-width: none; font-size: clamp(1.5rem, 1.1rem + 1.2vw, 2rem); }
 .app-role { flex: none; }
+.app-header-status { display: flex; align-items: center; gap: var(--esp-m); flex-wrap: wrap; }
+.app-header-status .sync-status { margin: 0; }
 
 .app-content { grid-area: content; min-width: 0; }
 

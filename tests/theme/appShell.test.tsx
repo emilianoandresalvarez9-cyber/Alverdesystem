@@ -37,6 +37,12 @@ describe("AppShell", () => {
     expect(html).toMatch(/<a class="active" href="\/pos\.html" aria-current="page"/);
   });
 
+  it("muestra en todas las páginas si hay operaciones pendientes de sincronizar (RF-36)", () => {
+    const html = renderShell("employee");
+    expect(html).toContain('class="sync-status');
+    expect(html).toMatch(/operaci(ón|ones) pendiente/);
+  });
+
   it("Empleado no ve el acceso a Administración; Administrador sí (RNF-04)", () => {
     expect(renderShell("employee")).not.toContain("/admin.html");
     expect(renderShell("employee")).toContain(">Empleado<");

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { AppShell } from "../shared/components/AppShell";
 import { BackupCenter } from "../modules/admin/BackupCenter";
-import { OfflineIndicator } from "../shared/components/OfflineIndicator";
 import { StockDashboard } from "../modules/stock";
 import { StockWarningsReview } from "../modules/stock/StockWarningsReview";
 import { ClassifierManager } from "../modules/admin/ClassifierManager";
@@ -206,7 +205,6 @@ export function AdminPage() {
         {activeTab === "settings" && (
           <div className="dashboard-grid">
             <section className="glass feature-card">
-              <OfflineIndicator />
               <h2>Acceso protegido</h2>
               <p>
                 La base de datos separa los costos y márgenes del catálogo operativo. Un empleado no puede obtenerlos ni cambiando una URL.
