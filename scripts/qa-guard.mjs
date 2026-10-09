@@ -37,7 +37,8 @@ const allowFile = "qa/mocks-conocidos.txt";
 const allowed = existsSync(allowFile)
   ? readFileSync(allowFile, "utf8").split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith("#"))
   : [];
-const mockPattern = /\bmock/i;
+// "para la demo": la pantalla de balanza mostraba "Conectada" y un peso fijo sin conectar nada.
+const mockPattern = /\bmock|para la demo/i;
 const prodSources = files.filter((f) => f.path.startsWith("src/") && /\.(ts|tsx)$/.test(f.path) && !isTest(f.path));
 for (const f of prodSources) {
   const hasMock = mockPattern.test(readFileSync(f.full, "utf8"));
