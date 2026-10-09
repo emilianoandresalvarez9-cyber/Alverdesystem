@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Alverde · hoja global (Agente D — RNF-06 a RNF-09)
  * --------------------------------------------------
  * Reemplaza a la global.css de Fase 0 manteniendo TODAS sus clases
@@ -10,6 +10,7 @@
  * Requiere importar tokens.css ANTES que este archivo.
  */
 
+@import "./tokens.css";
 @import "./themes/alverde-botanical.css";
 @import "./themes/midnight-bio.css";
 
@@ -209,7 +210,7 @@ select option { color: var(--color-fondo); background: #fff; }
   box-shadow: none;
   border: 1px solid transparent;
 }
-.button-ghost:hover { background: #ffffff10; filter: none; }
+.button-ghost:hover { background: var(--color-hover); filter: none; }
 .button-danger {
   color: var(--color-error-tinta);
   background: var(--color-error-fuerte);
@@ -251,7 +252,7 @@ code { color: var(--color-acento); }
   background: transparent;
   transition: background var(--mov-rapido) var(--mov-curva), color var(--mov-rapido) var(--mov-curva);
 }
-.tag:hover { background: #ffffff10; }
+.tag:hover { background: var(--color-hover); }
 .tag-activo, .tag[aria-pressed="true"] {
   color: var(--color-acento-tinta);
   background: var(--color-acento);
@@ -311,7 +312,7 @@ tbody tr:hover { background: var(--color-hover); }
 
 .skeleton {
   border-radius: var(--radio-control);
-  background: #ffffff12;
+  background: var(--color-hover);
   animation: pulso 1.6s ease-in-out infinite;
 }
 
