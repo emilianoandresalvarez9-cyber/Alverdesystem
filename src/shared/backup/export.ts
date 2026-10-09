@@ -6,20 +6,39 @@ export interface BackupData {
   tables: Record<string, Record<string, unknown>[]>;
 }
 
-const TABLES_TO_BACKUP = [
+/**
+ * Todas las tablas con datos del negocio (RF-41). Antes faltaban marcas, rubros, etiquetas,
+ * sucursales, cajas, turnos, faltantes, precios e historial: la copia no alcanzaba para
+ * reconstruir nada. Es una exportación de datos; para restaurar la base se sigue
+ * docs/runbooks/restaurar-base.md, nunca desde el navegador (P17).
+ */
+export const TABLES_TO_BACKUP = [
+  "brands",
+  "categories",
+  "labels",
+  "suppliers",
   "products",
+  "product_labels",
   "product_presentations",
+  "product_price_history",
+  "supplier_products",
+  "pricing_settings",
+  "category_price_multipliers",
+  "branches",
+  "registers",
+  "profiles",
   "stock_lots",
   "stock_movements",
+  "stock_warnings",
   "customers",
   "credit_movements",
+  "cash_shifts",
   "sales",
   "sale_items",
+  "missing_items",
   "audit_history",
-  "supplier_products",
-  "suppliers",
   "offline_operations"
-];
+] as const;
 
 /**
  * Genera un objeto con todos los datos de las tablas principales (RF-41)
