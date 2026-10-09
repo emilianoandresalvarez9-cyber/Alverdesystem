@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Alverde · hoja global (Agente D — RNF-06 a RNF-09)
  * --------------------------------------------------
  * Reemplaza a la global.css de Fase 0 manteniendo TODAS sus clases
@@ -11,6 +11,8 @@
  */
 
 @import "./tokens.css";
+@import "./themes/alverde-botanical.css";
+@import "./themes/midnight-bio.css";
 
 /* Transiciones animadas entre páginas del MPA (RNF-07/RNF-08) */
 @view-transition { navigation: auto; }
@@ -30,10 +32,7 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
-  background:
-    radial-gradient(circle at 8% 8%, var(--color-verde-medio) 0, transparent 29rem),
-    radial-gradient(circle at 92% 92%, var(--color-dorado) 0, transparent 28rem),
-    var(--color-fondo);
+  background: var(--fondo-pagina);
 }
 
 button, input, select, textarea { font: inherit; }
@@ -60,15 +59,15 @@ button { cursor: pointer; }
 /* ---------- Superficies glass ---------- */
 
 .glass {
-  background: rgba(244, 255, 240, 0.13);
   background: var(--glass-fondo);
   border: 1px solid var(--glass-borde);
   box-shadow: var(--glass-sombra);
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturacion));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturacion));
 }
 
 html.sin-blur .glass {
+  background: var(--glass-fondo-opaco);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
@@ -77,13 +76,18 @@ html.sin-blur .glass {
  * sin blur, para no fundir la notebook de la caja. Máximo una o dos
  * superficies .glass con blur por pantalla; el resto, .glass-lite. */
 .glass-lite {
-  background: rgba(244, 255, 240, 0.09);
   background: var(--glass-fondo-lite);
   border: 1px solid var(--glass-borde);
   box-shadow: none;
 }
 
-.card { border-radius: var(--radio-carta); padding: var(--esp-l); }
+.card {
+  border-radius: var(--radio-carta);
+  padding: var(--esp-l);
+  background: var(--carta-fondo);
+  border: 1px solid var(--carta-borde);
+  box-shadow: var(--carta-sombra);
+}
 .card-flush { padding: 0; }
 
 /* ---------- Marca y encabezados ---------- */
@@ -117,11 +121,19 @@ html.sin-blur .glass {
 h1 {
   max-width: 13ch;
   margin: 0 0 1.75rem;
+  font-family: var(--fuente-titulos);
   font-size: var(--texto-titulo);
   line-height: 1;
-  letter-spacing: -.065em;
+  letter-spacing: var(--titulo-tracking);
+  font-weight: var(--titulo-peso);
 }
-h2 { margin: .4rem 0 .75rem; font-size: var(--texto-l); letter-spacing: -.03em; }
+h2 {
+  margin: .4rem 0 .75rem;
+  font-family: var(--fuente-titulos);
+  font-size: var(--texto-l);
+  letter-spacing: var(--titulo-tracking);
+  font-weight: var(--titulo-peso);
+}
 p { line-height: 1.5; }
 
 /* ---------- Login ---------- */
@@ -141,16 +153,19 @@ label { display: grid; gap: .45rem; font-size: var(--texto-s); font-weight: 700;
 
 input, select, textarea {
   width: 100%;
-  border: 1px solid #dfffe244;
+  border: 1px solid var(--input-borde);
   border-radius: var(--radio-control);
   padding: .8rem .9rem;
   color: var(--color-tinta);
-  background: color-mix(in srgb, var(--color-fondo-profundo) 44%, transparent);
-  transition: border-color var(--mov-rapido) var(--mov-curva);
+  background: var(--input-fondo);
+  box-shadow: var(--input-sombra);
+  font-family: var(--fuente-datos);
+  transition: border-color var(--mov-rapido) var(--mov-curva), box-shadow var(--mov-rapido) var(--mov-curva);
 }
 input:focus-visible, select:focus-visible, textarea:focus-visible {
-  outline-offset: 0;
+  outline: none;
   border-color: var(--color-acento);
+  box-shadow: var(--foco-anillo);
 }
 input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="true"] {
   border-color: var(--color-error-fuerte);
@@ -169,21 +184,38 @@ select option { color: var(--color-fondo); background: #fff; }
   justify-content: center;
   gap: .5rem;
   border: 0;
-  border-radius: var(--radio-control);
+  border-radius: var(--radio-boton);
   padding: .8rem 1rem;
   color: var(--color-acento-tinta);
   background: var(--color-acento);
   font-weight: 800;
+  box-shadow: var(--boton-sombra);
   transition: filter var(--mov-rapido) var(--mov-curva), transform var(--mov-rapido) var(--mov-curva);
 }
 .button:hover { filter: brightness(1.06); }
 .button:active { transform: translateY(1px); }
 .button:disabled { cursor: wait; opacity: .65; transform: none; }
 
-.button-secondary { padding: .55rem .8rem; color: var(--color-tinta); background: #ffffff18; }
-.button-ghost { padding: .55rem .8rem; color: var(--color-tinta-suave); background: transparent; }
-.button-ghost:hover { background: #ffffff10; filter: none; }
-.button-danger { color: #2b0f0a; background: var(--color-error-fuerte); }
+.button-secondary {
+  padding: .55rem .8rem;
+  color: var(--boton-secundario-tinta);
+  background: var(--boton-secundario-fondo);
+  border: 1px solid var(--boton-secundario-borde);
+  box-shadow: none;
+}
+.button-ghost {
+  padding: .55rem .8rem;
+  color: var(--color-tinta-suave);
+  background: transparent;
+  box-shadow: none;
+  border: 1px solid transparent;
+}
+.button-ghost:hover { background: var(--color-hover); filter: none; }
+.button-danger {
+  color: var(--color-error-tinta);
+  background: var(--color-error-fuerte);
+  box-shadow: none;
+}
 
 /* ---------- Avisos, badges y tags ---------- */
 
@@ -200,11 +232,11 @@ code { color: var(--color-acento); }
   font-size: var(--texto-xs);
   font-weight: 750;
   color: var(--color-tinta-suave);
-  background: #ffffff14;
+  background: var(--color-badge-fondo);
 }
-.badge-exito { color: var(--color-fondo); background: var(--color-exito); }
-.badge-aviso { color: #34230a; background: var(--color-aviso); }
-.badge-error { color: #2b0f0a; background: var(--color-error-fuerte); }
+.badge-exito { color: var(--color-exito-tinta); background: var(--color-exito); }
+.badge-aviso { color: var(--color-aviso-tinta); background: var(--color-aviso); }
+.badge-error { color: var(--color-error-tinta); background: var(--color-error-fuerte); }
 
 /* Tags de catálogo (vegano, sin TACC, etc.): botones conmutables (RF-02/RF-04) */
 .tag {
@@ -220,7 +252,7 @@ code { color: var(--color-acento); }
   background: transparent;
   transition: background var(--mov-rapido) var(--mov-curva), color var(--mov-rapido) var(--mov-curva);
 }
-.tag:hover { background: #ffffff10; }
+.tag:hover { background: var(--color-hover); }
 .tag-activo, .tag[aria-pressed="true"] {
   color: var(--color-acento-tinta);
   background: var(--color-acento);
@@ -255,11 +287,15 @@ thead th {
   font-weight: 750;
   letter-spacing: .08em;
   text-transform: uppercase;
-  color: var(--color-tinta-apagada);
-  background: color-mix(in srgb, var(--color-fondo-profundo) 86%, transparent);
+  color: var(--tabla-cabecera-tinta);
+  background: var(--tabla-cabecera-fondo);
 }
-tbody td { padding: .8rem .9rem; border-top: 1px solid #ffffff12; }
-tbody tr:hover { background: #ffffff08; }
+tbody td {
+  padding: .8rem .9rem;
+  border-top: 1px solid var(--color-linea);
+  font-family: var(--fuente-datos);
+}
+tbody tr:hover { background: var(--color-hover); }
 
 /* ---------- Estado vacío y esqueleto de carga ---------- */
 
@@ -276,7 +312,7 @@ tbody tr:hover { background: #ffffff08; }
 
 .skeleton {
   border-radius: var(--radio-control);
-  background: #ffffff12;
+  background: var(--color-hover);
   animation: pulso 1.6s ease-in-out infinite;
 }
 
@@ -290,7 +326,7 @@ dialog.modal {
   padding: 0;
   color: inherit;
 }
-dialog.modal::backdrop { background: #06130aa8; }
+dialog.modal::backdrop { background: var(--backdrop); }
 .modal-head {
   display: flex;
   align-items: center;
