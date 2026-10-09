@@ -773,6 +773,9 @@ export type Database = {
           sale_id: string | null
           message: string
           created_at: string
+          resolved_at: string | null
+          resolved_by: string | null
+          resolution: string | null
         }
         Insert: {
           id?: string
@@ -780,6 +783,9 @@ export type Database = {
           sale_id?: string | null
           message: string
           created_at?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolution?: string | null
         }
         Update: {
           id?: string
@@ -787,9 +793,13 @@ export type Database = {
           sale_id?: string | null
           message?: string
           created_at?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolution?: string | null
         }
         Relationships: [
           { foreignKeyName: "stock_warnings_lot_id_fkey"; columns: ["lot_id"]; isOneToOne: false; referencedRelation: "stock_lots"; referencedColumns: ["id"] },
+          { foreignKeyName: "stock_warnings_resolved_by_fkey"; columns: ["resolved_by"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
           { foreignKeyName: "stock_warnings_sale_id_fkey"; columns: ["sale_id"]; isOneToOne: false; referencedRelation: "sales"; referencedColumns: ["id"] }
         ]
       }
@@ -1048,6 +1058,13 @@ export type Database = {
         }
         Returns: string
       }
+      resolve_stock_warning: {
+        Args: {
+          p_warning_id: string
+          p_resolution: string
+        }
+        Returns: undefined
+      }
       save_supplier_product_cost: {
         Args: {
           p_product_id: string
@@ -1076,6 +1093,28 @@ export type Database = {
           payment_method: Database["public"]["Enums"]["payment_method"]
           sales_count: number
           total: number
+        }[]
+      }
+      stock_warnings_for_review: {
+        Args: {
+          p_include_resolved?: boolean
+        }
+        Returns: {
+          id: string
+          created_at: string
+          message: string
+          lot_id: string
+          product_name: string
+          presentation_name: string
+          lot_current_quantity: number
+          sale_id: string
+          sale_occurred_at: string
+          sale_total: number
+          register_name: string
+          sold_by: string
+          resolved_at: string
+          resolved_by_name: string
+          resolution: string
         }[]
       }
       sync_offline_customer: {
