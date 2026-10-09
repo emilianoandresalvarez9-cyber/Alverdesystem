@@ -2,6 +2,7 @@ import { type FormEvent, useState } from "react";
 import { hasSupabaseConfig } from "../shared/config/env";
 import { signIn, signOut, currentSession, currentProfile } from "../shared/auth/session";
 import { homeFor } from "../shared/auth/roles";
+import { ThemeToggle } from "../shared/theme/ThemeToggle";
 
 export function LoginPage() {
   const [email, setEmail] = useState("");
@@ -34,6 +35,7 @@ export function LoginPage() {
 
   return (
     <main className="login-page">
+      <div className="login-theme"><ThemeToggle /></div>
       <section className="login-card glass">
         <div className="brand lockup"><span className="brand-mark">A</span><span>Alverde</span></div>
         <p className="eyebrow">Sistema de gestión para dietética</p>

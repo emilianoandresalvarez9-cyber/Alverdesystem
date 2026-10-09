@@ -3,7 +3,8 @@ import { hasSupabaseConfig } from "../config/env";
 import { currentProfile, currentSession } from "./session";
 import { canAccess, homeFor, type AppRole, type Profile } from "./roles";
 
-const ProfileContext = createContext<Profile | null>(null);
+/** Exportado para que los tests rendericen el shell sin pasar por Supabase. */
+export const ProfileContext = createContext<Profile | null>(null);
 
 /** Perfil del usuario dentro de una página protegida por AuthGate. */
 export function useCurrentProfile(): Profile {
