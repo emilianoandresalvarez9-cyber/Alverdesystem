@@ -1,31 +1,24 @@
+/** Etiqueta embebida en product_labels(label:labels(id, name)). */
+export interface SalesReportLabelRow {
+  label: { id: string; name: string } | { id: string; name: string }[] | null;
+}
+
+export interface SalesReportProductRow {
+  id: string;
+  name: string;
+  category_id: string | null;
+  category: { name: string } | { name: string }[] | null;
+  product_labels?: SalesReportLabelRow[] | null;
+}
+
 export interface SalesReportRow {
   quantity: number | string;
   unit_price: number | string;
   sale: { occurred_at: string; status: string } | { occurred_at: string; status: string }[] | null;
   presentation: {
-    product: {
-      id: string;
-      name: string;
-      category_id: string | null;
-      category: { name: string } | { name: string }[] | null;
-    } | {
-      id: string;
-      name: string;
-      category_id: string | null;
-      category: { name: string } | { name: string }[] | null;
-    }[] | null;
+    product: SalesReportProductRow | SalesReportProductRow[] | null;
   } | {
-    product: {
-      id: string;
-      name: string;
-      category_id: string | null;
-      category: { name: string } | { name: string }[] | null;
-    } | {
-      id: string;
-      name: string;
-      category_id: string | null;
-      category: { name: string } | { name: string }[] | null;
-    }[] | null;
+    product: SalesReportProductRow | SalesReportProductRow[] | null;
   }[] | null;
 }
 
@@ -37,12 +30,16 @@ export interface SalesReportLine {
   productName: string;
   categoryId: string | null;
   categoryName: string | null;
+  labels: { id: string; name: string }[];
 }
 
 export interface SalesReport {
   salesByDay: { date: string; total: number }[];
   productRanking: { name: string; quantity: number; revenue: number }[];
   categoryDemand: { categoryId: string; name: string; value: number }[];
+  /** RF-63: qué proporción de lo vendido lleva cada etiqueta (un producto puede tener varias). */
+  labelDemand: { labelId: string; name: string; value: number; share: number }[];
+  totalRevenue: number;
 }
 
 function one<T>(value: T | T[] | null): T | null {
@@ -66,7 +63,10 @@ export function toSalesReportLines(rows: SalesReportRow[]): SalesReportLine[] {
       productId: product.id,
       productName: product.name,
       categoryId: product.category_id,
-      categoryName: category?.name ?? null
+      categoryName: category?.name ?? null,
+      labels: (product.product_labels ?? [])
+        .map((row) => one(row.label))
+        .filter((label): label is { id: string; name: string } => label !== null)
     });
   }
 
@@ -77,11 +77,20 @@ export function buildSalesReport(lines: SalesReportLine[]): SalesReport {
   const daily = new Map<string, number>();
   const products = new Map<string, { name: string; quantity: number; revenue: number }>();
   const categories = new Map<string, { name: string; value: number }>();
+  const labels = new Map<string, { name: string; value: number }>();
+  let totalRevenue = 0;
 
   for (const line of lines) {
     const day = line.saleDate.slice(0, 10);
     const revenue = line.quantity * line.unitPrice;
+    totalRevenue += revenue;
     daily.set(day, (daily.get(day) ?? 0) + revenue);
+
+    for (const label of line.labels) {
+      const current = labels.get(label.id) ?? { name: label.name, value: 0 };
+      current.value += revenue;
+      labels.set(label.id, current);
+    }
 
     const currentProduct = products.get(line.productId) ?? { name: line.productName, quantity: 0, revenue: 0 };
     currentProduct.quantity += line.quantity;
@@ -107,6 +116,10 @@ export function buildSalesReport(lines: SalesReportLine[]): SalesReport {
       .slice(0, 10),
     categoryDemand: Array.from(categories.entries())
       .map(([categoryId, category]) => ({ categoryId, ...category }))
-      .sort((left, right) => right.value - left.value)
+      .sort((left, right) => right.value - left.value),
+    labelDemand: Array.from(labels.entries())
+      .map(([labelId, label]) => ({ labelId, ...label, share: totalRevenue > 0 ? label.value / totalRevenue : 0 }))
+      .sort((left, right) => right.value - left.value),
+    totalRevenue
   };
 }

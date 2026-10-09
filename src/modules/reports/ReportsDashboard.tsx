@@ -34,7 +34,7 @@ export function ReportsDashboard() {
             unit_price,
             sale:sales!inner(occurred_at, status),
             presentation:product_presentations!inner(
-              product:products!inner(id, name, category_id, category:categories(name))
+              product:products!inner(id, name, category_id, category:categories(name), product_labels(label:labels(id, name)))
             )
           `)
           .gte('sales.occurred_at', startDate.toISOString())
@@ -129,6 +129,31 @@ export function ReportsDashboard() {
                 </PieChart>
               </ResponsiveContainer>
             </div>
+          </GlassCard>
+
+          <GlassCard>
+            <h3>Demanda por etiqueta (RF-63)</h3>
+            <p className="field-help">
+              Qué parte de lo vendido lleva cada etiqueta. Un producto con dos etiquetas cuenta en las dos, por eso no suman 100 %.
+            </p>
+            {report.labelDemand.length === 0 ? (
+              <p className="field-help">No hubo ventas de productos con etiquetas en este período.</p>
+            ) : (
+              <div style={{ width: "100%", height: Math.max(160, 36 * report.labelDemand.length) }}>
+                <ResponsiveContainer>
+                  <BarChart data={report.labelDemand} layout="vertical" margin={{ left: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--glass-borde)" horizontal={false} />
+                    <XAxis type="number" domain={[0, 1]} tickFormatter={(v: number) => `${Math.round(v * 100)} %`} stroke="var(--color-tinta-apagada)" />
+                    <YAxis type="category" dataKey="name" width={120} stroke="var(--color-tinta-apagada)" />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: 'var(--fondo-oscuro)', border: 'none', borderRadius: 8 }}
+                      formatter={(value) => [`${Math.round(Number(value) * 100)} % de lo vendido`, ""]}
+                    />
+                    <Bar dataKey="share" fill="var(--color-acento)" radius={[0, 8, 8, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </GlassCard>
         </div>
       )}
