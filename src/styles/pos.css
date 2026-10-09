@@ -1,6 +1,6 @@
 /*
  * Caja (RNF-06). Solo tokens: los dos temas (alverde-botanical / midnight-bio)
- * definen todo lo que esta hoja usa; ningún color suelto (tests/theme/posStyles.test.ts).
+ * definen todo lo que esta hoja usa; ningún color suelto (tests/theme/pageStyles.test.ts).
  *
  * Diagrama: una franja de estado arriba (turno, conexión, cierre), a la izquierda
  * escáner + ticket, a la derecha el panel de cobro con el total grande.
@@ -18,17 +18,7 @@
 .pos-main { grid-area: main; display: grid; gap: var(--esp-m); min-width: 0; }
 .pos-side { grid-area: side; position: sticky; top: var(--esp-m); }
 
-/* Micro-etiquetas: mayúsculas, espaciadas, con la fuente de datos del tema */
-.pos-micro {
-  margin: 0;
-  color: var(--color-tinta-apagada);
-  font-family: var(--fuente-datos);
-  font-size: var(--texto-xs);
-  font-weight: 700;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-}
-.pos-num { font-family: var(--fuente-datos); font-variant-numeric: tabular-nums; }
+/* .pos-micro y .pos-num viven en global.css (las usan todas las páginas). */
 
 /* ---------- Franja de estado del turno ---------- */
 .pos-status {
