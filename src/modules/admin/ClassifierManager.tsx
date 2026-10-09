@@ -24,11 +24,19 @@ interface ClassifierManagerProps {
   type: ClassifierType;
 }
 
-const TABLE_MAP: Record<ClassifierType, string> = {
+const TABLE_MAP = {
   brand: "brands",
   category: "categories",
   label: "labels",
-};
+} as const satisfies Record<ClassifierType, "brands" | "categories" | "labels">;
+
+/**
+ * Las tres tablas comparten id, name y archived_at; categories agrega parent_id, que solo se envía
+ * para rubros. Se tipa como "categories" porque es la forma más completa de las tres.
+ */
+function classifierTable(table: (typeof TABLE_MAP)[ClassifierType]) {
+  return getSupabase().from(table as "categories");
+}
 
 const TITLE_MAP: Record<ClassifierType, string> = {
   brand: "Marcas",
@@ -52,8 +60,7 @@ export function ClassifierManager({ type }: ClassifierManagerProps) {
     setLoading(true);
     setError(null);
     try {
-      const { data, error: err } = await getSupabase()
-        .from(tableName)
+      const { data, error: err } = await classifierTable(tableName)
         .select("*")
         .is("archived_at", null)
         .order("name");
@@ -72,9 +79,9 @@ export function ClassifierManager({ type }: ClassifierManagerProps) {
     if (!newName.trim()) return;
     setError(null);
     try {
-      const payload: Record<string, string> = { name: newName.trim() };
+      const payload: { name: string; parent_id?: string } = { name: newName.trim() };
       if (type === "category" && newParentId) payload.parent_id = newParentId;
-      const { error: err } = await getSupabase().from(tableName).insert(payload);
+      const { error: err } = await classifierTable(tableName).insert(payload);
       if (err) throw err;
       setNewName(""); setNewParentId("");
       await fetchItems();
@@ -86,8 +93,7 @@ export function ClassifierManager({ type }: ClassifierManagerProps) {
   const handleArchive = async (id: string) => {
     setError(null);
     try {
-      const { error: err } = await getSupabase()
-        .from(tableName).update({ archived_at: new Date().toISOString() }).eq("id", id);
+      const { error: err } = await classifierTable(tableName).update({ archived_at: new Date().toISOString() }).eq("id", id);
       if (err) throw err;
       setItems(prev => prev.filter(i => i.id !== id));
     } catch (e) {
@@ -99,8 +105,7 @@ export function ClassifierManager({ type }: ClassifierManagerProps) {
     if (!editName.trim()) { setEditingId(null); return; }
     setError(null);
     try {
-      const { error: err } = await getSupabase()
-        .from(tableName).update({ name: editName.trim() }).eq("id", id);
+      const { error: err } = await classifierTable(tableName).update({ name: editName.trim() }).eq("id", id);
       if (err) throw err;
       setEditingId(null);
       await fetchItems();

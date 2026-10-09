@@ -95,7 +95,7 @@ export function ProductPricing({ product, presentations, onPricesSaved }: {
       p_supplier_id: supplierId,
       p_cost: costValue,
       p_purchase_quantity: quantityValue,
-      p_supplier_product_code: supplierCode.trim() || null,
+      p_supplier_product_code: supplierCode.trim() || undefined,
       p_is_primary: isPrimary
     });
     if (saveError) setError(saveError.message);

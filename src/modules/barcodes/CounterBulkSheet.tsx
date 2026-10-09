@@ -1,4 +1,3 @@
-import type { SupabaseAny } from "../../shared/types";
 import { useEffect, useState } from "react";
 import { getSupabase } from "../../shared/supabase/client";
 import { BarcodeSvg } from "./BarcodeSvg";
@@ -30,11 +29,11 @@ export function CounterBulkSheet() {
 
       const flatItems: BulkPresentationItem[] = [];
       
-      data.forEach((p: SupabaseAny) => {
+      data.forEach((p) => {
         if (!p.presentations) return;
         p.presentations
-          .filter((pr: SupabaseAny) => pr.active && pr.sold_by_weight && pr.internal_barcode) // Solo "Balanza" con código (las bolsitas se escanean de su paquete)
-          .forEach((pr: SupabaseAny) => {
+          .filter((pr) => pr.active && pr.sold_by_weight && pr.internal_barcode) // Solo "Balanza" con código (las bolsitas se escanean de su paquete)
+          .forEach((pr) => {
             flatItems.push({
               productId: p.id,
               productName: p.name,

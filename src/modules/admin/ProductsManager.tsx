@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { getSupabase } from "../../shared/supabase/client";
+import type { Enums } from "../../shared/supabase/database.types";
 import { Button, TextField, SelectField, GlassCard, Badge, EmptyState, Modal } from "../../shared/ui";
 import { normalizeManufacturerBarcode } from "./manufacturerBarcode";
 import { ProductPricing } from "./ProductPricing";
@@ -25,7 +26,7 @@ export function ProductsManager() {
   const [productBarcode, setProductBarcode] = useState("");
   const [productBrandId, setProductBrandId] = useState("");
   const [productCategoryId, setProductCategoryId] = useState("");
-  const [productBaseUnit, setProductBaseUnit] = useState("unit");
+  const [productBaseUnit, setProductBaseUnit] = useState<Enums<"base_unit">>("unit");
   const [productMultiplier, setProductMultiplier] = useState("");
 
   const sb = getSupabase();
@@ -210,7 +211,7 @@ export function ProductsManager() {
             {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </SelectField>
 
-          <SelectField label="Unidad Base" value={productBaseUnit} onChange={e => setProductBaseUnit(e.target.value)}>
+          <SelectField label="Unidad Base" value={productBaseUnit} onChange={e => setProductBaseUnit(e.target.value as Enums<"base_unit">)}>
             <option value="unit">Unidad</option>
             <option value="gram">Gramos</option>
             <option value="millilitre">Mililitros</option>

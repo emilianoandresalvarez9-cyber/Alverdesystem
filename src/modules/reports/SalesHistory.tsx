@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { getSupabase } from "../../shared/supabase/client";
 import type { Sale } from "../../shared/types";
+
+type SaleRow = Pick<Sale, "id" | "local_id" | "occurred_at" | "total_amount" | "status" | "payment_method">;
 import { GlassCard, Button, Badge } from "../../shared/ui";
 
 export function SalesHistory() {
-  const [sales, setSales] = useState<Sale[]>([]);
+  const [sales, setSales] = useState<SaleRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 

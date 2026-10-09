@@ -1,4 +1,3 @@
-import type { SupabaseAny } from "../../shared/types";
 import { useState, useEffect, useCallback } from "react";
 import { getSupabase } from "../../shared/supabase/client";
 import { loadCatalogSnapshot, saveCatalogSnapshot } from "../../shared/offline/queue";
@@ -48,26 +47,28 @@ export function useCatalog(): UseCatalogReturn {
     const productMap = new Map<string, CatalogProduct>();
 
     for (const row of catalogRes.data || []) {
+      // La vista declara todas sus columnas opcionales; sin producto o presentación no hay fila útil.
+      if (!row.product_id || !row.presentation_id) continue;
       if (!productMap.has(row.product_id)) {
         productMap.set(row.product_id, {
           id: row.product_id,
-          name: row.product_name,
+          name: row.product_name ?? "",
           manufacturer_barcode: row.manufacturer_barcode,
-          base_unit: row.base_unit as SupabaseAny,
+          base_unit: row.base_unit ?? "unit",
           open_shelf_life_days: row.open_shelf_life_days,
           label_text: row.label_text,
           active: true, // filtered by view
-          brand: row.brand_id ? { id: row.brand_id, name: row.brand_name, archived_at: null } : null,
-          category: row.category_id ? { id: row.category_id, name: row.category_name, parent_id: null, archived_at: null } : null,
-          labels: row.labels || [],
+          brand: row.brand_id ? { id: row.brand_id, name: row.brand_name ?? "", archived_at: null } : null,
+          category: row.category_id ? { id: row.category_id, name: row.category_name ?? "", parent_id: null, archived_at: null } : null,
+          labels: Array.isArray(row.labels) ? (row.labels as unknown as Label[]) : [],
           presentations: []
         });
       }
 
       productMap.get(row.product_id)!.presentations.push({
         id: row.presentation_id,
-        name: row.presentation_name,
-        base_quantity: row.base_quantity,
+        name: row.presentation_name ?? "",
+        base_quantity: Number(row.base_quantity ?? 0),
         internal_barcode: row.internal_barcode,
         sale_price: Number(row.sale_price),
         sold_by_weight: Boolean(row.sold_by_weight),

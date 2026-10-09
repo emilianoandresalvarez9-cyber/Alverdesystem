@@ -1,6 +1,8 @@
-import { getSupabase } from "../supabase/client";
+import { getSupabase, SQL_NULL } from "../supabase/client";
+import type { Json } from "../supabase/database.types";
 import { markOperationFailed, markOperationSynced, pendingOperations } from "./queue";
 import { upgradeLegacyOperations } from "./legacy";
+import type { QueuedOperation } from "./types";
 
 export type SyncResult = {
   synchronized: number;
@@ -64,23 +66,7 @@ async function runSynchronization(): Promise<SyncResult> {
   let failed = 0;
 
   for (const operation of operations) {
-    let rpcName = "apply_offline_operation";
-    let payload: Record<string, unknown> = { p_operation: operation };
-
-    if (operation.kind === "sale") {
-      rpcName = "process_offline_sale";
-      payload = { payload: operation };
-    } else if (operation.kind === "customer") {
-      rpcName = "sync_offline_customer";
-      payload = {
-        p_id: operation.localId,
-        p_name: operation.payload.name,
-        p_phone: operation.payload.phone || null,
-        p_credit_limit: operation.payload.creditLimit ?? null
-      };
-    }
-
-    const { error } = await getSupabase().rpc(rpcName, payload);
+    const { error } = await sendOperation(operation);
 
     if (error) {
       failed += 1;
@@ -93,6 +79,27 @@ async function runSynchronization(): Promise<SyncResult> {
   }
 
   return { synchronized, failed };
+}
+
+/** Cada tipo de operación va a su RPC, con argumentos tipados contra el esquema real. */
+function sendOperation(operation: QueuedOperation) {
+  const supabase = getSupabase();
+  const asJson = operation as unknown as Json;
+  switch (operation.kind) {
+    case "sale":
+      return supabase.rpc("process_offline_sale", { payload: asJson });
+    case "customer": {
+      const customer = operation.payload as { name?: string; phone?: string | null; creditLimit?: number | null };
+      return supabase.rpc("sync_offline_customer", {
+        p_id: operation.localId,
+        p_name: customer.name ?? "",
+        p_phone: customer.phone || SQL_NULL,
+        p_credit_limit: customer.creditLimit ?? SQL_NULL
+      });
+    }
+    default:
+      return supabase.rpc("apply_offline_operation", { p_operation: asJson });
+  }
 }
 
 export function startOfflineSynchronization(): () => void {

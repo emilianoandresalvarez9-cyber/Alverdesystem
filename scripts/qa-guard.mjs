@@ -50,6 +50,28 @@ for (const path of allowed) {
   }
 }
 
+// 2b. Tipos de la base: sin `any` disfrazado (P20) y database.types.ts al día con las migraciones.
+const fakeAny = /ReturnType<\s*typeof\s+JSON\.parse\s*>/;
+for (const f of prodSources) {
+  if (fakeAny.test(readFileSync(f.full, "utf8"))) {
+    errors.push(`${f.path}: ReturnType<typeof JSON.parse> es \`any\` con otro nombre. Usá un tipo de database.types.ts o \`unknown\`.`);
+  }
+}
+const typesFile = "src/shared/supabase/database.types.ts";
+if (existsSync(typesFile)) {
+  const types = readFileSync(typesFile, "utf8");
+  const migrationsSql = files
+    .filter((f) => /^supabase\/migrations\/.+\.sql$/.test(f.path))
+    .map((f) => readFileSync(f.full, "utf8").toLowerCase())
+    .join("\n");
+  const created = new Set([...migrationsSql.matchAll(/create table (?:if not exists )?public\.([a-z_]+)/g)].map((m) => m[1]));
+  for (const table of created) {
+    if (!new RegExp(`^ {6}${table}: \\{`, "m").test(types)) {
+      errors.push(`${typesFile}: falta la tabla ${table}. Regenerá los tipos (npm run gen:types).`);
+    }
+  }
+}
+
 // 3. Tests SQL con plan y cierre explícitos (pg_prove necesita ambos para reportar bien).
 for (const f of files.filter((f) => /^supabase\/tests\/.+\.sql$/.test(f.path))) {
   const sql = readFileSync(f.full, "utf8").toLowerCase();

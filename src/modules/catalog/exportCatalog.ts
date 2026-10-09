@@ -1,10 +1,9 @@
-import type { SupabaseAny } from "../../shared/types";
 import type { CatalogProduct } from "./types";
 import { exportToExcel } from "../../shared/export/excel";
 
 export function exportCatalogToExcel(products: CatalogProduct[], filename = "catalogo-alverde") {
   const headers = ["Nombre", "Marca", "Rubro", "Unidad base", "Etiquetas", "Presentacion", "Precio de venta", "Codigo de barras"];
-  const matrix: SupabaseAny[][] = [];
+  const matrix: (string | number | null)[][] = [];
 
   for (const p of products) {
     const brand = p.brand?.name ?? "";

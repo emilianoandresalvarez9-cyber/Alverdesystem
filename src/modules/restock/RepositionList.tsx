@@ -1,4 +1,3 @@
-import type { SupabaseAny } from "../../shared/types";
 import { useEffect, useState, useCallback } from "react";
 import { getSupabase } from "../../shared/supabase/client";
 import { Button, GlassCard, Badge, EmptyState } from "../../shared/ui";
@@ -37,7 +36,7 @@ export function RepositionList({ refreshTrigger, onResolve }: RepositionListProp
 
       if (err) throw err;
 
-      const mapped: MissingItem[] = (data ?? []).map((row: SupabaseAny) => {
+      const mapped: MissingItem[] = (data ?? []).map((row) => {
         const prod = row.product;
         const productSupplier = preferredSupplier(prod?.supplier_products ?? []);
 
