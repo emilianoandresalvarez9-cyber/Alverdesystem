@@ -3,6 +3,7 @@ import { AppShell } from "../shared/components/AppShell";
 import { BackupCenter } from "../modules/admin/BackupCenter";
 import { OfflineIndicator } from "../shared/components/OfflineIndicator";
 import { StockDashboard } from "../modules/stock";
+import { StockWarningsReview } from "../modules/stock/StockWarningsReview";
 import { ClassifierManager } from "../modules/admin/ClassifierManager";
 import { QuickRestock } from "../modules/restock/QuickRestock";
 import { RepositionList } from "../modules/restock/RepositionList";
@@ -132,7 +133,12 @@ export function AdminPage() {
           {activeTab === "reports" && <ReportsDashboard />}
 
         {/* Tab 1: Lotes y Vencimientos (Agente E) */}
-        {activeTab === "stock" && <StockDashboard />}
+        {activeTab === "stock" && (
+          <>
+            <StockWarningsReview />
+            <StockDashboard />
+          </>
+        )}
 
         {/* Tab 1.5: Fraccionamiento (Agente F) */}
         {activeTab === "fractioning" && <BulkDashboard />}
