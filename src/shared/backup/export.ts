@@ -20,6 +20,7 @@ export const TABLES_TO_BACKUP = [
   "products",
   "product_labels",
   "product_presentations",
+  "price_update_batches",
   "product_price_history",
   "supplier_products",
   "pricing_settings",
