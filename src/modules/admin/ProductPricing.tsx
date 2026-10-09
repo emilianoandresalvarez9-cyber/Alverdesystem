@@ -4,6 +4,7 @@ import { formatMoney } from "../pos/money";
 import { getEffectiveMultiplier, suggestPresentationPrice, type PriceCategory, type PriceCategoryMultiplier } from "../catalog/priceSuggestion";
 import type { Product, Presentation } from "../../shared/types";
 import { Button, GlassCard, SelectField, TextField } from "../../shared/ui";
+import { PriceHistoryPanel } from "./PriceHistoryPanel";
 
 type Supplier = { id: string; name: string };
 type SupplierCost = {
@@ -184,6 +185,10 @@ export function ProductPricing({ product, presentations, onPricesSaved }: {
           </> : <span>Sin sugerencia: revisá el costo y la cantidad del envase.</span>}
         </div>;
       })}
+
+      <h4>Historial de precios (RF-27)</h4>
+      <p className="field-help">Cada cambio de precio de venta, quién lo hizo y la variación; sirve para seguir la inflación del producto.</p>
+      <PriceHistoryPanel key={presentations.map(p => `${p.id}:${p.sale_price}`).join("|")} presentations={presentations} />
     </GlassCard>
   );
 }
