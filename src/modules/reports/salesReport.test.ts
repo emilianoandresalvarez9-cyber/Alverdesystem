@@ -25,7 +25,8 @@ describe("reportes de ventas (RF-61 a RF-64)", () => {
       productId: "product-1",
       productName: "Agua",
       categoryId: "category-1",
-      categoryName: "Bebidas"
+      categoryName: "Bebidas",
+      labels: []
     }]);
   });
 
@@ -39,6 +40,28 @@ describe("reportes de ventas (RF-61 a RF-64)", () => {
     expect(report.salesByDay[0]?.total).toBe(80);
     expect(report.productRanking).toEqual([{ name: "Agua", quantity: 5, revenue: 80 }]);
     expect(report.categoryDemand).toEqual([{ categoryId: "category-1", name: "Bebidas", value: 80 }]);
+  });
+
+  it("RF-63: demanda por etiqueta como proporción de lo vendido, sin duplicar productos con varias etiquetas", () => {
+    const sinTacc = { id: "label-1", name: "Sin TACC" };
+    const vegano = { id: "label-2", name: "Vegano" };
+    const report = buildSalesReport(toSalesReportLines([
+      // $40 con dos etiquetas
+      row({ quantity: 2, unit_price: 20, presentation: { product: {
+        id: "p1", name: "Galletas", category_id: null, category: null,
+        product_labels: [{ label: sinTacc }, { label: vegano }] } } }),
+      // $60 solo vegano
+      row({ quantity: 3, unit_price: 20, presentation: { product: {
+        id: "p2", name: "Hummus", category_id: null, category: null, product_labels: [{ label: vegano }] } } }),
+      // $100 sin etiquetas
+      row({ quantity: 5, unit_price: 20 })
+    ]));
+
+    expect(report.totalRevenue).toBe(200);
+    expect(report.labelDemand).toEqual([
+      { labelId: "label-2", name: "Vegano", value: 100, share: 0.5 },
+      { labelId: "label-1", name: "Sin TACC", value: 40, share: 0.2 }
+    ]);
   });
 
   it("no incluye ventas anuladas ni filas sin producto relacionado", () => {
