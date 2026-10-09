@@ -334,41 +334,6 @@ export type Database = {
           { foreignKeyName: "offline_operations_received_by_fkey"; columns: ["received_by"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] }
         ]
       }
-      price_update_batches: {
-        Row: {
-          id: string
-          created_by: string | null
-          created_at: string
-          percent: number
-          scope: string
-          scope_id: string | null
-          round_to: number | null
-          changed_count: number
-        }
-        Insert: {
-          id?: string
-          created_by?: string | null
-          created_at?: string
-          percent: number
-          scope: string
-          scope_id?: string | null
-          round_to?: number | null
-          changed_count?: number
-        }
-        Update: {
-          id?: string
-          created_by?: string | null
-          created_at?: string
-          percent?: number
-          scope?: string
-          scope_id?: string | null
-          round_to?: number | null
-          changed_count?: number
-        }
-        Relationships: [
-          { foreignKeyName: "price_update_batches_created_by_fkey"; columns: ["created_by"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] }
-        ]
-      }
       pricing_settings: {
         Row: {
           id: number
@@ -453,8 +418,6 @@ export type Database = {
           sale_price: number
           changed_by: string | null
           changed_at: string
-          previous_price: number | null
-          batch_id: string | null
         }
         Insert: {
           id?: string
@@ -462,8 +425,6 @@ export type Database = {
           sale_price: number
           changed_by?: string | null
           changed_at?: string
-          previous_price?: number | null
-          batch_id?: string | null
         }
         Update: {
           id?: string
@@ -471,11 +432,8 @@ export type Database = {
           sale_price?: number
           changed_by?: string | null
           changed_at?: string
-          previous_price?: number | null
-          batch_id?: string | null
         }
         Relationships: [
-          { foreignKeyName: "product_price_history_batch_id_fkey"; columns: ["batch_id"]; isOneToOne: false; referencedRelation: "price_update_batches"; referencedColumns: ["id"] },
           { foreignKeyName: "product_price_history_changed_by_fkey"; columns: ["changed_by"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
           { foreignKeyName: "product_price_history_presentation_id_fkey"; columns: ["presentation_id"]; isOneToOne: false; referencedRelation: "product_presentations"; referencedColumns: ["id"] }
         ]
@@ -773,9 +731,6 @@ export type Database = {
           sale_id: string | null
           message: string
           created_at: string
-          resolved_at: string | null
-          resolved_by: string | null
-          resolution: string | null
         }
         Insert: {
           id?: string
@@ -783,9 +738,6 @@ export type Database = {
           sale_id?: string | null
           message: string
           created_at?: string
-          resolved_at?: string | null
-          resolved_by?: string | null
-          resolution?: string | null
         }
         Update: {
           id?: string
@@ -793,13 +745,9 @@ export type Database = {
           sale_id?: string | null
           message?: string
           created_at?: string
-          resolved_at?: string | null
-          resolved_by?: string | null
-          resolution?: string | null
         }
         Relationships: [
           { foreignKeyName: "stock_warnings_lot_id_fkey"; columns: ["lot_id"]; isOneToOne: false; referencedRelation: "stock_lots"; referencedColumns: ["id"] },
-          { foreignKeyName: "stock_warnings_resolved_by_fkey"; columns: ["resolved_by"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
           { foreignKeyName: "stock_warnings_sale_id_fkey"; columns: ["sale_id"]; isOneToOne: false; referencedRelation: "sales"; referencedColumns: ["id"] }
         ]
       }
@@ -944,22 +892,26 @@ export type Database = {
         }
         Returns: boolean
       }
-      bulk_update_prices: {
+      audit_history_search: {
         Args: {
-          p_percent: number
-          p_scope?: string
-          p_scope_id?: string
-          p_apply?: boolean
-          p_round_to?: number
+          p_text?: string
+          p_entity?: string
+          p_user_id?: string
+          p_from?: string
+          p_to?: string
+          p_limit?: number
         }
         Returns: {
-          batch_id: string
-          presentation_id: string
-          product_id: string
-          product_name: string
-          presentation_name: string
-          old_price: number
-          new_price: number
+          id: number
+          occurred_at: string
+          entity: string
+          entity_id: string
+          entity_label: string
+          field: string
+          old_value: Json
+          new_value: Json
+          user_id: string
+          user_name: string
         }[]
       }
       credit_movement_delta: {
@@ -1027,21 +979,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      price_batch_changes: {
-        Args: {
-          p_batch_id: string
-        }
-        Returns: {
-          presentation_id: string
-          product_id: string
-          product_name: string
-          presentation_name: string
-          internal_barcode: string
-          old_price: number
-          new_price: number
-          changed_at: string
-        }[]
-      }
       process_offline_sale: {
         Args: {
           payload: Json
@@ -1057,13 +994,6 @@ export type Database = {
           p_purchase_cost?: number
         }
         Returns: string
-      }
-      resolve_stock_warning: {
-        Args: {
-          p_warning_id: string
-          p_resolution: string
-        }
-        Returns: undefined
       }
       save_supplier_product_cost: {
         Args: {
@@ -1093,28 +1023,6 @@ export type Database = {
           payment_method: Database["public"]["Enums"]["payment_method"]
           sales_count: number
           total: number
-        }[]
-      }
-      stock_warnings_for_review: {
-        Args: {
-          p_include_resolved?: boolean
-        }
-        Returns: {
-          id: string
-          created_at: string
-          message: string
-          lot_id: string
-          product_name: string
-          presentation_name: string
-          lot_current_quantity: number
-          sale_id: string
-          sale_occurred_at: string
-          sale_total: number
-          register_name: string
-          sold_by: string
-          resolved_at: string
-          resolved_by_name: string
-          resolution: string
         }[]
       }
       sync_offline_customer: {
