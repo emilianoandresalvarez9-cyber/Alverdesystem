@@ -1,6 +1,5 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { Badge, Button, EmptyState, GlassCard, Modal, SelectField, TextField } from "../../shared/ui";
-import { OfflineIndicator } from "../../shared/components/OfflineIndicator";
 import { enqueueOperation } from "../../shared/offline/queue";
 import { synchronizePendingOperations } from "../../shared/offline/sync";
 import { useCatalog } from "../catalog/useCatalog";
@@ -240,7 +239,6 @@ function Register({ shift, onClosed }: { shift: CurrentShift; onClosed: () => vo
           {!shift.persisted && <Badge tone="aviso">Turno abierto sin conexión · se registra al sincronizar</Badge>}
         </div>
         <div className="pos-status-actions">
-          <OfflineIndicator />
           <Button variant="secundario" onClick={() => setClosing(true)}>Cerrar turno</Button>
         </div>
       </header>

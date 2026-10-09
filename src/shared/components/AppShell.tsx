@@ -3,6 +3,7 @@ import { AuthGate, useCurrentProfile } from "../auth/AuthGate";
 import { signOut } from "../auth/session";
 import type { AppRole } from "../auth/roles";
 import { ThemeToggle } from "../theme/ThemeToggle";
+import { OfflineIndicator } from "./OfflineIndicator";
 
 export type ShellSection = "catalog" | "pos" | "customers" | "stock" | "admin";
 
@@ -73,7 +74,10 @@ export function ShellLayout({ active, title, children }: PropsWithChildren<{ act
           <p className="eyebrow">Alverde · sistema de gestión</p>
           <h1>{title}</h1>
         </div>
-        <span className="badge app-role" title="Rol de la sesión">{ROLE_LABELS[profile.role]}</span>
+        <div className="app-header-status">
+          <OfflineIndicator />
+          <span className="badge app-role" title="Rol de la sesión">{ROLE_LABELS[profile.role]}</span>
+        </div>
       </header>
 
       <main className="app-content" style={{ viewTransitionName: "app-content" }}>

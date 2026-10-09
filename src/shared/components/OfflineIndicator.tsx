@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { pendingOperationCount, subscribeToQueueChanges } from "../offline/queue";
 
 export function OfflineIndicator() {
-  const [online, setOnline] = useState(navigator.onLine);
+  // RF-36: visible en todo momento, en todas las páginas (lo monta AppShell).
+  const [online, setOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
   const [pending, setPending] = useState(0);
 
   useEffect(() => {
