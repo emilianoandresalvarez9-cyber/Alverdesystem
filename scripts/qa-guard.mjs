@@ -56,6 +56,17 @@ for (const f of files.filter((f) => /^supabase\/tests\/.+\.sql$/.test(f.path))) 
   if (!/\bplan\s*\(/.test(sql) || !/\bfinish\s*\(/.test(sql)) errors.push(`${f.path}: falta plan(n) o finish().`);
 }
 
+// 4. Scripts de package.json que apuntan a archivos inexistentes (así quedó roto
+//    `npm run test:db:nodocker` cuando se borró qa/pg-harness como si fuera basura).
+const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+for (const [name, command] of Object.entries(pkg.scripts ?? {})) {
+  const inputs = String(command).replace(/>\s*\S+/g, ""); // lo que va después de ">" es salida, no entrada
+  for (const ref of inputs.match(/[\w./-]+\.(?:sh|mjs|cjs|js|ts|py)\b/g) ?? []) {
+    if (/^(npx|node|python3?|bash|vite|vitest|tsc|playwright)$/.test(ref) || ref.includes("*")) continue;
+    if (!existsSync(ref)) errors.push(`package.json: el script "${name}" usa ${ref}, que no existe.`);
+  }
+}
+
 if (errors.length) {
   console.error(`\nqa:guard encontró ${errors.length} problema(s):\n`);
   for (const e of errors) console.error(`  ✗ ${e}`);

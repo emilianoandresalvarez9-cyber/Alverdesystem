@@ -14,7 +14,8 @@
     "qa:guard": "node scripts/qa-guard.mjs",
     "test:db:nodocker": "bash qa/pg-harness/run.sh .",
     "verify": "npm run qa:guard && npm run typecheck && npm test && npm run build",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "gen:types": "python3 -I qa/pg-harness/gen_types.py > src/shared/supabase/database.types.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
