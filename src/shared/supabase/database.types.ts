@@ -944,6 +944,15 @@ export type Database = {
         }
         Returns: boolean
       }
+      assign_classifier: {
+        Args: {
+          p_kind: string
+          p_id: string
+          p_product_ids: string[]
+          p_remove?: boolean
+        }
+        Returns: number
+      }
       audit_history_search: {
         Args: {
           p_text?: string
@@ -1042,6 +1051,14 @@ export type Database = {
       is_api_role: {
         Args: Record<PropertyKey, never>
         Returns: boolean
+      }
+      merge_classifier: {
+        Args: {
+          p_kind: string
+          p_from_id: string
+          p_into_id: string
+        }
+        Returns: number
       }
       open_stock_lot: {
         Args: {

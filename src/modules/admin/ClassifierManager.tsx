@@ -11,6 +11,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { getSupabase } from "../../shared/supabase/client";
 import { Button, TextField, SelectField, GlassCard, Badge, EmptyState } from "../../shared/ui";
+import { BulkAssignPanel } from "./BulkAssignPanel";
 
 type ClassifierType = "brand" | "category" | "label";
 
@@ -52,6 +53,11 @@ export function ClassifierManager({ type }: ClassifierManagerProps) {
   const [newParentId, setNewParentId] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  const [mergingId, setMergingId] = useState<string | null>(null);
+  const [mergeTarget, setMergeTarget] = useState("");
+  const [mergeBusy, setMergeBusy] = useState(false);
+  const [assigningId, setAssigningId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const tableName = TABLE_MAP[type];
   const title = TITLE_MAP[type];
@@ -114,6 +120,28 @@ export function ClassifierManager({ type }: ClassifierManagerProps) {
     }
   };
 
+  /** RF-03: unir dos elementos. Los productos pasan al destino y el origen queda archivado (RF-56). */
+  const confirmMerge = async (fromId: string) => {
+    if (!mergeTarget || mergeTarget === fromId) return;
+    const from = items.find(i => i.id === fromId)?.name ?? "";
+    const into = items.find(i => i.id === mergeTarget)?.name ?? "";
+    if (!window.confirm(`¿Unir "${from}" con "${into}"? Los productos pasan a "${into}" y "${from}" queda archivada.`)) return;
+    setMergeBusy(true);
+    setError(null);
+    try {
+      const { data, error: err } = await getSupabase().rpc("merge_classifier", { p_kind: type, p_from_id: fromId, p_into_id: mergeTarget });
+      if (err) throw err;
+      setNotice(`Listo: ${data ?? 0} producto${data === 1 ? "" : "s"} pasaron a "${into}". "${from}" quedó archivada.`);
+      setMergingId(null);
+      setMergeTarget("");
+      await fetchItems();
+    } catch (e) {
+      setError(e instanceof Error ? `Error al unir: ${e.message}` : "Error al unir");
+    } finally {
+      setMergeBusy(false);
+    }
+  };
+
   const topLevelItems = items.filter(i => !i.parent_id);
 
   return (
@@ -121,6 +149,7 @@ export function ClassifierManager({ type }: ClassifierManagerProps) {
       <h2 style={{ margin: 0 }}>Gestionar {title}</h2>
 
       {error && <p role="alert" style={{ color: "var(--color-error)", margin: 0 }}>{error}</p>}
+      {notice && <p role="status" className="notice" style={{ margin: 0 }}>{notice}</p>}
 
       <GlassCard>
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--esp-s)" }}>
@@ -163,7 +192,7 @@ export function ClassifierManager({ type }: ClassifierManagerProps) {
           {items.map(item => (
             <GlassCard
               key={item.id} padding="compact"
-              style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--esp-s)" }}
+              style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--esp-s)", flexWrap: "wrap" }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: "var(--esp-s)", flex: 1 }}>
                 {editingId === item.id ? (
@@ -195,10 +224,36 @@ export function ClassifierManager({ type }: ClassifierManagerProps) {
                 ) : (
                   <>
                     <Button variant="secundario" onClick={() => { setEditingId(item.id); setEditName(item.name); }}>Renombrar</Button>
+                    <Button variant="secundario" onClick={() => { setAssigningId(assigningId === item.id ? null : item.id); setMergingId(null); }}>
+                      Asignar a productos
+                    </Button>
+                    <Button variant="secundario" onClick={() => { setMergingId(mergingId === item.id ? null : item.id); setMergeTarget(""); setAssigningId(null); }}
+                      disabled={items.length < 2}>
+                      Unir con…
+                    </Button>
                     <Button variant="peligro" onClick={() => handleArchive(item.id)}>Archivar</Button>
                   </>
                 )}
               </div>
+              {mergingId === item.id && (
+                <div style={{ flexBasis: "100%", display: "flex", gap: "var(--esp-s)", alignItems: "flex-end", flexWrap: "wrap", paddingTop: "var(--esp-s)", borderTop: "1px solid var(--color-linea)" }}>
+                  <SelectField label={`Unir "${item.name}" con`} value={mergeTarget} onChange={(e) => setMergeTarget(e.target.value)}>
+                    <option value="">Elegí el destino…</option>
+                    {items.filter(i => i.id !== item.id).map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                  </SelectField>
+                  <Button variant="primario" onClick={() => void confirmMerge(item.id)} disabled={!mergeTarget} loading={mergeBusy}>Unir</Button>
+                  <Button variant="fantasma" onClick={() => setMergingId(null)}>Cancelar</Button>
+                  <p className="field-help" style={{ flexBasis: "100%", margin: 0 }}>
+                    Los productos de "{item.name}" pasan al destino y "{item.name}" queda archivada (no se borra: RF-56).
+                  </p>
+                </div>
+              )}
+              {assigningId === item.id && (
+                <div style={{ flexBasis: "100%", paddingTop: "var(--esp-s)", borderTop: "1px solid var(--color-linea)" }}>
+                  <BulkAssignPanel kind={type} id={item.id} name={item.name}
+                    onDone={(message) => { setNotice(message); setAssigningId(null); }} />
+                </div>
+              )}
             </GlassCard>
           ))}
         </div>
