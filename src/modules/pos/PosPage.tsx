@@ -1,5 +1,5 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { Button, EmptyState, GlassCard, Modal, SelectField, TextField } from "../../shared/ui";
+import { Badge, Button, EmptyState, GlassCard, Modal, SelectField, TextField } from "../../shared/ui";
 import { OfflineIndicator } from "../../shared/components/OfflineIndicator";
 import { enqueueOperation } from "../../shared/offline/queue";
 import { synchronizePendingOperations } from "../../shared/offline/sync";
@@ -73,6 +73,7 @@ function RegisterSetup({ onAssigned }: { onAssigned: (register: RegisterOption) 
 
   return (
     <GlassCard className="pos-panel pos-setup">
+      <p className="pos-micro">Antes de vender</p>
       <h2>¿Qué caja es este equipo?</h2>
       <p className="field-help">Se elige una sola vez por equipo. Hace falta conexión para ver la lista.</p>
       {error && <p className="form-error" role="alert">{error}</p>}
@@ -117,8 +118,9 @@ function OpenShiftForm({ register, onOpened, onChangeRegister }: {
 
   return (
     <GlassCard className="pos-panel pos-setup">
+      <p className="pos-micro">{register.branchName ? `${register.branchName} · ` : ""}{register.name}</p>
       <h2>Abrir turno en {register.name}</h2>
-      <form onSubmit={submit} className="pos-setup">
+      <form onSubmit={submit} className="pos-setup-form">
         <TextField label="Efectivo en la caja al empezar" inputMode="decimal" value={initial}
           onChange={(e) => setInitial(e.target.value)} help="Sin conexión el turno se abre igual y se registra al volver internet." />
         {error && <p className="form-error" role="alert">{error}</p>}
@@ -130,6 +132,14 @@ function OpenShiftForm({ register, onOpened, onChangeRegister }: {
 }
 
 const SELLING_METHODS: PaymentMethod[] = ["cash", "transfer", "qr", "credit"];
+
+const TIME_FORMAT = new Intl.DateTimeFormat("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false });
+
+/** Hora local de apertura del turno; si la fecha guardada no se puede leer, no se muestra nada raro. */
+function formatTime(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? "—" : TIME_FORMAT.format(date);
+}
 
 function Register({ shift, onClosed }: { shift: CurrentShift; onClosed: () => void }) {
   const { products, isLoading, isOffline } = useCatalog();
@@ -211,104 +221,146 @@ function Register({ shift, onClosed }: { shift: CurrentShift; onClosed: () => vo
     }
   }
 
+  const itemCount = lines.reduce((sum, line) => sum + (line.weight === undefined ? line.quantity : 1), 0);
+  const catalogState = isLoading && entries.length === 0
+    ? { tone: "neutro" as const, text: "Cargando catálogo…" }
+    : isOffline
+      ? { tone: "aviso" as const, text: `Catálogo guardado en este equipo · ${entries.length}` }
+      : { tone: "exito" as const, text: `Catálogo listo · ${entries.length}` };
+
   return (
     <div className="pos-layout">
-      <GlassCard className="pos-panel">
-        <form className="pos-scan" onSubmit={submitQuery}>
-          <TextField ref={scanRef} label="Código o nombre del producto" autoFocus autoComplete="off" value={query}
-            onChange={(e) => setQuery(e.target.value)} placeholder="Escaneá o escribí" />
-          <Button type="submit" variant="secundario">Agregar</Button>
-        </form>
-        {isLoading && entries.length === 0 && <p className="field-help">Cargando catálogo…</p>}
+      <header className="pos-status glass-lite">
+        <div className="pos-status-shift">
+          <p className="pos-micro">Turno abierto</p>
+          <p className="pos-status-register">
+            <strong>{shift.registerName}</strong>
+            <span>desde las {formatTime(shift.openedAt)} · efectivo inicial {formatMoney(shift.initialBalance)}</span>
+          </p>
+          {!shift.persisted && <Badge tone="aviso">Turno abierto sin conexión · se registra al sincronizar</Badge>}
+        </div>
+        <div className="pos-status-actions">
+          <OfflineIndicator />
+          <Button variant="secundario" onClick={() => setClosing(true)}>Cerrar turno</Button>
+        </div>
+      </header>
 
-        {results.length > 0 && (
-          <ul className="pos-results" aria-label="Resultados">
-            {results.map((entry) => (
-              <li key={entry.presentationId}>
-                <Button variant="fantasma" onClick={() => addEntry(entry)}>
-                  <span>{entry.productName} · {entry.presentationName}</span>
-                  <span>{entry.soldByWeight ? `${formatMoney(pricePerKilo(entry))}/kg` : formatMoney(entry.salePrice)}</span>
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
+      <section className="pos-main" aria-label="Carga de productos">
+        <GlassCard className="pos-panel pos-scanner">
+          <div className="pos-panel-head">
+            <p className="pos-micro">Escáner y búsqueda</p>
+            <Badge tone={catalogState.tone}>{catalogState.text}</Badge>
+          </div>
+          <form className="pos-scan" onSubmit={submitQuery}>
+            <TextField ref={scanRef} label="Código o nombre del producto" autoFocus autoComplete="off" value={query}
+              onChange={(e) => setQuery(e.target.value)} placeholder="Escaneá o escribí" />
+            <Button type="submit" variant="secundario">Agregar</Button>
+          </form>
 
-        {choices && (
-          <div role="group" aria-label="Elegí la presentación">
-            <p className="field-help">Ese código es de un producto con varias presentaciones. ¿Cuál es?</p>
-            <ul className="pos-results">
-              {choices.map((entry) => (
+          {results.length > 0 && (
+            <ul className="pos-results" aria-label="Resultados">
+              {results.map((entry) => (
                 <li key={entry.presentationId}>
-                  <Button variant="secundario" onClick={() => addEntry(entry)}>
-                    <span>{entry.presentationName}</span><span>{formatMoney(entry.salePrice)}</span>
+                  <Button variant="fantasma" onClick={() => addEntry(entry)}>
+                    <span>{entry.productName} · {entry.presentationName}</span>
+                    <span className="pos-num">{entry.soldByWeight ? `${formatMoney(pricePerKilo(entry))}/kg` : formatMoney(entry.salePrice)}</span>
                   </Button>
                 </li>
               ))}
             </ul>
+          )}
+
+          {choices && (
+            <div role="group" aria-label="Elegí la presentación">
+              <p className="field-help">Ese código es de un producto con varias presentaciones. ¿Cuál es?</p>
+              <ul className="pos-results">
+                {choices.map((entry) => (
+                  <li key={entry.presentationId}>
+                    <Button variant="secundario" onClick={() => addEntry(entry)}>
+                      <span>{entry.presentationName}</span><span className="pos-num">{formatMoney(entry.salePrice)}</span>
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </GlassCard>
+
+        <GlassCard className="pos-panel pos-ticket">
+          <div className="pos-panel-head">
+            <p className="pos-micro">Ticket</p>
+            <div className="pos-panel-head-actions">
+              <Badge>{itemCount === 1 ? "1 artículo" : `${itemCount} artículos`}</Badge>
+              <Button variant="fantasma" onClick={() => dispatch({ type: "clear" })} disabled={lines.length === 0}>Vaciar</Button>
+            </div>
           </div>
-        )}
 
-        {lines.length === 0 ? (
-          <EmptyState title="Todavía no hay productos">Pasá un producto por el lector o buscalo por nombre.</EmptyState>
-        ) : (
-          <ul className="pos-lines">
-            {lines.map((line) => (
-              <li key={line.lineId} className="pos-line">
-                <div>
-                  <p className="pos-line-name">{line.entry.productName} · {line.entry.presentationName}</p>
-                  <p className="pos-line-detail">
-                    {line.weight !== undefined
-                      ? `${line.weight} ${line.entry.baseUnit === "millilitre" ? "ml" : "g"} a ${formatMoney(pricePerKilo(line.entry))}/kg`
-                      : `${formatMoney(line.entry.salePrice)} c/u`}
-                  </p>
-                </div>
-                {line.weight === undefined ? (
-                  <div className="pos-qty">
-                    <Button variant="secundario" aria-label="Quitar uno"
-                      onClick={() => dispatch({ type: "setQuantity", lineId: line.lineId, quantity: line.quantity - 1 })}>−</Button>
-                    <output aria-label="Cantidad">{line.quantity}</output>
-                    <Button variant="secundario" aria-label="Agregar uno"
-                      onClick={() => dispatch({ type: "setQuantity", lineId: line.lineId, quantity: line.quantity + 1 })}>+</Button>
-                  </div>
-                ) : <span />}
-                <span className="pos-amount">{formatMoney(lineTotal(line))}</span>
-                <Button variant="fantasma" aria-label={`Quitar ${line.entry.productName}`}
-                  onClick={() => dispatch({ type: "remove", lineId: line.lineId })}>Quitar</Button>
-              </li>
+          {lines.length === 0 ? (
+            <EmptyState title="Todavía no hay productos">Pasá un producto por el lector o buscalo por nombre.</EmptyState>
+          ) : (
+            <>
+              <div className="pos-line pos-lines-head" aria-hidden="true">
+                <span>Producto</span><span>Cantidad</span><span>Unitario</span><span>Subtotal</span><span />
+              </div>
+              <ul className="pos-lines">
+                {lines.map((line) => (
+                  <li key={line.lineId} className="pos-line">
+                    <div>
+                      <p className="pos-line-name">{line.entry.productName}</p>
+                      <p className="pos-line-detail">{line.entry.presentationName}</p>
+                    </div>
+                    {line.weight === undefined ? (
+                      <div className="pos-qty">
+                        <Button variant="secundario" aria-label="Quitar uno"
+                          onClick={() => dispatch({ type: "setQuantity", lineId: line.lineId, quantity: line.quantity - 1 })}>−</Button>
+                        <output aria-label="Cantidad" className="pos-num">{line.quantity}</output>
+                        <Button variant="secundario" aria-label="Agregar uno"
+                          onClick={() => dispatch({ type: "setQuantity", lineId: line.lineId, quantity: line.quantity + 1 })}>+</Button>
+                      </div>
+                    ) : (
+                      <span className="pos-num pos-weight">{line.weight} {line.entry.baseUnit === "millilitre" ? "ml" : "g"}</span>
+                    )}
+                    <span className="pos-num pos-unit">
+                      {line.weight !== undefined ? `${formatMoney(pricePerKilo(line.entry))}/kg` : formatMoney(line.entry.salePrice)}
+                    </span>
+                    <span className="pos-amount">{formatMoney(lineTotal(line))}</span>
+                    <Button variant="fantasma" className="pos-remove" aria-label={`Quitar ${line.entry.productName}`}
+                      onClick={() => dispatch({ type: "remove", lineId: line.lineId })}>×</Button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </GlassCard>
+      </section>
+
+      <aside className="pos-side" aria-label="Cobro">
+        <GlassCard className="pos-panel pos-checkout">
+          <div className="pos-total-box">
+            <p className="pos-total-label">Total a cobrar</p>
+            <p className="pos-total" aria-live="polite">{formatMoney(total)}</p>
+            <p className="pos-total-sub">{itemCount === 1 ? "1 artículo" : `${itemCount} artículos`}</p>
+          </div>
+
+          <fieldset className="pos-methods">
+            <legend className="pos-micro">Medio de pago</legend>
+            {SELLING_METHODS.map((m) => (
+              <label key={m} className="pos-method">
+                <input type="radio" name="metodo" value={m} checked={method === m} onChange={() => setMethod(m)} />
+                <span>{PAYMENT_LABELS[m]}</span>
+              </label>
             ))}
-          </ul>
-        )}
-      </GlassCard>
+          </fieldset>
 
-      <GlassCard className="pos-panel">
-        <p className="pos-total-label">Total</p>
-        <p className="pos-total" aria-live="polite">{formatMoney(total)}</p>
+          {method === "credit" && <CustomerPicker selected={customer} onSelect={setCustomer} saleTotal={total} />}
 
-        <fieldset className="pos-methods">
-          <legend>Medio de pago</legend>
-          {SELLING_METHODS.map((m) => (
-            <label key={m} className="pos-method">
-              <input type="radio" name="metodo" value={m} checked={method === m} onChange={() => setMethod(m)} />
-              <span>{PAYMENT_LABELS[m]}</span>
-            </label>
-          ))}
-        </fieldset>
-
-        {method === "credit" && <CustomerPicker selected={customer} onSelect={setCustomer} saleTotal={total} />}
-
-        <Button className="pos-charge" onClick={() => void charge()}
-          disabled={lines.length === 0 || (method === "credit" && !customer)} loading={charging}>
-          Cobrar {lines.length > 0 ? formatMoney(total) : ""}
-        </Button>
-        <Button variant="fantasma" onClick={() => dispatch({ type: "clear" })} disabled={lines.length === 0}>Vaciar</Button>
-        <p className="pos-feedback" data-tone={feedback?.tone} role="status">{feedback?.text}</p>
-
-        <div className="pos-shift">
-          <OfflineIndicator />
-          <Button variant="secundario" onClick={() => setClosing(true)}>Cerrar turno</Button>
-        </div>
-      </GlassCard>
+          <Button className="pos-charge" onClick={() => void charge()}
+            disabled={lines.length === 0 || (method === "credit" && !customer)} loading={charging}>
+            Cobrar {lines.length > 0 ? formatMoney(total) : ""}
+          </Button>
+          <p className="pos-feedback" data-tone={feedback?.tone} role="status">{feedback?.text}</p>
+        </GlassCard>
+      </aside>
 
       {weighing && (
         <WeightDialog entry={weighing} onCancel={() => { setWeighing(null); focusScan(); }}
