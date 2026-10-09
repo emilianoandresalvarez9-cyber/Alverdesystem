@@ -944,6 +944,28 @@ export type Database = {
         }
         Returns: boolean
       }
+      audit_history_search: {
+        Args: {
+          p_text?: string
+          p_entity?: string
+          p_user_id?: string
+          p_from?: string
+          p_to?: string
+          p_limit?: number
+        }
+        Returns: {
+          id: number
+          occurred_at: string
+          entity: string
+          entity_id: string
+          entity_label: string
+          field: string
+          old_value: Json
+          new_value: Json
+          user_id: string
+          user_name: string
+        }[]
+      }
       bulk_update_prices: {
         Args: {
           p_percent: number
