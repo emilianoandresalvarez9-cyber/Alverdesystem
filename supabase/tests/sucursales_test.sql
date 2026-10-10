@@ -12,6 +12,7 @@ set role authenticated;
 select lives_ok($$insert into public.branches (id, name) values ('00000000-0000-0000-0000-000000000b01', 'Central')$$, 'Administradora crea una sucursal');
 select lives_ok($$insert into public.registers (branch_id, name) values ('00000000-0000-0000-0000-000000000b01', 'Caja 2')$$, 'RF-55: agregar una caja es un alta de datos');
 reset role;
+update public.profiles set branch_id = '00000000-0000-0000-0000-000000000b01' where id = '00000000-0000-0000-0000-0000000000e1';
 
 set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000e1';
 set role authenticated;
