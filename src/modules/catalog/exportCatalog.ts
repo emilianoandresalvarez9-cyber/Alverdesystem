@@ -1,7 +1,9 @@
 import type { CatalogProduct } from "./types";
 import { exportToExcel } from "../../shared/export/excel";
+import { effectivePrice } from "./branchPricing";
 
-export function exportCatalogToExcel(products: CatalogProduct[], filename = "catalogo-alverde") {
+/** RF-05 + RF-69: el Excel lleva el precio de la sucursal de trabajo (sin sucursal: el base). */
+export function exportCatalogToExcel(products: CatalogProduct[], filename = "catalogo-alverde", branchId: string | null = null) {
   const headers = ["Nombre", "Marca", "Rubro", "Unidad base", "Etiquetas", "Presentacion", "Precio de venta", "Codigo de barras"];
   const matrix: (string | number | null)[][] = [];
 
@@ -20,7 +22,7 @@ export function exportCatalogToExcel(products: CatalogProduct[], filename = "cat
         matrix.push([
           p.name, brand, category, unit, labelNames,
           pr.name,
-          pr.sale_price.toFixed(2),
+          effectivePrice(pr, branchId).toFixed(2),
           pr.internal_barcode ?? "",
         ]);
       }

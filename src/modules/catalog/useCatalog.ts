@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { getSupabase } from "../../shared/supabase/client";
 import { loadCatalogSnapshot, saveCatalogSnapshot } from "../../shared/offline/queue";
 import type { CatalogProduct, Brand, Category, Label, CatalogFilters } from "./types";
+import { parseBranchPrices } from "./branchPricing";
 
 export interface UseCatalogReturn {
   products: CatalogProduct[];
@@ -71,6 +72,7 @@ export function useCatalog(): UseCatalogReturn {
         base_quantity: Number(row.base_quantity ?? 0),
         internal_barcode: row.internal_barcode,
         sale_price: Number(row.sale_price),
+        branch_prices: parseBranchPrices(row.branch_prices),
         sold_by_weight: Boolean(row.sold_by_weight),
         active: true
       });

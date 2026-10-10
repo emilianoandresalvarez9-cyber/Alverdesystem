@@ -1,6 +1,7 @@
 import { useRef, useCallback } from "react";
 import { TextField, Button, Tag } from "../../shared/ui";
 import type { Brand, Category, Label, CatalogFilters } from "./types";
+import { useBranch } from "../../shared/branch/BranchContext";
 
 interface CatalogFiltersBarProps {
   filters: CatalogFilters;
@@ -8,7 +9,8 @@ interface CatalogFiltersBarProps {
   brands: Brand[];
   categories: Category[];
   labels: Label[];
-  onExport: () => void;
+  /** Recibe la sucursal de trabajo para exportar sus precios (RF-69). */
+  onExport: (branchId: string | null) => void;
 }
 
 /**
@@ -19,6 +21,7 @@ export function CatalogFiltersBar({
   filters, setFilters, brands, categories, labels, onExport,
 }: CatalogFiltersBarProps) {
   const searchRef = useRef<HTMLInputElement>(null);
+  const { workingBranchId } = useBranch();
 
   const clearAll = useCallback(() => {
     setFilters({ search: "", brandId: "", categoryId: "", labelId: "" });
@@ -42,7 +45,7 @@ export function CatalogFiltersBar({
         {hasActiveFilters && (
           <Button variant="fantasma" onClick={clearAll}>Limpiar filtros</Button>
         )}
-        <Button variant="secundario" onClick={onExport}>Exportar Excel</Button>
+        <Button variant="secundario" onClick={() => onExport(workingBranchId)}>Exportar Excel</Button>
       </div>
       <FilterAxis label="Marca" all="Todas" items={brands} value={filters.brandId} onChange={brandId => setFilters({ brandId })} />
       <FilterAxis label="Rubro" all="Todos" items={categories} value={filters.categoryId} onChange={categoryId => setFilters({ categoryId })} />

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { lookupBarcode, pricePerKilo, searchEntries } from "./catalogLookup";
+import { lookupBarcode, pricePerKilo, searchEntries, toPosEntries } from "./catalogLookup";
+import type { CatalogProduct } from "../catalog/types";
 import type { PosEntry } from "./types";
 
 const entry = (over: Partial<PosEntry>): PosEntry => ({
@@ -45,5 +46,30 @@ describe("búsqueda y precios", () => {
 
   it("muestra el precio por kilo de un granel cargado por gramo", () => {
     expect(pricePerKilo(entries[4]!)).toBe(3000);
+  });
+});
+
+describe("RF-69: la caja cobra el precio de la sucursal de su caja", () => {
+  const product: CatalogProduct = {
+    id: "alm", name: "Almendras", manufacturer_barcode: null, base_unit: "gram", open_shelf_life_days: null,
+    label_text: null, active: true, brand: null, category: null, labels: [],
+    presentations: [
+      { id: "bolsa", name: "Bolsa 250 g", base_quantity: 250, internal_barcode: "2000000000022", sale_price: 4000,
+        branch_prices: { norte: 4500 }, sold_by_weight: false, active: true },
+      { id: "granel", name: "Granel", base_quantity: 1, internal_barcode: null, sale_price: 16, sold_by_weight: true, active: true }
+    ]
+  };
+
+  it("en Norte usa el precio propio de Norte", () => {
+    expect(toPosEntries([product], "norte").find((e) => e.presentationId === "bolsa")?.salePrice).toBe(4500);
+  });
+
+  it("en Centro (sin precio propio) usa el base", () => {
+    expect(toPosEntries([product], "centro").find((e) => e.presentationId === "bolsa")?.salePrice).toBe(4000);
+  });
+
+  it("sin sucursal conocida (turno viejo) usa el base y no falla con presentaciones sin precios por sucursal", () => {
+    const result = toPosEntries([product]);
+    expect(result.map((e) => e.salePrice)).toEqual([4000, 16]);
   });
 });

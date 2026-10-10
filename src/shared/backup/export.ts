@@ -13,6 +13,8 @@ export interface BackupData {
  * docs/runbooks/restaurar-base.md, nunca desde el navegador (P17).
  */
 export const TABLES_TO_BACKUP = [
+  "branches",
+  "registers",
   "brands",
   "categories",
   "labels",
@@ -25,8 +27,7 @@ export const TABLES_TO_BACKUP = [
   "supplier_products",
   "pricing_settings",
   "category_price_multipliers",
-  "branches",
-  "registers",
+  "branch_prices",
   "profiles",
   "stock_lots",
   "stock_movements",

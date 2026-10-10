@@ -26,7 +26,7 @@ export function CatalogPage() {
           brands={brands}
           categories={categories}
           labels={labels}
-          onExport={() => exportCatalogToExcel(visible)}
+          onExport={(branchId) => exportCatalogToExcel(visible, "catalogo-alverde", branchId)}
         />
 
         {isLoading && (

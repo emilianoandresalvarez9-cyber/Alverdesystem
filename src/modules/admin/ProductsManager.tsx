@@ -237,7 +237,7 @@ export function ProductsManager() {
               {presentations.map(pr => (
                 <li key={pr.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--glass-borde)", paddingBottom: "var(--esp-xs)", marginBottom: "var(--esp-xs)" }}>
                   <span>{pr.name} (Cant: {pr.base_quantity}) - ${pr.sale_price}</span>
-                  <Button variant="fantasma" onClick={() => handleUpdatePrice(pr.id, pr.sale_price)}>Cambiar Precio</Button>
+                  <Button variant="fantasma" onClick={() => handleUpdatePrice(pr.id, pr.sale_price)}>Cambiar precio base</Button>
                 </li>
               ))}
             </ul>

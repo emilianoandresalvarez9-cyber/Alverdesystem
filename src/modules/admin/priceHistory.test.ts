@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { accumulatedChange, formatPercent, toPriceHistory, type PriceHistoryRow } from "./priceHistory";
+import { accumulatedChange, formatPercent, groupByBranch, toPriceHistory, type PriceHistoryRow } from "./priceHistory";
 
 const row = (over: Partial<PriceHistoryRow>): PriceHistoryRow => ({
   id: "h1", presentation_id: "p1", sale_price: "1000.00", previous_price: null, changed_at: "2026-08-01T10:00:00Z",
@@ -35,5 +35,19 @@ describe("RF-27: historial de precios por producto", () => {
     expect(formatPercent(0.2)).toBe("+20 %");
     expect(formatPercent(-0.055)).toBe("-5,5 %");
     expect(formatPercent(null)).toBe("—");
+  });
+});
+
+describe("RF-69: historial separado por precio base y por sucursal", () => {
+  it("no mezcla la inflación del base con la del precio propio de una sucursal", () => {
+    const entries = toPriceHistory([
+      row({ id: "b1", sale_price: "1000.00", previous_price: null, changed_at: "2026-08-01T10:00:00Z" }),
+      row({ id: "b2", sale_price: "1100.00", previous_price: "1000.00", changed_at: "2026-09-01T10:00:00Z" }),
+      row({ id: "n1", sale_price: "1500.00", previous_price: "1100.00", changed_at: "2026-09-15T10:00:00Z", branch_id: "norte" })
+    ]);
+    const groups = groupByBranch(entries);
+    expect(groups.map((g) => g.branchId)).toEqual([null, "norte"]);
+    expect(accumulatedChange(groups[0]!.entries)).toBeCloseTo(0.1);
+    expect(groups[1]!.entries.map((e) => e.id)).toEqual(["n1"]);
   });
 });

@@ -8,7 +8,7 @@ import type { CurrentShift } from "./types";
 const REGISTER_KEY = "pos-register";
 const SHIFT_KEY = "pos-current-shift";
 
-export type RegisterOption = { id: string; name: string; branchName: string };
+export type RegisterOption = { id: string; name: string; branchName: string; branchId?: string };
 
 /** Caja asignada a este dispositivo (se elige una vez por equipo). */
 export async function assignedRegister(): Promise<RegisterOption | undefined> {
@@ -32,7 +32,7 @@ export async function listRegisters(branchId: string | null = null): Promise<Reg
   return (data ?? []).map((row) => {
     const branch = row.branch as unknown as { name: string } | { name: string }[] | null;
     const branchName = Array.isArray(branch) ? branch[0]?.name ?? "" : branch?.name ?? "";
-    return { id: row.id as string, name: row.name as string, branchName };
+    return { id: row.id as string, name: row.name as string, branchName, branchId: row.branch_id as string };
   });
 }
 
@@ -54,6 +54,7 @@ export async function openShift(register: RegisterOption, initialBalance: number
     id: crypto.randomUUID(),
     registerId: register.id,
     registerName: register.name,
+    ...(register.branchId ? { branchId: register.branchId } : {}),
     openedAt: new Date().toISOString(),
     initialBalance,
     persisted: false
@@ -80,6 +81,7 @@ async function findOwnOpenShift(register: RegisterOption): Promise<CurrentShift 
     id: data.id as string,
     registerId: register.id,
     registerName: register.name,
+    ...(register.branchId ? { branchId: register.branchId } : {}),
     openedAt: data.opened_at as string,
     initialBalance: Number(data.initial_balance),
     persisted: true

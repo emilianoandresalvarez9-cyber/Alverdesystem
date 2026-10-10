@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import { GlassCard, Badge, Tag } from "../../shared/ui";
 import type { CatalogProduct } from "./types";
 import { presentationPriceLabel } from "./scalePricing";
+import { effectivePrice } from "./branchPricing";
+import { useBranch } from "../../shared/branch/BranchContext";
 
 const ars = (value: number) => `$${value.toLocaleString("es-AR")}`;
 
@@ -20,9 +22,11 @@ const BASE_UNIT_LABEL: Record<string, string> = {
 };
 
 export function ProductCard({ product, onToggle, expanded = false, actions }: ProductCardProps) {
+  // RF-69: precios de la sucursal de trabajo; con "Todas", el base.
+  const { workingBranchId } = useBranch();
   const lowestPrice = product.presentations
     .filter(p => p.active && !p.sold_by_weight)
-    .map(p => p.sale_price)
+    .map(p => effectivePrice(p, workingBranchId))
     .filter(p => p > 0)
     .sort((a, b) => a - b)[0];
 
@@ -61,7 +65,7 @@ export function ProductCard({ product, onToggle, expanded = false, actions }: Pr
           {product.presentations.filter(p => p.active).map(pr => (
             <span key={pr.id} className="product-card__presentation">
               <span>{pr.name}{pr.sold_by_weight ? <Badge tone="neutro" className="product-card__scale">Balanza</Badge> : null}</span>
-              <span className="pos-num">{presentationPriceLabel(pr, ars)}</span>
+              <span className="pos-num">{presentationPriceLabel({ ...pr, sale_price: effectivePrice(pr, workingBranchId) }, ars)}</span>
             </span>
           ))}
         </span>

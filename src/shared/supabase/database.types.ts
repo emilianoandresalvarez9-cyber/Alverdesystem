@@ -39,6 +39,34 @@ export type Database = {
           { foreignKeyName: "audit_history_user_id_fkey"; columns: ["user_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] }
         ]
       }
+      branch_prices: {
+        Row: {
+          branch_id: string
+          presentation_id: string
+          sale_price: number
+          updated_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          branch_id: string
+          presentation_id: string
+          sale_price: number
+          updated_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string
+          presentation_id?: string
+          sale_price?: number
+          updated_by?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          { foreignKeyName: "branch_prices_branch_id_fkey"; columns: ["branch_id"]; isOneToOne: false; referencedRelation: "branches"; referencedColumns: ["id"] },
+          { foreignKeyName: "branch_prices_presentation_id_fkey"; columns: ["presentation_id"]; isOneToOne: false; referencedRelation: "product_presentations"; referencedColumns: ["id"] },
+          { foreignKeyName: "branch_prices_updated_by_fkey"; columns: ["updated_by"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] }
+        ]
+      }
       branches: {
         Row: {
           id: string
@@ -348,6 +376,7 @@ export type Database = {
           scope_id: string | null
           round_to: number | null
           changed_count: number
+          branch_id: string | null
         }
         Insert: {
           id?: string
@@ -358,6 +387,7 @@ export type Database = {
           scope_id?: string | null
           round_to?: number | null
           changed_count?: number
+          branch_id?: string | null
         }
         Update: {
           id?: string
@@ -368,8 +398,10 @@ export type Database = {
           scope_id?: string | null
           round_to?: number | null
           changed_count?: number
+          branch_id?: string | null
         }
         Relationships: [
+          { foreignKeyName: "price_update_batches_branch_id_fkey"; columns: ["branch_id"]; isOneToOne: false; referencedRelation: "branches"; referencedColumns: ["id"] },
           { foreignKeyName: "price_update_batches_created_by_fkey"; columns: ["created_by"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] }
         ]
       }
@@ -459,6 +491,7 @@ export type Database = {
           changed_at: string
           previous_price: number | null
           batch_id: string | null
+          branch_id: string | null
         }
         Insert: {
           id?: string
@@ -468,6 +501,7 @@ export type Database = {
           changed_at?: string
           previous_price?: number | null
           batch_id?: string | null
+          branch_id?: string | null
         }
         Update: {
           id?: string
@@ -477,9 +511,11 @@ export type Database = {
           changed_at?: string
           previous_price?: number | null
           batch_id?: string | null
+          branch_id?: string | null
         }
         Relationships: [
           { foreignKeyName: "product_price_history_batch_id_fkey"; columns: ["batch_id"]; isOneToOne: false; referencedRelation: "price_update_batches"; referencedColumns: ["id"] },
+          { foreignKeyName: "product_price_history_branch_id_fkey"; columns: ["branch_id"]; isOneToOne: false; referencedRelation: "branches"; referencedColumns: ["id"] },
           { foreignKeyName: "product_price_history_changed_by_fkey"; columns: ["changed_by"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
           { foreignKeyName: "product_price_history_presentation_id_fkey"; columns: ["presentation_id"]; isOneToOne: false; referencedRelation: "product_presentations"; referencedColumns: ["id"] }
         ]
@@ -953,6 +989,7 @@ export type Database = {
           sale_price: number | null
           sold_by_weight: boolean | null
           labels: Json | null
+          branch_prices: Json | null
         }
         Relationships: []
       }
@@ -1047,6 +1084,7 @@ export type Database = {
           p_scope_id?: string
           p_apply?: boolean
           p_round_to?: number
+          p_branch_id?: string
         }
         Returns: {
           batch_id: string
@@ -1101,6 +1139,13 @@ export type Database = {
           shelf_life_days: number
         }
         Returns: string
+      }
+      effective_sale_price: {
+        Args: {
+          p_presentation_id: string
+          p_branch_id: string
+        }
+        Returns: number
       }
       fraction_stock: {
         Args: {
@@ -1194,6 +1239,14 @@ export type Database = {
           p_purchase_quantity: number
           p_supplier_product_code?: string
           p_is_primary?: boolean
+        }
+        Returns: undefined
+      }
+      set_branch_price: {
+        Args: {
+          p_presentation_id: string
+          p_branch_id: string
+          p_price: number
         }
         Returns: undefined
       }
