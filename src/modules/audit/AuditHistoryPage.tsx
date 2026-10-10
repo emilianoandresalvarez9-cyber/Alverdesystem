@@ -3,6 +3,7 @@ import { getSupabase } from "../../shared/supabase/client";
 import type { Database } from "../../shared/supabase/database.types";
 import { Button, EmptyState, Icon, Message, SelectField, TextField, useCompact } from "../../shared/ui";
 import { formatDay, formatDayTime } from "../../shared/format/date";
+import { useBranch } from "../../shared/branch/BranchContext";
 import { EMPTY_FILTERS, ENTITY_LABELS, entityLabel, fieldLabel, formatValue, toSearchArgs, type AuditFilters } from "./auditFormat";
 
 type AuditRow = Database["public"]["Functions"]["audit_history_search"]["Returns"][number];
@@ -126,11 +127,13 @@ export function AuditHistoryPage() {
 
 /** Valor anterior → nuevo: el anterior apagado, el nuevo en negrita. */
 function Change({ field, before, after }: { field: string; before: AuditRow["old_value"]; after: AuditRow["new_value"] }) {
+  const { branches } = useBranch();
+  const names = Object.fromEntries(branches.map((b) => [b.id, b.name]));
   return (
     <span className="auditoria__cambio">
-      <span className="apagada">{formatValue(field, before)}</span>
+      <span className="apagada">{formatValue(field, before, names)}</span>
       <Icon name="arrow_forward" size="s" /><span className="sr">pasó a</span>
-      <span className="fuerte">{formatValue(field, after)}</span>
+      <span className="fuerte">{formatValue(field, after, names)}</span>
     </span>
   );
 }
