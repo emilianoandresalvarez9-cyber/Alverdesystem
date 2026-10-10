@@ -145,6 +145,7 @@ function OpenShiftForm({ register, onOpened, onChangeRegister }: {
   const [initial, setInitial] = useState("0");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const profile = useCurrentProfile();
   const { isAdmin, workingBranchId, label: branchLabel } = useBranch();
   const otherBranch = registerBranchWarning({ isAdmin, workingBranchId, workingBranchLabel: branchLabel, register });
 
@@ -156,7 +157,7 @@ function OpenShiftForm({ register, onOpened, onChangeRegister }: {
     setBusy(true);
     setError(null);
     try {
-      onOpened(await openShift(register, amount, useCurrentProfile().id));
+      onOpened(await openShift(register, amount, profile.id));
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo abrir el turno.");
     } finally {
