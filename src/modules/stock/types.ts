@@ -6,7 +6,8 @@ export type StockMovementKind =
   | "portioning"
   | "waste"
   | "adjustment"
-  | "discard";
+  | "discard"
+  | "transfer";
 
 export type LotExpiryStatus = "expired" | "critical" | "warning" | "good" | "indeterminate";
 

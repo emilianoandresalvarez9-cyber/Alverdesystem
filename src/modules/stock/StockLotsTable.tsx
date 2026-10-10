@@ -2,6 +2,7 @@ import { useState } from "react";
 import { GlassCard, Button, Badge, EmptyState } from "../../shared/ui";
 import { LotStatusBadge } from "./LotStatusBadge";
 import { StockAdjustmentModal } from "./StockAdjustmentModal";
+import { TransferModal } from "./TransferModal";
 import type { StockLot } from "./types";
 import { useBranch } from "../../shared/branch/BranchContext";
 
@@ -25,6 +26,7 @@ export function StockLotsTable({
   onFraction
 }: StockLotsTableProps) {
   const [selectedLotForAdjustment, setSelectedLotForAdjustment] = useState<StockLot | null>(null);
+  const [lotToTransfer, setLotToTransfer] = useState<StockLot | null>(null);
   // Con "Todas las sucursales" cada lote dice de qué sucursal es (RF-65/66).
   const { isAdmin, filterId, branches } = useBranch();
   const showBranch = isAdmin && filterId === null && branches.length > 1;
@@ -152,6 +154,11 @@ export function StockLotsTable({
                           Ajustar
                         </Button>
                       )}
+                      {isAdmin && branches.length > 1 && !isPending && !isClosed && lot.current_quantity > 0 && (
+                        <Button variant="fantasma" onClick={() => setLotToTransfer(lot)} title="Pasar a otra sucursal (RF-68)">
+                          Traspasar
+                        </Button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -167,6 +174,9 @@ export function StockLotsTable({
         onClose={() => setSelectedLotForAdjustment(null)}
         onSuccess={onRefresh}
       />
+      {lotToTransfer && (
+        <TransferModal key={lotToTransfer.id} lot={lotToTransfer} onClose={() => setLotToTransfer(null)} onDone={onRefresh} />
+      )}
     </>
   );
 }

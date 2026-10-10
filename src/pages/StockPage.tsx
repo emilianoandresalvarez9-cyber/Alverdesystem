@@ -2,6 +2,7 @@ import { useState } from "react";
 import { AppShell } from "../shared/components/AppShell";
 import { QuickRestock } from "../modules/restock/QuickRestock";
 import { StockDashboard } from "../modules/stock/StockDashboard";
+import { TransfersHistory } from "../modules/stock/TransfersHistory";
 import "../styles/pos.css";
 
 export function StockPage() {
@@ -15,6 +16,7 @@ export function StockPage() {
           <QuickRestock onSuccess={() => setStockRevision((revision) => revision + 1)} />
         </section>
         <StockDashboard key={stockRevision} enableFractioning />
+        <TransfersHistory refreshKey={stockRevision} />
       </div>
     </AppShell>
   );
