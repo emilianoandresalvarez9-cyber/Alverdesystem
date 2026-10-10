@@ -26,8 +26,12 @@ grant usage on schema auth to anon, authenticated, service_role;
 grant execute on all functions in schema auth to anon, authenticated, service_role;
 grant usage on schema public to postgres, anon, authenticated, service_role;
 grant usage on schema extensions to postgres, anon, authenticated, service_role;
--- Privilegios por defecto idénticos a los de Supabase: TODO objeto nuevo en public queda concedido a anon.
-alter default privileges in schema public grant all on tables to postgres, anon, authenticated, service_role;
-alter default privileges in schema public grant all on functions to postgres, anon, authenticated, service_role;
-alter default privileges in schema public grant all on sequences to postgres, anon, authenticated, service_role;
+-- Privilegios por defecto como en el proyecto de PRODUCCIÓN: los objetos nuevos en public NO quedan
+-- concedidos a anon ni a authenticated. Cada migración tiene que dar sus permisos (GRANT) explícitos.
+-- Con los privilegios automáticos de Supabase (lo que hacía este archivo antes) las pruebas pasaban
+-- y producción fallaba: "permission denied" en stock_warnings, is_api_role y credit_movement_delta.
+-- Modo permisivo (el de un proyecto Supabase con exposición automática): PGQA_LENIENT=1.
+alter default privileges in schema public grant all on tables to postgres, service_role;
+alter default privileges in schema public grant all on functions to postgres, service_role;
+alter default privileges in schema public grant all on sequences to postgres, service_role;
 create extension if not exists pgtap schema extensions;
