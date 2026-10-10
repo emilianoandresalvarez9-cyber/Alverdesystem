@@ -1,0 +1,12 @@
+/*
+ * Clientes y fiado (RF-41 a RF-48; RNF-06) sobre el sistema de diseño: .clientes, .cliente,
+ * .kpis y los diálogos salen de design-system.css. Sólo tokens (tests/theme/pageStyles.test.ts).
+ */
+.clientes-barra { flex-wrap: nowrap; align-items: flex-end; }
+.cliente__cabeza { align-items: flex-start; flex-wrap: nowrap; }
+.cliente__datos { gap: 2px; min-width: 0; }
+.cliente__telefono { gap: var(--esp-xs); }
+.cliente__saldo { font: 500 var(--texto-l)/28px var(--fuente-datos); color: var(--color-tinta); }
+.cuenta-cliente__tope { flex-wrap: nowrap; align-items: flex-end; }
+.cuenta-cliente__tope > .campo { flex: 1; }
+.kpi__valor--texto { font-size: var(--texto-m); }

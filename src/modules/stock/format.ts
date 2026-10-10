@@ -21,19 +21,7 @@ export function formatQuantity(value: number, baseUnit: string): string {
   return `${formatAmount(value)} ${unitLabel(baseUnit)}`;
 }
 
-const DAY = new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
-
-/**
- * «29/09/2026». Una fecha sola («2026-09-29», vencimientos) se arma con sus partes: con
- * `new Date()` se leería como medianoche UTC y en Argentina mostraría el día anterior.
- */
-export function formatDay(value: string | null | undefined): string {
-  if (!value) return "—";
-  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (dateOnly) return `${dateOnly[3]}/${dateOnly[2]}/${dateOnly[1]}`;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "—" : DAY.format(date);
-}
+export { formatDay, formatDayTime } from "../../shared/format/date";
 
 /** Cuánto queda del lote, para el medidor: 0 a 100, y si conviene avisar. */
 export function remaining(current: number, initial: number): { percent: number; tone: "normal" | "aviso" | "error" } {
