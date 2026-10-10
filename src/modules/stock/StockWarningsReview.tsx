@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { getSupabase } from "../../shared/supabase/client";
-import { Badge, Button, EmptyState, GlassCard, TextField } from "../../shared/ui";
+import { Badge, Button, EmptyState, Message, TextField } from "../../shared/ui";
+import { formatDayTime } from "../../shared/format/date";
+import { formatAmount } from "./format";
 import { formatMoney } from "../pos/money";
 import type { Database } from "../../shared/supabase/database.types";
 import { useBranch } from "../../shared/branch/BranchContext";
 
 type WarningRow = Database["public"]["Functions"]["stock_warnings_for_review"]["Returns"][number];
 
-const DATE = new Intl.DateTimeFormat("es-AR", { dateStyle: "short", timeStyle: "short" });
-const when = (iso: string | null) => (iso ? DATE.format(new Date(iso)) : "—");
+const when = (iso: string | null) => formatDayTime(iso);
 
 /**
  * RF-38: ventas que dejaron stock negativo o se hicieron sin lotes cargados. La venta
@@ -52,64 +53,62 @@ export function StockWarningsReview() {
   const pending = rows?.filter((r) => !r.resolved_at).length ?? 0;
 
   return (
-    <GlassCard>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--esp-m)", flexWrap: "wrap" }}>
-        <div>
-          <h2 style={{ margin: 0 }}>Revisión de stock negativo (RF-38)</h2>
-          <p className="field-help">
-            Ventas que no se bloquearon aunque no alcanzaba el stock (por ejemplo dos cajas vendieron el mismo último lote sin conexión).
-            Ajustá el lote desde Stock si hace falta y marcá el caso como revisado.
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: "var(--esp-s)", alignItems: "center" }}>
+    <section className="carta carta--sin-relleno" aria-labelledby="revision-stock">
+      <div className="carta__cabecera">
+        <h3 className="titulo-seccion" id="revision-stock">Revisión de stock negativo</h3>
+        <div className="fila">
           <Badge tone={pending > 0 ? "aviso" : "exito"}>{pending} pendiente{pending === 1 ? "" : "s"}</Badge>
-          <label style={{ display: "flex", gap: ".4rem", alignItems: "center", fontWeight: 600 }}>
+          <label className="casilla">
             <input type="checkbox" checked={includeResolved} onChange={(e) => setIncludeResolved(e.target.checked)} />
             Ver resueltos
           </label>
         </div>
       </div>
-      {error && <p className="form-error" role="alert">{error}</p>}
+      <p className="cuerpo-s suave relleno">
+        Ventas que no se bloquearon aunque no alcanzaba el stock (por ejemplo, dos cajas vendieron el mismo último lote sin
+        conexión). Ajustá el lote desde Stock si hace falta y marcá el caso como revisado.
+      </p>
+      {error && <div className="relleno"><Message tone="error">{error}</Message></div>}
 
       {rows && rows.length === 0 && (
-        <EmptyState title="No hay casos para revisar">Cuando una venta deje stock negativo va a aparecer acá.</EmptyState>
+        <EmptyState title="No hay casos para revisar" icon="check_circle">Cuando una venta deje stock negativo va a aparecer acá.</EmptyState>
       )}
 
       {rows && rows.length > 0 && (
-        <ul style={{ listStyle: "none", margin: "var(--esp-m) 0 0", padding: 0, display: "grid", gap: "var(--esp-s)" }}>
+        <ul className="lista lista--plana">
           {rows.map((r) => (
-            <li key={r.id} className="glass-lite" style={{ padding: "var(--esp-m)", borderRadius: "var(--radio-control)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: "var(--esp-m)", flexWrap: "wrap", alignItems: "baseline" }}>
-                <strong>
+            <li key={r.id} className="revision__caso">
+              <div className="lista__principal">
+                <span className="lista__titulo">
                   {r.product_name ?? "Producto sin lote"}{r.presentation_name ? ` · ${r.presentation_name}` : ""}
-                  {showBranch && r.branch_name ? <> <Badge tone="neutro">{r.branch_name}</Badge></> : null}
-                </strong>
-                <span className="field-help">{when(r.created_at)}</span>
+                  {showBranch && r.branch_name ? <span className="suave"> · {r.branch_name}</span> : null}
+                </span>
+                <span className="lista__meta">{r.message}</span>
+                <span className="lista__meta">
+                  {r.lot_id ? <>Lote actual: <span className="cifra">{formatAmount(Number(r.lot_current_quantity))}</span> · </> : null}
+                  {r.sale_id ? <>Venta <span className="cifra">{when(r.sale_occurred_at)}</span> por <span className="cifra">{formatMoney(Number(r.sale_total ?? 0))}</span></> : "Sin venta asociada"}
+                  {r.register_name ? ` · ${r.register_name}` : ""}{r.sold_by ? ` · ${r.sold_by}` : ""}
+                </span>
+                {r.resolved_at ? (
+                  <Message tone="exito">Revisado el {when(r.resolved_at)} por {r.resolved_by_name}: {r.resolution}</Message>
+                ) : (
+                  <div className="form-fila revision__acciones">
+                    <TextField label="Qué se hizo" placeholder="Ej.: conteo físico, se ajustó el lote" value={notes[r.id] ?? ""}
+                      onChange={(e) => setNotes((n) => ({ ...n, [r.id]: e.target.value }))} />
+                    <div className="fila">
+                      <Button variant="secundario" icon="check" onClick={() => void resolve(r.id)} loading={busy === r.id} disabled={busy !== null}>
+                        Marcar como revisado
+                      </Button>
+                      {r.lot_id && <a className="boton boton--fantasma" href="/stock.html">Ajustar en Stock</a>}
+                    </div>
+                  </div>
+                )}
               </div>
-              <p style={{ margin: ".3rem 0" }}>{r.message}</p>
-              <p className="field-help" style={{ margin: 0 }}>
-                {r.lot_id ? `Lote actual: ${Number(r.lot_current_quantity)} · ` : ""}
-                {r.sale_id ? `Venta ${when(r.sale_occurred_at)} por ${formatMoney(Number(r.sale_total ?? 0))}` : "Sin venta asociada"}
-                {r.register_name ? ` · ${r.register_name}` : ""}{r.sold_by ? ` · ${r.sold_by}` : ""}
-              </p>
-              {r.resolved_at ? (
-                <p className="notice" style={{ marginTop: "var(--esp-s)" }}>
-                  Revisado el {when(r.resolved_at)} por {r.resolved_by_name}: {r.resolution}
-                </p>
-              ) : (
-                <div style={{ display: "flex", gap: "var(--esp-s)", alignItems: "flex-end", flexWrap: "wrap", marginTop: "var(--esp-s)" }}>
-                  <TextField label="Qué se hizo" placeholder="Ej.: conteo físico, se ajustó el lote" value={notes[r.id] ?? ""}
-                    onChange={(e) => setNotes((n) => ({ ...n, [r.id]: e.target.value }))} style={{ minWidth: "18rem" }} />
-                  <Button variant="secundario" onClick={() => void resolve(r.id)} loading={busy === r.id} disabled={busy !== null}>
-                    Marcar como revisado
-                  </Button>
-                  {r.lot_id && <a className="boton boton--fantasma" href="/stock.html">Ajustar en Stock</a>}
-                </div>
-              )}
+              <span className="lista__valor"><small>{when(r.created_at)}</small></span>
             </li>
           ))}
         </ul>
       )}
-    </GlassCard>
+    </section>
   );
 }

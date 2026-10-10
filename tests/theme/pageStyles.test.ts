@@ -19,7 +19,7 @@ const definedVars = (css: string) =>
 const usedVars = (css: string) =>
   new Set([...stripComments(css).matchAll(/var\(\s*(--[a-zA-Z0-9-]+)/g)].map((m) => m[1]));
 
-const PAGE_SHEETS = ["src/styles/pos.css", "src/styles/catalog.css", "src/styles/stock.css", "src/styles/customers.css"];
+const PAGE_SHEETS = ["src/styles/pos.css", "src/styles/catalog.css", "src/styles/stock.css", "src/styles/customers.css", "src/styles/admin.css"];
 
 describe.each(PAGE_SHEETS)("%s con los dos temas", (sheet) => {
   const pos = stripComments(read(sheet));

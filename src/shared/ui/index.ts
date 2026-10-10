@@ -28,3 +28,4 @@ export type { MessageTone } from "./Message";
 export { useCompact, COMPACT_QUERY } from "./useCompact";
 export { ActionsMenu } from "./ActionsMenu";
 export type { MenuAction } from "./ActionsMenu";
+export { SubTabs } from "./SubTabs";

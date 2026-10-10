@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, TextField } from "../../shared/ui";
+import { Button, SubTabs, TextField } from "../../shared/ui";
 import { getSupabase } from "../../shared/supabase/client";
 import { generateInternalEan13 } from "./ean13";
 import { CounterBulkSheet } from "./CounterBulkSheet";
@@ -148,17 +148,8 @@ export function BarcodeDashboard() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--esp-m)" }}>
-      <div style={{ display: "flex", gap: "var(--esp-xs)", borderBottom: "1px solid var(--glass-borde)", paddingBottom: "var(--esp-xs)" }}>
-        <Button variant={activeTab === "sheet" ? "primario" : "fantasma"} onClick={() => setActiveTab("sheet")}>
-          🖨️ Planilla de Mostrador
-        </Button>
-        <Button variant={activeTab === "tester" ? "primario" : "fantasma"} onClick={() => setActiveTab("tester")}>
-          🔍 Probar Lector / Scanner
-        </Button>
-        <Button variant={activeTab === "generator" ? "primario" : "fantasma"} onClick={() => setActiveTab("generator")}>
-          ⚙️ Generación de Códigos
-        </Button>
-      </div>
+      <SubTabs label="Códigos y planilla" value={activeTab} onChange={setActiveTab}
+        tabs={[{ value: "sheet", label: "Planilla de mostrador" }, { value: "tester", label: "Probar lector" }, { value: "generator", label: "Generación de códigos" }]} />
 
       {feedback && <p role={feedback.kind === "error" ? "alert" : "status"} style={{ color: feedback.kind === "error" ? "var(--color-error)" : "var(--color-exito)" }}>{feedback.message}</p>}
 

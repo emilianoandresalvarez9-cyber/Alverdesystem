@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSalesReport, toSalesReportLines, type SalesReportRow } from "./salesReport";
+import { buildSalesReport, localDayKey, toSalesReportLines, type SalesReportRow } from "./salesReport";
 
 const row = (overrides: Partial<SalesReportRow> = {}): SalesReportRow => ({
   quantity: 2,
@@ -71,5 +71,18 @@ describe("reportes de ventas (RF-61 a RF-64)", () => {
     ]);
     expect(lines).toEqual([]);
     expect(buildSalesReport(lines).productRanking).toEqual([]);
+  });
+});
+
+describe("ventas por día en la hora local del equipo", () => {
+  it("una venta de las 22:30 cuenta en ese día, no en el siguiente (UTC)", () => {
+    const late = new Date(2026, 8, 27, 22, 30).toISOString();
+    const early = new Date(2026, 8, 28, 0, 15).toISOString();
+    expect(localDayKey(late)).toBe("2026-09-27");
+    const report = buildSalesReport(toSalesReportLines([
+      row({ sale: { occurred_at: late, status: "closed" } }),
+      row({ sale: { occurred_at: early, status: "closed" } })
+    ]));
+    expect(report.salesByDay).toEqual([{ day: "2026-09-27", total: 20 }, { day: "2026-09-28", total: 20 }]);
   });
 });

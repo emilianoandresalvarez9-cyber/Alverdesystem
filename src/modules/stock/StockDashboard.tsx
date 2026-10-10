@@ -8,6 +8,8 @@ import "../../styles/stock.css";
 
 interface StockDashboardProps {
   enableFractioning?: boolean;
+  /** Sólo lotes a granel (Administración → Fraccionamiento y granel). */
+  onlyBulk?: boolean;
 }
 
 type Kpi = { label: string; value: number; icon: IconName; tone?: "error" | "aviso" | "exito" };
@@ -16,7 +18,7 @@ type Kpi = { label: string; value: number; icon: IconName; tone?: "error" | "avi
  * Control de stock y lotes (RF-07 a RF-10): resumen de vencimientos de los lotes abiertos,
  * filtros y la tabla. El resumen sale de los mismos lotes que se ven: no hay números inventados.
  */
-export function StockDashboard({ enableFractioning = false }: StockDashboardProps) {
+export function StockDashboard({ enableFractioning = false, onlyBulk = false }: StockDashboardProps) {
   const { lots, loading, error, filters, setFilters, stats, refreshLots, markLotOpened, hasActiveOpenBag } = useStockLots();
   const [lotToFraction, setLotToFraction] = useState<StockLot | null>(null);
 
@@ -30,18 +32,18 @@ export function StockDashboard({ enableFractioning = false }: StockDashboardProp
 
   return (
     <>
-      <div className="kpis" aria-label="Vencimientos de los lotes abiertos">
+      {!onlyBulk && <div className="kpis" aria-label="Vencimientos de los lotes abiertos">
         {kpis.map((kpi) => (
           <div key={kpi.label} className={kpi.tone ? `kpi kpi--${kpi.tone}` : "kpi"}>
             <span className="kpi__etiqueta"><Icon name={kpi.icon} />{kpi.label}</span>
             <span className="kpi__valor">{loading ? "—" : kpi.value}</span>
           </div>
         ))}
-      </div>
+      </div>}
 
       <section className="carta carta--sin-relleno" aria-labelledby="lotes-titulo">
         <div className="carta__cabecera">
-          <h2 className="titulo-seccion" id="lotes-titulo">Control de stock y lotes</h2>
+          <h2 className="titulo-seccion" id="lotes-titulo">{onlyBulk ? "Lotes a granel" : "Control de stock y lotes"}</h2>
           <Button variant="fantasma" size="compacto" icon="refresh" onClick={refreshLots}>Actualizar</Button>
         </div>
 
@@ -79,7 +81,7 @@ export function StockDashboard({ enableFractioning = false }: StockDashboardProp
         {error && <div className="lotes__mensaje"><Message tone="error">{error}</Message></div>}
 
         <StockLotsTable
-          lots={lots}
+          lots={onlyBulk ? lots.filter((lot) => lot.sold_by_weight) : lots}
           loading={loading}
           onRefresh={refreshLots}
           onOpenLot={markLotOpened}

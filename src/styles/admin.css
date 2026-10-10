@@ -1,0 +1,22 @@
+/*
+ * Administración (RNF-06) sobre el sistema de diseño: .admin, .nav-sec, .barras, .ranking
+ * y .barras-h salen de design-system.css. Sólo ajustes propios con tokens
+ * (tests/theme/pageStyles.test.ts).
+ */
+.admin__contenido { min-width: 0; }
+.admin__acceso { padding: var(--esp-m) var(--esp-l); }
+.admin__acceso > p { flex: 1; min-width: 12rem; }
+
+/* Reportes */
+.reportes__cabecera { justify-content: space-between; }
+.barras__barra--destacada .barras__valor { color: var(--color-tinta); }
+.barras__barra--parcial .barras__valor { color: var(--color-tinta-suave); font-family: var(--fuente); }
+.ventas__estado { white-space: nowrap; }
+
+/* Márgenes */
+.margen--negativo { color: var(--color-error); }
+
+/* Mercadería */
+.revision__caso { align-items: flex-start; }
+.revision__acciones { margin-top: var(--esp-s); }
+.reposicion__proveedor { gap: 2px; }

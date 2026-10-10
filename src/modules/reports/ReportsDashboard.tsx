@@ -1,19 +1,24 @@
-import { useState, useEffect } from "react";
-import { GlassCard, SelectField, EmptyState } from "../../shared/ui";
+import { useState, useEffect, type CSSProperties } from "react";
+import { EmptyState, Message, Options } from "../../shared/ui";
 import { getSupabase } from "../../shared/supabase/client";
 import { SalesHistory } from "./SalesHistory";
 import { useBranch } from "../../shared/branch/BranchContext";
 import { toSalesReportLines, buildSalesReport, type SalesReportRow } from "./salesReport";
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
-  PieChart, Pie, Cell, LineChart, Line
-} from "recharts";
+import { dailyBars, percentOf } from "./reportCharts";
+import { formatMoney } from "../pos/money";
+import { formatDay } from "../../shared/format/date";
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#A28DFF'];
+type Range = "7" | "30" | "90";
+const bar = (percent: number) => ({ "--v": `${percent}%` }) as CSSProperties;
 
+/**
+ * Reportes (RF-61 a RF-64): ventas por día, los más vendidos y la demanda por rubro y por
+ * etiqueta del rango elegido, de la sucursal elegida. Gráficos dibujados con CSS: una serie,
+ * sin acento, cada barra con su valor en `title` y una tabla equivalente para lectores de pantalla.
+ */
 export function ReportsDashboard() {
   const [report, setReport] = useState(() => buildSalesReport([]));
-  const [dateRange, setDateRange] = useState("30");
+  const [range, setRange] = useState<Range>("7");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { filterId: branchFilter, label: branchLabel } = useBranch();
@@ -24,13 +29,13 @@ export function ReportsDashboard() {
     async function loadReports() {
       setLoading(true);
       setError(null);
-
       try {
         const startDate = new Date();
-        startDate.setDate(startDate.getDate() - Number(dateRange));
+        startDate.setHours(0, 0, 0, 0);
+        startDate.setDate(startDate.getDate() - (Number(range) - 1));
 
         const { data, error: queryError } = await getSupabase()
-          .from('sale_items')
+          .from("sale_items")
           .select(`
             quantity,
             unit_price,
@@ -39,13 +44,12 @@ export function ReportsDashboard() {
               product:products!inner(id, name, category_id, category:categories(name), product_labels(label:labels(id, name)))
             )
           `)
-          .gte('sales.occurred_at', startDate.toISOString())
-          .eq('sales.status', 'closed')
+          .gte("sales.occurred_at", startDate.toISOString())
+          .eq("sales.status", "closed")
           // RF-70: reportes de la sucursal elegida; sin filtro = todas.
-          .match(branchFilter ? { 'sales.branch_id': branchFilter } : {});
+          .match(branchFilter ? { "sales.branch_id": branchFilter } : {});
 
         if (queryError) throw queryError;
-
         const nextReport = buildSalesReport(toSalesReportLines((data ?? []) as unknown as SalesReportRow[]));
         if (!cancelled) setReport(nextReport);
       } catch (cause) {
@@ -57,113 +61,105 @@ export function ReportsDashboard() {
 
     void loadReports();
     return () => { cancelled = true; };
-  }, [dateRange, branchFilter]);
+  }, [range, branchFilter]);
+
+  const days = Number(range);
+  const { bars, ticks } = dailyBars(report.salesByDay, days);
+  const dense = bars.length > 14;
+  const topRevenue = report.productRanking[0]?.revenue ?? 0;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--esp-l)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <h2 style={{ margin: 0 }}>Reportes y Análisis</h2>
-          <p className="field-help" style={{ margin: 0 }}>{branchLabel}</p>
-        </div>
-        <SelectField
-          label="Rango de tiempo"
-          value={dateRange}
-          onChange={(e) => setDateRange(e.target.value)}
-        >
-          <option value="7">Últimos 7 días</option>
-          <option value="30">Últimos 30 días</option>
-          <option value="90">Últimos 90 días</option>
-        </SelectField>
+    <>
+      <div className="fila reportes__cabecera">
+        <p className="meta">{branchLabel} · total del rango <span className="cifra">{formatMoney(report.totalRevenue)}</span></p>
+        <Options name="rango" legend="Rango de tiempo" variant="segmento" value={range} onChange={setRange}
+          options={[{ value: "7", label: "7 días" }, { value: "30", label: "30 días" }, { value: "90", label: "90 días" }]} />
       </div>
 
-      {error && <p role="alert" style={{ color: "var(--color-error)" }}>{error}</p>}
+      {error && <Message tone="error">{error}</Message>}
 
-      {loading ? (
-        <EmptyState title="Cargando reportes..." />
-      ) : (
-        <div className="dashboard-grid">
-          <div style={{ gridColumn: "1 / -1", marginBottom: "1rem" }}><SalesHistory /></div>
-          <GlassCard style={{ gridColumn: "1 / -1" }}>
-            <h3>Ventas Diarias</h3>
-            <div style={{ width: "100%", height: 300 }}>
-              <ResponsiveContainer>
-                <LineChart data={report.salesByDay}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                  <XAxis dataKey="date" stroke="var(--texto-secundario)" />
-                  <YAxis stroke="var(--texto-secundario)" />
-                  <Tooltip contentStyle={{ backgroundColor: 'var(--fondo-oscuro)', border: 'none', borderRadius: 8 }} />
-                  <Line type="monotone" dataKey="total" name="Recaudación ($)" stroke="var(--primario-hover)" strokeWidth={3} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </GlassCard>
-
-          <GlassCard>
-            <h3>Top 10 Productos Más Vendidos</h3>
-            <div style={{ width: "100%", height: 300 }}>
-              <ResponsiveContainer>
-                <BarChart data={report.productRanking} layout="vertical" margin={{ left: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" horizontal={false} />
-                  <XAxis type="number" stroke="var(--texto-secundario)" />
-                  <YAxis dataKey="name" type="category" stroke="var(--texto-secundario)" width={100} />
-                  <Tooltip contentStyle={{ backgroundColor: 'var(--fondo-oscuro)', border: 'none', borderRadius: 8 }} />
-                  <Bar dataKey="revenue" name="Ingresos ($)" fill="var(--secundario-base)" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </GlassCard>
-
-          <GlassCard>
-            <h3>Demanda por Rubro</h3>
-            <div style={{ width: "100%", height: 300 }}>
-              <ResponsiveContainer>
-                <PieChart>
-                  <Pie
-                    data={report.categoryDemand}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={100}
-                    label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
-                  >
-                    {report.categoryDemand.map((entry, index) => (
-                      <Cell key={`cell-${entry.categoryId}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip contentStyle={{ backgroundColor: 'var(--fondo-oscuro)', border: 'none', borderRadius: 8 }} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </GlassCard>
-
-          <GlassCard>
-            <h3>Demanda por etiqueta (RF-63)</h3>
-            <p className="field-help">
-              Qué parte de lo vendido lleva cada etiqueta. Un producto con dos etiquetas cuenta en las dos, por eso no suman 100 %.
-            </p>
-            {report.labelDemand.length === 0 ? (
-              <p className="field-help">No hubo ventas de productos con etiquetas en este período.</p>
-            ) : (
-              <div style={{ width: "100%", height: Math.max(160, 36 * report.labelDemand.length) }}>
-                <ResponsiveContainer>
-                  <BarChart data={report.labelDemand} layout="vertical" margin={{ left: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--glass-borde)" horizontal={false} />
-                    <XAxis type="number" domain={[0, 1]} tickFormatter={(v: number) => `${Math.round(v * 100)} %`} stroke="var(--color-tinta-apagada)" />
-                    <YAxis type="category" dataKey="name" width={120} stroke="var(--color-tinta-apagada)" />
-                    <Tooltip
-                      contentStyle={{ backgroundColor: 'var(--fondo-oscuro)', border: 'none', borderRadius: 8 }}
-                      formatter={(value) => [`${Math.round(Number(value) * 100)} % de lo vendido`, ""]}
-                    />
-                    <Bar dataKey="share" fill="var(--color-acento)" radius={[0, 8, 8, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+      <div className="reja-3-1" aria-busy={loading}>
+        <section className="carta pila" aria-labelledby="ventas-dia">
+          <h3 className="titulo-seccion" id="ventas-dia">Ventas diarias</h3>
+          {report.totalRevenue === 0 && !loading ? (
+            <EmptyState title="Sin ventas en este rango" icon="bar_chart" />
+          ) : (
+            <>
+              <div className="barras" aria-hidden="true">
+                <div className="barras__eje">
+                  {ticks.map((t) => <span key={t.percent} style={{ bottom: `${t.percent}%` }}>{t.label}</span>)}
+                </div>
+                <div className="barras__area" style={dense ? { gap: 2 } : undefined}>
+                  {ticks.filter((t) => t.percent > 0).map((t) => <span key={t.percent} className="barras__guia" style={{ bottom: `${t.percent}%` }} />)}
+                  {bars.map((b) => (
+                    <div key={b.day}
+                      className={["barras__barra", b.highlight ? "barras__barra--destacada" : "", b.today ? "barras__barra--parcial" : ""].filter(Boolean).join(" ")}
+                      style={bar(b.percent)} title={`${b.weekday} ${b.dayOfMonth}: ${formatMoney(b.total)}`}>
+                      {b.highlight && !b.today && !dense ? <span className="barras__valor">{formatMoney(b.total)}</span> : null}
+                      {b.today && !dense ? <span className="barras__valor">en curso</span> : null}
+                    </div>
+                  ))}
+                </div>
+                <div className="barras__dias" style={dense ? { gap: 2 } : undefined}>
+                  {bars.map((b, i) => (
+                    <span key={b.day}>{!dense || i % 7 === bars.length % 7 || b.today ? <>{b.weekday}<br /><span className="cifra">{b.dayOfMonth}</span></> : null}</span>
+                  ))}
+                </div>
               </div>
-            )}
-          </GlassCard>
-        </div>
-      )}
-    </div>
+              {/* La tabla va dentro de un div .sr: una tabla no se deja achicar y desbordaba la página. */}
+              <div className="sr">
+                <table>
+                  <caption>Ventas diarias</caption>
+                  <tbody>{bars.map((b) => <tr key={b.day}><td>{formatDay(b.day)}</td><td>{formatMoney(b.total)}</td></tr>)}</tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </section>
+
+        <section className="carta pila" aria-labelledby="top-10">
+          <h3 className="titulo-seccion" id="top-10">Top 10 más vendidos</h3>
+          {report.productRanking.length === 0 ? <p className="meta">Sin ventas en este rango.</p> : (
+            <ol className="ranking">
+              {report.productRanking.map((p, i) => (
+                <li key={p.name}>
+                  <span className="ranking__n">{i + 1}</span>
+                  <span>{p.name}</span>
+                  <span className="cifra">{formatMoney(p.revenue)}</span>
+                  <span className="medidor" style={bar(percentOf(p.revenue, topRevenue))} aria-hidden="true"><span /></span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
+      </div>
+
+      <div className="reja-2">
+        <section className="carta pila" aria-labelledby="demanda-rubro">
+          <div className="fila fila--entre"><h3 className="titulo-seccion" id="demanda-rubro">Demanda por rubro</h3><span className="meta">% de las ventas</span></div>
+          {report.categoryDemand.length === 0 ? <p className="meta">Sin ventas con rubro en este rango.</p> : (
+            <ul className="barras-h">
+              {report.categoryDemand.map((c) => {
+                const share = percentOf(c.value, report.totalRevenue);
+                return <li key={c.categoryId}><span>{c.name}</span><span className="pista"><span style={bar(share)} /></span><span className="cifra">{share} %</span></li>;
+              })}
+            </ul>
+          )}
+        </section>
+        <section className="carta pila" aria-labelledby="demanda-etiqueta">
+          <div className="fila fila--entre"><h3 className="titulo-seccion" id="demanda-etiqueta">Demanda por etiqueta</h3><span className="meta">una venta puede sumar a varias</span></div>
+          {report.labelDemand.length === 0 ? <p className="meta">No hubo ventas de productos con etiquetas en este rango.</p> : (
+            <ul className="barras-h">
+              {report.labelDemand.map((l) => {
+                const share = Math.round(l.share * 100);
+                return <li key={l.labelId}><span>{l.name}</span><span className="pista"><span style={bar(share)} /></span><span className="cifra">{share} %</span></li>;
+              })}
+            </ul>
+          )}
+        </section>
+      </div>
+
+      <SalesHistory />
+    </>
   );
 }
