@@ -1163,6 +1163,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: number
       }
+      is_active_staff: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
       is_administrator: {
         Args: Record<PropertyKey, never>
         Returns: boolean
