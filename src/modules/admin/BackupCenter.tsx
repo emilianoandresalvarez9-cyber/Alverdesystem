@@ -108,7 +108,9 @@ export function BackupCenter() {
               pisaría los datos actuales sin poder deshacerlo.
             </p>
           </div>
-          <Button icon="download" onClick={() => void downloadFull()} loading={busy}>Descargar copia completa</Button>
+          <div className="fila">
+            <Button icon="download" onClick={() => void downloadFull()} loading={busy}>Descargar copia completa</Button>
+          </div>
         </section>
 
         <section className="carta pila" aria-labelledby="respaldo-csv">

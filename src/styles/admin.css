@@ -53,3 +53,14 @@
 /* Vida útil después de abrir */
 .vida-util__marca { width: 1%; }
 .vida-util__casilla { min-width: 0; }
+
+/* Cartas con lista: la lista y los rellenos alineados con la cabecera de la carta. */
+.admin__contenido .carta--sin-relleno > .lista--plana > li { padding-inline: var(--esp-l); }
+.admin__contenido .carta--sin-relleno .tabla :is(th, td):first-child { padding-left: var(--esp-l); }
+.admin__contenido .carta--sin-relleno .tabla :is(th, td):last-child { padding-right: var(--esp-l); }
+@container (max-width: 720px) {
+  .admin__contenido .carta--sin-relleno .tabla :is(th, td):first-child { padding-left: var(--esp-m); }
+  .admin__contenido .carta--sin-relleno .tabla :is(th, td):last-child { padding-right: var(--esp-m); }
+  .admin__contenido .carta--sin-relleno > .lista--plana > li,
+  .admin__contenido .carta--sin-relleno > .relleno { padding-inline: var(--esp-m); }
+}

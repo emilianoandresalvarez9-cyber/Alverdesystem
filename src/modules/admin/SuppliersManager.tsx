@@ -72,7 +72,7 @@ export function SuppliersManager() {
         <h3 className="titulo-seccion" id="proveedor-form">{editingId ? "Editar proveedor" : "Nuevo proveedor"}</h3>
         <div className="form-fila">
           <TextField label="Nombre" value={name} onChange={(e) => setName(e.target.value)} required />
-          <TextField label="Contacto" help="Teléfono, correo o lo que sirva para pedirle." value={contact} onChange={(e) => setContact(e.target.value)} />
+          <TextField label="Contacto (opcional)" placeholder="Teléfono o correo" value={contact} onChange={(e) => setContact(e.target.value)} />
         </div>
         <div className="fila">
           <Button type="submit" icon={editingId ? "check" : "add"} loading={loading} disabled={!name.trim()}>

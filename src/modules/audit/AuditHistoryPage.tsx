@@ -56,9 +56,9 @@ export function AuditHistoryPage() {
     <>
       <form className="carta pila" onSubmit={submit} aria-label="Filtros del historial">
         <p className="cuerpo-s suave">Qué cambió, quién lo hizo, cuándo, y el valor anterior y el nuevo.</p>
+        <TextField label="Buscar" icon="search" type="search" placeholder="Producto, marca, rubro o cliente" value={filters.text}
+          onChange={(e) => setFilters({ ...filters, text: e.target.value })} />
         <div className="form-fila">
-          <TextField label="Producto, marca, rubro o cliente" icon="search" type="search" placeholder="Buscar por nombre" value={filters.text}
-            onChange={(e) => setFilters({ ...filters, text: e.target.value })} />
           <SelectField label="Persona" value={filters.userId} onChange={(e) => setFilters({ ...filters, userId: e.target.value })}>
             <option value="">Todas</option>
             {people.map((p) => <option key={p.id} value={p.id}>{p.display_name}</option>)}
@@ -109,7 +109,7 @@ export function AuditHistoryPage() {
                 {rows.map((r) => (
                   <tr key={r.id}>
                     <td className="cifra" title={formatDay(r.occurred_at)}>{formatDayTime(r.occurred_at)}</td>
-                    <td>{r.user_name}</td>
+                    <td className="nowrap">{r.user_name}</td>
                     <td><span className="pila auditoria__que"><span className="meta">{entityLabel(r.entity)}</span><span className="fuerte">{r.entity_label ?? r.entity_id}</span></span></td>
                     <td>{fieldLabel(r.field)}</td>
                     <td><Change field={r.field} before={r.old_value} after={r.new_value} /></td>
