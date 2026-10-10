@@ -16,14 +16,9 @@ export function CatalogPage() {
   return (
     <AppShell active="catalog" title="Catálogo">
       <div className="catalog-page">
-        <header className="page-heading">
-          <h1>Catálogo</h1>
-          {isOffline && (
-            <span className="sync-status offline">
-              <span>⚠️</span> Sin conexión — mostrando caché local
-            </span>
-          )}
-        </header>
+        {isOffline && (
+          <p className="notice catalog-offline" role="status">Sin conexión: se muestra el catálogo guardado en este equipo.</p>
+        )}
 
         <CatalogFiltersBar
           filters={filters}
@@ -57,7 +52,8 @@ export function CatalogPage() {
         {!isLoading && visible.length > 0 && (
           <>
             <p className="catalog-count">
-              {visible.length} {visible.length === 1 ? "producto" : "productos"}
+              <span className="pos-micro">Catálogo</span>
+              <strong>{visible.length}</strong> {visible.length === 1 ? "producto" : "productos"}
               {visible.length < products.length && ` de ${products.length}`}
             </p>
             <div className="catalog-grid">

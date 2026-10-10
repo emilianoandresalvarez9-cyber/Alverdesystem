@@ -56,6 +56,18 @@ button { cursor: pointer; }
   white-space: nowrap;
 }
 
+/* Micro-etiquetas: mayúsculas, espaciadas, con la fuente de datos del tema */
+.pos-micro {
+  margin: 0;
+  color: var(--color-tinta-apagada);
+  font-family: var(--fuente-datos);
+  font-size: var(--texto-xs);
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.pos-num { font-family: var(--fuente-datos); font-variant-numeric: tabular-nums; }
+
 /* ---------- Superficies glass ---------- */
 
 .glass {

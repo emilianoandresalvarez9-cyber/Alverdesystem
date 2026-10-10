@@ -4,7 +4,7 @@ import { exportToExcel } from "../../shared/export/excel";
 import { Badge, Button, EmptyState, GlassCard, SelectField, TextField } from "../../shared/ui";
 import { formatMoney } from "../pos/money";
 import {
-  RETAG_HEADERS, SCOPE_LABELS, formatDiff, parsePercent, retagMatrix, summarizePreview,
+  RETAG_HEADERS, SCOPE_LABELS, formatDiff, formatPrice, parsePercent, retagMatrix, summarizePreview,
   type PriceChange, type PriceScope, type RetagRow
 } from "./bulkPrices";
 
@@ -138,8 +138,8 @@ export function BulkPriceUpdate() {
                       <tr key={row.presentation_id}>
                         <td>{row.product_name}</td>
                         <td>{row.presentation_name}</td>
-                        <td>{formatMoney(row.old_price)}</td>
-                        <td><strong>{formatMoney(row.new_price)}</strong></td>
+                        <td>{formatPrice(row.old_price, row.sold_by_weight)}</td>
+                        <td><strong>{formatPrice(row.new_price, row.sold_by_weight)}</strong></td>
                         <td>{formatDiff(row)}</td>
                       </tr>
                     ))}
@@ -227,7 +227,7 @@ function RetagList({ highlightBatchId }: { highlightBatchId: string | null }) {
                 <tr key={r.presentation_id}>
                   <td>{r.product_name}</td><td>{r.presentation_name}</td>
                   <td><code>{r.internal_barcode ?? "—"}</code></td>
-                  <td>{formatMoney(r.old_price)}</td><td><strong>{formatMoney(r.new_price)}</strong></td>
+                  <td>{formatPrice(r.old_price, r.sold_by_weight)}</td><td><strong>{formatPrice(r.new_price, r.sold_by_weight)}</strong></td>
                 </tr>
               ))}
             </tbody>
