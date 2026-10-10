@@ -60,7 +60,17 @@ export async function openShift(register: RegisterOption, initialBalance: number
     persisted: false
   };
   await writeSetting(SHIFT_KEY, shift);
-  if (!shift.persisted) await persistShift();
+  if (!shift.persisted) {
+    try {
+      await persistShift();
+    } catch (error) {
+      // La base rechazó el turno recién abierto (caja de otra sucursal, caja ocupada…). Todavía no
+      // tiene ventas: se descarta en el equipo para no quedar trabado con un turno que nunca va a
+      // existir en la nube. Sin conexión no llega acá: persistShift no intenta y el turno sigue.
+      if (!resumed) await writeSetting(SHIFT_KEY, undefined);
+      throw error;
+    }
+  }
   return (await currentShift()) ?? shift;
 }
 

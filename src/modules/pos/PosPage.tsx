@@ -14,6 +14,7 @@ import type { ShiftSummary } from "./shiftSummary";
 import { PAYMENT_LABELS, type CartLine, type CurrentShift, type PaymentMethod, type PosEntry } from "./types";
 import { useScanner } from "./useScanner";
 import { useBranch } from "../../shared/branch/BranchContext";
+import { registerBranchWarning } from "./registerBranch";
 import { loadAccounts } from "../customers/api";
 import { exceedsLimit, filterAccounts } from "../customers/balance";
 import type { CustomerAccount } from "../customers/types";
@@ -122,9 +123,12 @@ function OpenShiftForm({ register, onOpened, onChangeRegister }: {
   const [initial, setInitial] = useState("0");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const { isAdmin, workingBranchId, label: branchLabel } = useBranch();
+  const otherBranch = registerBranchWarning({ isAdmin, workingBranchId, workingBranchLabel: branchLabel, register });
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (otherBranch) return;
     const amount = Number(initial.replace(",", "."));
     if (!(amount >= 0)) return setError("Ingresá el efectivo inicial (puede ser 0).");
     setBusy(true);
@@ -143,8 +147,9 @@ function OpenShiftForm({ register, onOpened, onChangeRegister }: {
       <form onSubmit={submit} className="pila">
         <TextField label="Efectivo en la caja al empezar" inputMode="decimal" numeric value={initial}
           onChange={(e) => setInitial(e.target.value)} help="Sin conexión el turno se abre igual y se registra al volver internet." />
+        {otherBranch && <Message tone="aviso">{otherBranch}</Message>}
         {error && <Message tone="error">{error}</Message>}
-        <Button type="submit" block loading={busy}>Abrir turno</Button>
+        <Button type="submit" block loading={busy} disabled={!!otherBranch}>Abrir turno</Button>
         <Button variant="fantasma" block onClick={onChangeRegister}>Este equipo es otra caja</Button>
       </form>
     </SetupCard>
