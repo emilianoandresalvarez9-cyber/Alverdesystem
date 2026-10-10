@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { getSupabase } from "../../shared/supabase/client";
 import { useBranch } from "../../shared/branch/BranchContext";
-import { Button, Modal, SelectField, TextField } from "../../shared/ui";
+import { Button, Message, Modal, SelectField, TextField } from "../../shared/ui";
+import { formatQuantity, unitLabel } from "./format";
 import { checkTransfer } from "./transfer";
 import type { StockLot } from "./types";
 
@@ -21,7 +22,7 @@ export function TransferModal({ lot, onClose, onDone }: { lot: StockLot | null; 
   const [localId] = useState(() => crypto.randomUUID());
 
   if (!lot) return null;
-  const unit = lot.base_unit === "gram" ? "g" : lot.base_unit === "millilitre" ? "ml" : "u.";
+  const unit = unitLabel(lot.base_unit);
 
   async function confirm() {
     if (!lot) return;
@@ -45,29 +46,26 @@ export function TransferModal({ lot, onClose, onDone }: { lot: StockLot | null; 
 
   return (
     <Modal open title={`Traspasar ${lot.product_name} · ${lot.presentation_name}`} onClose={onClose}
+      subtitle={<>Desde {lot.branch_name ?? "esta sucursal"} · quedan <span className="cifra">{formatQuantity(lot.current_quantity, lot.base_unit)}</span></>}
       footer={<>
         <Button variant="fantasma" onClick={onClose}>Cancelar</Button>
-        <Button onClick={() => void confirm()} loading={busy} disabled={destinations.length === 0}>Confirmar traspaso</Button>
+        <Button icon="swap_horiz" onClick={() => void confirm()} loading={busy} disabled={destinations.length === 0}>Confirmar traspaso</Button>
       </>}>
-      <p className="field-help" style={{ marginTop: 0 }}>
-        Desde <strong>{lot.branch_name ?? "esta sucursal"}</strong>: hay {lot.current_quantity} {unit}. El lote nuevo conserva
-        proveedor, costo y vencimiento.
-      </p>
       {destinations.length === 0 ? (
-        <p className="notice">No hay otra sucursal activa. Creala en Administración → Sucursales y cajas.</p>
+        <Message tone="aviso">No hay otra sucursal activa. Creala en Administración → Sucursales y cajas.</Message>
       ) : (
-        <div style={{ display: "grid", gap: "var(--esp-m)" }}>
+        <>
           <SelectField label="Sucursal de destino" value={toBranchId} onChange={(e) => setToBranchId(e.target.value)}>
             <option value="">Elegí…</option>
             {destinations.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
           </SelectField>
-          <TextField label={`Cantidad a traspasar (${unit})`} inputMode="decimal" value={quantity}
-            onChange={(e) => setQuantity(e.target.value)} help={`Máximo ${lot.current_quantity} ${unit}`} />
+          <TextField label="Cantidad a traspasar" inputMode="decimal" numeric suffix={unit} value={quantity}
+            onChange={(e) => setQuantity(e.target.value)} help={`Máximo ${formatQuantity(lot.current_quantity, lot.base_unit)}. El lote nuevo conserva proveedor, costo y vencimiento.`} />
           <TextField label="Nota (opcional)" placeholder="Ej.: pedido de Norte" value={note} maxLength={500}
             onChange={(e) => setNote(e.target.value)} />
-        </div>
+        </>
       )}
-      {error && <p className="form-error" role="alert">{error}</p>}
+      {error && <Message tone="error">{error}</Message>}
     </Modal>
   );
 }
