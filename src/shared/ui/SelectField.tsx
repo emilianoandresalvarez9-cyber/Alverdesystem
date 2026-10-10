@@ -9,15 +9,29 @@ export type SelectFieldProps = SelectHTMLAttributes<HTMLSelectElement> & {
   help?: string;
   /** Mensaje de error; al estar presente marca el campo como inválido. */
   error?: string;
+  /**
+   * Barras de filtro: la etiqueta va adentro como prefijo («Marca Todas») para ahorrar una
+   * línea. Sin ayuda ni error. `className` va al `.selector`.
+   */
+  inline?: boolean;
 };
 
 /**
  * Select nativo con flecha propia, 44 px. Se usa con más de cuatro opciones o cuando la
  * lista crece con los datos. `className` va al contenedor `.campo`.
  */
-export function SelectField({ label, help, error, id, className, children, ...rest }: SelectFieldProps) {
+export function SelectField({ label, help, error, inline, id, className, children, ...rest }: SelectFieldProps) {
   const autoId = useId();
   const selectId = id ?? autoId;
+  if (inline) {
+    return (
+      <div className={["selector", className].filter(Boolean).join(" ")}>
+        <label className="selector__prefijo" htmlFor={selectId}>{label}</label>
+        <select id={selectId} {...rest}>{children}</select>
+        <Icon name="keyboard_arrow_down" />
+      </div>
+    );
+  }
   const descriptionId = `${selectId}-desc`;
   const described = Boolean(help) || Boolean(error);
   return (

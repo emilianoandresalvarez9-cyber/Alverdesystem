@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button } from "../../shared/ui";
+import { Button, Message } from "../../shared/ui";
 import { enqueueOperation } from "../../shared/offline/queue";
 import { synchronizePendingOperations } from "../../shared/offline/sync";
 import { useBranch } from "../../shared/branch/BranchContext";
@@ -28,14 +28,15 @@ export function MissingReportButton({ productId, productName }: { productId: str
   }
 
   if (state === "done") {
-    return <p className="pos-feedback" data-tone="ok" role="status">Listo: {productName} quedó en la lista de reposición de {branch.label}.</p>;
+    return <Message tone="exito">Listo: {productName} quedó en la lista de reposición de {branch.label}.</Message>;
   }
   return (
-    <>
-      <Button variant="secundario" onClick={() => void report()} loading={state === "saving"} disabled={needsBranch}
-        title={needsBranch ? "Elegí una sucursal para avisar el faltante" : undefined}>Avisar que falta</Button>
-      {needsBranch && <p className="field-help">Elegí una sucursal en la barra lateral para avisar que falta.</p>}
-      {state === "error" && <p className="pos-feedback" data-tone="error" role="alert">No se pudo guardar el aviso en este equipo. Probá de nuevo.</p>}
-    </>
+    <div className="pila pila--s">
+      <Button variant="fantasma" size="compacto" icon="add_alert" onClick={() => void report()} loading={state === "saving"}
+        disabled={needsBranch} title={needsBranch ? "Elegí una sucursal para avisar el faltante" : undefined}>Avisar que falta</Button>
+      {/* Un control deshabilitado dice por qué al lado. */}
+      {needsBranch && <p className="meta">Elegí una sucursal para avisar que falta.</p>}
+      {state === "error" && <Message tone="error">No se pudo guardar el aviso en este equipo. Probá de nuevo.</Message>}
+    </div>
   );
 }

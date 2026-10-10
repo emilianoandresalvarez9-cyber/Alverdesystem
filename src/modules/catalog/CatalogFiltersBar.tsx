@@ -1,5 +1,5 @@
 import { useRef, useCallback } from "react";
-import { TextField, Button, Tag } from "../../shared/ui";
+import { TextField, Button, SelectField, Tag, useCompact } from "../../shared/ui";
 import type { Brand, Category, Label, CatalogFilters } from "./types";
 import { useBranch } from "../../shared/branch/BranchContext";
 
@@ -9,63 +9,74 @@ interface CatalogFiltersBarProps {
   brands: Brand[];
   categories: Category[];
   labels: Label[];
+  /** «4 de 6 productos»: cuántos quedan con los filtros. */
+  countText: string;
   /** Recibe la sucursal de trabajo para exportar sus precios (RF-69). */
   onExport: (branchId: string | null) => void;
 }
 
 /**
- * RF-04: filtros por marca, rubro y etiqueta, combinables. Cada eje es una fila de
- * chips (un solo valor por eje, "Todas" lo limpia), como en las maquetas RNF-06.
+ * RF-04: filtros por marca, rubro y etiqueta, combinables. Marca y Rubro son selects
+ * (crecen con los datos y una fila de 20 chips no entra); Etiqueta sigue en chips porque
+ * son pocas y se combinan. Un solo valor por eje: «Todas» / «Todos» lo limpia.
  */
 export function CatalogFiltersBar({
-  filters, setFilters, brands, categories, labels, onExport,
+  filters, setFilters, brands, categories, labels, countText, onExport,
 }: CatalogFiltersBarProps) {
   const searchRef = useRef<HTMLInputElement>(null);
   const { workingBranchId } = useBranch();
+  const compact = useCompact();
 
   const clearAll = useCallback(() => {
     setFilters({ search: "", brandId: "", categoryId: "", labelId: "" });
     searchRef.current?.focus();
   }, [setFilters]);
 
-  const hasActiveFilters = filters.search || filters.brandId || filters.categoryId || filters.labelId;
+  const hasActiveFilters = Boolean(filters.search || filters.brandId || filters.categoryId || filters.labelId);
+  const exportExcel = () => onExport(workingBranchId);
 
   return (
-    <div className="catalog-filters glass">
-      <div className="catalog-filters__top">
+    <>
+      <div className="catalogo-barra">
         <TextField
           ref={searchRef}
-          label=""
-          placeholder="Buscar por nombre o código de barras…"
+          type="search"
+          label="Buscar en el catálogo"
+          hideLabel
+          icon="search"
+          placeholder="Buscá por nombre, marca o código"
           value={filters.search}
-          onChange={e => setFilters({ search: e.target.value })}
-          className="catalog-filters__search"
-          aria-label="Buscar producto"
+          onChange={(e) => setFilters({ search: e.target.value })}
         />
-        {hasActiveFilters && (
-          <Button variant="fantasma" onClick={clearAll}>Limpiar filtros</Button>
-        )}
-        <Button variant="secundario" onClick={() => onExport(workingBranchId)}>Exportar Excel</Button>
+        <SelectField inline label="Marca" value={filters.brandId} onChange={(e) => setFilters({ brandId: e.target.value })}>
+          <option value="">Todas</option>
+          {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+        </SelectField>
+        <SelectField inline label="Rubro" value={filters.categoryId} onChange={(e) => setFilters({ categoryId: e.target.value })}>
+          <option value="">Todos</option>
+          {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </SelectField>
+        {!compact && <Button variant="secundario" icon="download" onClick={exportExcel}>Exportar Excel</Button>}
       </div>
-      <FilterAxis label="Marca" all="Todas" items={brands} value={filters.brandId} onChange={brandId => setFilters({ brandId })} />
-      <FilterAxis label="Rubro" all="Todos" items={categories} value={filters.categoryId} onChange={categoryId => setFilters({ categoryId })} />
-      <FilterAxis label="Etiqueta" all="Todas" items={labels} value={filters.labelId} onChange={labelId => setFilters({ labelId })} />
-    </div>
-  );
-}
 
-function FilterAxis({ label, all, items, value, onChange }: {
-  label: string; all: string; items: { id: string; name: string }[]; value: string; onChange: (id: string) => void;
-}) {
-  return (
-    <div className="catalog-axis" role="group" aria-label={label}>
-      <span className="catalog-axis__label">{label}</span>
-      <div className="catalog-axis__chips">
-        <Tag active={value === ""} onClick={() => onChange("")}>{all}</Tag>
-        {items.map(item => (
-          <Tag key={item.id} active={value === item.id} onClick={() => onChange(value === item.id ? "" : item.id)}>{item.name}</Tag>
-        ))}
+      <div className="filtros">
+        <div className="fila catalogo-etiquetas">
+          {!compact && <span className="cuerpo-s suave">Etiqueta</span>}
+          <div className="chips" role="group" aria-label="Etiqueta">
+            <Tag active={filters.labelId === ""} onClick={() => setFilters({ labelId: "" })}>Todas</Tag>
+            {labels.map((l) => (
+              <Tag key={l.id} active={filters.labelId === l.id} onClick={() => setFilters({ labelId: filters.labelId === l.id ? "" : l.id })}>
+                {l.name}
+              </Tag>
+            ))}
+          </div>
+        </div>
+        <div className="fila">
+          <span className="meta" role="status">{countText}</span>
+          <Button variant="fantasma" size="compacto" onClick={clearAll} disabled={!hasActiveFilters}>Limpiar filtros</Button>
+          {compact && <Button variant="fantasma" size="compacto" icon="download" onClick={exportExcel}>Excel</Button>}
+        </div>
       </div>
-    </div>
+    </>
   );
 }

@@ -1,92 +1,14 @@
 /*
- * Catálogo (RF-01 a RF-06, RNF-06). Solo tokens: los dos temas definen todo lo que esta
- * hoja usa; ningún color suelto (tests/theme/pageStyles.test.ts).
+ * Catálogo (RF-01 a RF-06, RNF-06) sobre el sistema de diseño: el marcado usa
+ * .catalogo-barra, .filtros, .chips, .productos y details.carta.producto de
+ * design-system.css. Acá sólo los ajustes propios. Solo tokens: ningún color suelto
+ * (tests/theme/pageStyles.test.ts).
  */
 
-.catalog-page { display: grid; gap: var(--esp-m); }
-.catalog-offline { margin: 0; }
-
-/* ---- Buscador y filtros por eje (marca / rubro / etiqueta) ---- */
-.catalog-filters {
-  display: grid;
-  gap: var(--esp-s);
-  padding: var(--esp-m) var(--esp-l);
-  border-radius: var(--radio-carta);
+/* El buscador es un .campo (con su etiqueta para lectores de pantalla): en celular ocupa la fila. */
+@container (max-width: 720px) {
+  .catalogo-barra > .campo { grid-column: 1 / -1; }
 }
-.catalog-filters__top { display: flex; gap: var(--esp-s); align-items: center; flex-wrap: wrap; }
-.catalog-filters__search { flex: 1 1 16rem; }
-.catalog-filters__search input { font-size: var(--texto-l); }
-
-.catalog-axis { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); gap: var(--esp-s); align-items: center; }
-.catalog-axis__label {
-  color: var(--color-tinta-apagada);
-  font-family: var(--fuente-datos);
-  font-size: var(--texto-xs);
-  font-weight: 700;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-}
-.catalog-axis__chips { display: flex; gap: var(--esp-xs); overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
-.catalog-axis__chips .tag { flex: none; padding: .35rem .75rem; }
-
-/* ---- Contador ---- */
-.catalog-count { margin: 0; display: flex; align-items: baseline; gap: .4rem; color: var(--color-tinta-suave); font-size: var(--texto-s); }
-.catalog-count strong { font-family: var(--fuente-datos); font-size: var(--texto-l); color: var(--color-tinta); }
-
-/* ---- Grilla ---- */
-.catalog-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
-  gap: var(--esp-m);
-}
-
-/* ---- Tarjeta de producto ---- */
-.product-card {
-  display: grid;
-  gap: var(--esp-s);
-  transition: transform var(--mov-rapido) var(--mov-curva), box-shadow var(--mov-rapido) var(--mov-curva);
-}
-.product-card:hover { transform: translateY(-2px); box-shadow: var(--carta-hover-sombra); }
-.product-card__toggle {
-  display: grid;
-  gap: var(--esp-s);
-  width: 100%;
-  padding: 0;
-  border: 0;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  background: none;
-  cursor: pointer;
-}
-.product-card__toggle:disabled { cursor: default; }
-.product-card__toggle:focus-visible { outline: 2px solid var(--color-acento); outline-offset: 4px; border-radius: var(--radio-control); }
-
-.product-card__header { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--esp-s); }
-.product-card__name { font-family: var(--fuente-titulos); font-weight: 700; font-size: var(--texto-l); color: var(--color-tinta); line-height: 1.25; letter-spacing: var(--titulo-tracking); }
-.product-card__price { font-size: var(--texto-xs); color: var(--color-tinta-suave); white-space: nowrap; flex-shrink: 0; text-align: right; }
-.product-card__price strong { display: block; color: var(--color-acento); font-size: var(--texto-l); font-weight: 800; }
-.product-card__meta, .product-card__labels { display: flex; flex-wrap: wrap; gap: var(--esp-xs); }
-.product-card__labels .tag { padding: .25rem .6rem; font-size: var(--texto-xs); }
-
-.product-card__presentations {
-  display: grid;
-  gap: var(--esp-xs);
-  border-top: 1px solid var(--color-linea);
-  padding-top: var(--esp-s);
-}
-.product-card__presentation { display: flex; justify-content: space-between; gap: var(--esp-s); font-size: var(--texto-s); color: var(--color-tinta-suave); }
-.product-card__presentation .pos-num { color: var(--color-tinta); font-weight: 600; }
-.product-card__scale { margin-left: .4rem; font-size: var(--texto-xs); }
-.product-card__actions { padding-top: var(--esp-s); border-top: 1px solid var(--color-linea); }
-
-/* ---- Estados ---- */
-.catalog-error { border-left: 3px solid var(--color-error); }
-.skeleton { animation: skeleton-pulse 1.4s ease-in-out infinite; pointer-events: none; }
-@keyframes skeleton-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
-
-@media (max-width: 600px) {
-  .catalog-filters { padding: var(--esp-m); }
-  .catalog-axis { grid-template-columns: 1fr; gap: .25rem; }
-  .catalog-grid { grid-template-columns: 1fr; }
-}
+.catalogo-etiquetas { flex-wrap: nowrap; min-width: 0; }
+.productos { align-items: start; }
+.producto__pie .pila { width: 100%; }
