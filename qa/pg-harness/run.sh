@@ -30,6 +30,12 @@ fi
 psql -q -d postgres -c "drop database if exists alverde" -c "create database alverde"
 psql -q -d alverde -c "alter database alverde set search_path = \"\$user\", public, extensions"
 psql -q -v ON_ERROR_STOP=1 -d alverde -f "$HERE/supabase_stub.sql"
+if [ "${PGQA_LENIENT:-0}" = "1" ]; then
+  echo "== modo permisivo: privilegios automáticos a anon/authenticated (no es como producción)"
+  psql -q -d alverde -c "alter default privileges in schema public grant all on tables to anon, authenticated" \
+    -c "alter default privileges in schema public grant all on functions to anon, authenticated" \
+    -c "alter default privileges in schema public grant all on sequences to anon, authenticated"
+fi
 for f in "$REPO"/supabase/migrations/*.sql; do
   echo "== migración $(basename "$f")"
   psql -q -v ON_ERROR_STOP=1 -d alverde -f "$f"
