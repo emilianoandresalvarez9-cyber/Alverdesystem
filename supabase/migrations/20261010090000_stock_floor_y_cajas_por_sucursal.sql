@@ -20,22 +20,26 @@ begin
     'stock-floor:' || new.branch_id::text || ':' || new.presentation_id::text, 0
   ));
 
-  select coalesce(sum(sl.current_quantity), 0)
-    into v_other_quantity
-  from public.stock_lots sl
-  where sl.branch_id = new.branch_id
-    and sl.presentation_id = new.presentation_id
-    and (tg_op = 'INSERT' or sl.id <> old.id);
-
-  v_after_quantity := v_other_quantity + new.current_quantity;
   if tg_op = 'UPDATE' then
+    select coalesce(sum(sl.current_quantity), 0)
+      into v_other_quantity
+    from public.stock_lots sl
+    where sl.branch_id = new.branch_id
+      and sl.presentation_id = new.presentation_id
+      and sl.id <> old.id;
     v_before_quantity := v_other_quantity + old.current_quantity;
   else
+    select coalesce(sum(sl.current_quantity), 0)
+      into v_other_quantity
+    from public.stock_lots sl
+    where sl.branch_id = new.branch_id
+      and sl.presentation_id = new.presentation_id;
     v_before_quantity := v_other_quantity;
   end if;
 
+  v_after_quantity := v_other_quantity + new.current_quantity;
   if v_after_quantity < -10
-     and (tg_op = 'INSERT' or v_after_quantity < v_before_quantity) then
+     and v_after_quantity < v_before_quantity then
     raise exception 'La venta superaría el faltante máximo de 10 unidades para esta presentación en la sucursal.'
       using errcode = '22023';
   end if;
