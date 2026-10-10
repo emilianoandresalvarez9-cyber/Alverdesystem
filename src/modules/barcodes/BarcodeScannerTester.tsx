@@ -1,5 +1,7 @@
-import { useState, useEffect, useRef } from "react";
-import { TextField, Button, Badge } from "../../shared/ui";
+import { type FormEvent, useState, useEffect, useRef } from "react";
+import { TextField, Button, Badge, Message } from "../../shared/ui";
+import { formatMoney } from "../pos/money";
+import { pricePerKiloFromGram } from "../catalog/scalePricing";
 import { validateEan13 } from "./ean13";
 import type { BarcodeScanLookup } from "./types";
 
@@ -9,7 +11,7 @@ interface BarcodeScannerTesterProps {
 }
 
 /**
- * Componente que simula/captura la entrada de un lector de códigos de barras (ej. Nictom LCB3100).
+ * Prueba del lector de códigos de barras (ej. Nictom LCB3100): captura lo que escanea o un código escrito.
  * Los lectores tipo "teclado cuña" (wedge) disparan eventos de teclado súper rápidos seguidos de Enter.
  */
 export function BarcodeScannerTester({ onScan, lastLookupResult }: BarcodeScannerTesterProps) {
@@ -54,7 +56,7 @@ export function BarcodeScannerTester({ onScan, lastLookupResult }: BarcodeScanne
     };
   }, [isListening, onScan]);
 
-  const handleManualSubmit = (e: React.FormEvent) => {
+  const handleManualSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (manualCode.trim()) {
       onScan(manualCode.trim());
@@ -62,45 +64,61 @@ export function BarcodeScannerTester({ onScan, lastLookupResult }: BarcodeScanne
     }
   };
 
+  const result = lastLookupResult;
   return (
-    <div className="glass" style={{ padding: "var(--esp-m)", borderRadius: "var(--radio-carta)" }}>
-      <h3 style={{ marginTop: 0 }}>Simulador de Lector (Nictom LCB3100)</h3>
-      <p style={{ color: "var(--color-tinta-suave)", fontSize: "0.9rem" }}>
-        {isListening 
-          ? "✅ Escuchando eventos de teclado... (Asegurate de hacer click fuera del cuadro de texto y probar escanear)"
-          : "❌ Escucha global desactivada."}
-      </p>
+    <section className="carta pila" aria-labelledby="probar-lector">
+      <div className="pila pila--s">
+        <div className="fila fila--entre">
+          <h3 className="titulo-seccion" id="probar-lector">Probar el lector</h3>
+          {isListening
+            ? <Badge tone="exito" icon="barcode_scanner">Escuchando el lector</Badge>
+            : <Badge tone="neutro">Lector en pausa</Badge>}
+        </div>
+        <p className="cuerpo-s suave">
+          Escaneá cualquier código con el lector, sin tocar antes ningún campo: abajo aparece qué producto es.
+          Si no tenés el lector a mano, escribí el código y tocá Buscar.
+        </p>
+      </div>
 
-      <form onSubmit={handleManualSubmit} style={{ display: "flex", gap: "var(--esp-s)", marginTop: "var(--esp-s)" }}>
-        <TextField
-          label="O ingreso manual"
-          value={manualCode}
-          onChange={(e) => setManualCode(e.target.value)}
-          placeholder="Ej. 2000000000123"
-        />
-        <Button variant="secundario" type="submit" style={{ alignSelf: "flex-end" }}>
-          Simular Escaneo
-        </Button>
+      <form className="form-fila" onSubmit={handleManualSubmit}>
+        <TextField label="Código" icon="barcode" inputMode="numeric" value={manualCode}
+          onChange={(e) => setManualCode(e.target.value)} placeholder="2000000000123" />
+        <div className="fila">
+          <Button variant="secundario" type="submit" icon="search" disabled={!manualCode.trim()}>Buscar</Button>
+          <Button variant="fantasma" onClick={() => setIsListening((on) => !on)}>
+            {isListening ? "Pausar el lector" : "Volver a escuchar"}
+          </Button>
+        </div>
       </form>
 
-      {lastLookupResult && (
-        <div style={{ marginTop: "var(--esp-m)", padding: "var(--esp-s)", background: "rgba(0,0,0,0.2)", borderRadius: "var(--radio-control)" }}>
-          <h4 style={{ margin: "0 0 var(--esp-xs) 0" }}>Último resultado:</h4>
-          {!lastLookupResult.found ? (
-            <Badge tone="error">Código {lastLookupResult.barcode} no encontrado</Badge>
+      {result && (
+        <div className="pila pila--s" aria-live="polite">
+          <span className="rotulo-seccion">Último código</span>
+          {!result.found ? (
+            <Message tone="error">No hay ningún producto con el código <span className="cifra">{result.barcode}</span>.</Message>
           ) : (
-            <div>
-              <div style={{ display: "flex", gap: "var(--esp-xs)", flexWrap: "wrap", marginBottom: "var(--esp-xs)" }}>
-                <Badge tone="exito">Encontrado</Badge>
-                {lastLookupResult.isBulk && <Badge tone="aviso">Producto a granel</Badge>}
-                {validateEan13(lastLookupResult.barcode).isInternalRange && <Badge tone="neutro">Rango Interno</Badge>}
-              </div>
-              <strong>{lastLookupResult.product?.name}</strong> - {lastLookupResult.presentation?.name} <br/>
-              <em>${lastLookupResult.presentation?.salePrice}</em>
-            </div>
+            <ul className="lista">
+              <li>
+                <div className="lista__principal">
+                  <span className="lista__titulo">{result.product?.name}{result.presentation ? ` · ${result.presentation.name}` : ""}</span>
+                  <span className="lista__meta cifra">{result.barcode}</span>
+                  <span className="fila">
+                    <Badge tone="exito">Encontrado</Badge>
+                    {result.isBulk && <Badge tone="etiqueta" icon="scale">Granel</Badge>}
+                    {validateEan13(result.barcode).isInternalRange && <Badge tone="neutro">Código interno</Badge>}
+                  </span>
+                </div>
+                {result.presentation && (
+                  // Balanza (ADR-001): el precio se guarda por gramo y se muestra por kilo.
+                  result.isBulk && Number(result.presentation.baseQuantity) === 1
+                    ? <span className="lista__valor">{formatMoney(pricePerKiloFromGram(Number(result.presentation.salePrice)))}<small>por kilo</small></span>
+                    : <span className="lista__valor">{formatMoney(Number(result.presentation.salePrice))}</span>
+                )}
+              </li>
+            </ul>
           )}
         </div>
       )}
-    </div>
+    </section>
   );
 }

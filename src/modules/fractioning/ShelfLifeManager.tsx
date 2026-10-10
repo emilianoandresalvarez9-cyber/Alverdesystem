@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { GlassCard, Button, TextField, Badge } from "../../shared/ui";
+import { Badge, Button, EmptyState, Message, TextField, useCompact } from "../../shared/ui";
 import { getSupabase } from "../../shared/supabase/client";
 import { validateShelfLifeDays } from "./fractioningLogic";
 
@@ -11,6 +11,7 @@ interface ShelfLifeProduct {
   open_shelf_life_days: number | null;
 }
 
+/** Vida útil después de abrir (RF-17, RF-17b): días que corren desde que se abre una bolsa, asignados en masa. */
 export function ShelfLifeManager() {
   const [products, setProducts] = useState<ShelfLifeProduct[]>([]);
   const [loading, setLoading] = useState(true);
@@ -20,6 +21,7 @@ export function ShelfLifeManager() {
   const [search, setSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDays, setBulkDays] = useState("");
+  const compact = useCompact();
   
   const fetchProducts = async () => {
     setLoading(true);
@@ -47,7 +49,7 @@ export function ShelfLifeManager() {
       }));
       setProducts(mapped);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error cargando productos");
+      setError(e instanceof Error ? e.message : "No se pudieron cargar los productos.");
     } finally {
       setLoading(false);
     }
@@ -103,14 +105,15 @@ export function ShelfLifeManager() {
 
       if (err) throw err;
       
-      // Actualizamos localmente para no hacer refetch si no queremos
       setProducts(prev => prev.map(p => 
         selectedIds.has(p.id) ? { ...p, open_shelf_life_days: days } : p
       ));
       
       setSelectedIds(new Set());
       setBulkDays("");
-      setSuccess(`Vida útil ${clear ? "borrada" : "asignada"} a ${selectedIds.size} producto(s).`);
+      setSuccess(clear
+        ? `Se quitó la vida útil de ${selectedIds.size} producto${selectedIds.size === 1 ? "" : "s"}.`
+        : `${days} días después de abrir para ${selectedIds.size} producto${selectedIds.size === 1 ? "" : "s"}.`);
     } catch (e) {
       setError(e instanceof Error ? `No se pudo aplicar la vida útil: ${e.message}` : "No se pudo aplicar la vida útil.");
     } finally {
@@ -118,103 +121,98 @@ export function ShelfLifeManager() {
     }
   };
 
+  const allChecked = filteredProducts.length > 0 && filteredProducts.every((p) => selectedIds.has(p.id));
+  const count = `${selectedIds.size} producto${selectedIds.size === 1 ? "" : "s"}`;
+  const daysBadge = (p: ShelfLifeProduct) => p.open_shelf_life_days
+    ? <Badge tone="exito" icon={null}>{p.open_shelf_life_days} días</Badge>
+    : <Badge tone="neutro">Sin asignar</Badge>;
+
   return (
-    <GlassCard>
-      <header style={{ marginBottom: "var(--esp-m)" }}>
-        <h2 style={{ margin: "0 0 var(--esp-xs)" }}>Vida Útil tras Apertura (RF-17 / RF-17b)</h2>
-        <p style={{ margin: 0, color: "var(--color-tinta-suave)", fontSize: "var(--texto-s)" }}>
-          Asigná de forma masiva los días de vencimiento que corren luego de abrir una bolsa.
-        </p>
-      </header>
+    <>
+      <section className="carta pila" aria-labelledby="vida-util-titulo">
+        <div className="pila pila--s">
+          <h3 className="titulo-seccion" id="vida-util-titulo">Vida útil después de abrir</h3>
+          <p className="cuerpo-s suave">Cuántos días dura un producto una vez abierta la bolsa. Marcá los productos y asignales los días de una vez.</p>
+        </div>
+        <div className="form-fila">
+          <TextField label="Buscar producto, marca o rubro" icon="search" type="search" placeholder="Ej.: lentejas"
+            value={search} onChange={(e) => setSearch(e.target.value)} />
+          <TextField label="Días después de abrir" type="number" min="1" inputMode="numeric" numeric suffix="días" placeholder="90"
+            value={bulkDays} onChange={(e) => setBulkDays(e.target.value)} disabled={selectedIds.size === 0} />
+        </div>
+        <div className="fila">
+          <Button onClick={() => void applyBulkUpdate(false)} disabled={selectedIds.size === 0 || !bulkDays} loading={loading && products.length > 0}>
+            Asignar a {count}
+          </Button>
+          <Button variant="secundario" onClick={() => void applyBulkUpdate(true)} disabled={selectedIds.size === 0 || loading}>
+            Quitar la vida útil
+          </Button>
+        </div>
+        {error && <Message tone="error">{error}</Message>}
+        {success && <Message tone="exito">{success}</Message>}
+      </section>
 
-      {error && <p role="alert" style={{ color: "var(--color-error)" }}>{error}</p>}
-      {success && <p role="status" style={{ color: "var(--color-exito)" }}>{success}</p>}
-
-      {/* Barra de Herramientas Masiva */}
-      <div style={{ display: "flex", gap: "var(--esp-m)", alignItems: "flex-end", marginBottom: "var(--esp-l)", flexWrap: "wrap", padding: "var(--esp-s)", background: "var(--glass-fondo-lite)", borderRadius: "var(--radio-panel)" }}>
-        <TextField
-          label="Buscar producto, marca o rubro"
-          placeholder="Ej: Lentejas, El Portugues..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{ minWidth: 250 }}
-        />
-        
-        <div style={{ width: "1px", background: "var(--glass-borde)", height: 40, margin: "0 var(--esp-s)" }}></div>
-
-        <TextField
-          label="Días tras apertura"
-          type="number"
-          min="1"
-          placeholder="Ej: 90"
-          value={bulkDays}
-          onChange={(e) => setBulkDays(e.target.value)}
-          style={{ width: 120 }}
-          disabled={selectedIds.size === 0}
-        />
-        <Button 
-          variant="primario" 
-          onClick={() => applyBulkUpdate(false)}
-          disabled={selectedIds.size === 0 || !bulkDays}
-        >
-          Aplicar a {selectedIds.size} selec.
-        </Button>
-        <Button 
-          variant="fantasma" 
-          onClick={() => applyBulkUpdate(true)}
-          disabled={selectedIds.size === 0}
-        >
-          Limpiar (N/A)
-        </Button>
-      </div>
-
-      <div className="table-wrap glass">
-        <table>
-          <thead>
-            <tr>
-              <th style={{ width: 40, textAlign: "center" }}>
-                <input 
-                  type="checkbox" 
-                  checked={filteredProducts.length > 0 && selectedIds.size === filteredProducts.length}
-                  onChange={toggleAll}
-                  disabled={filteredProducts.length === 0}
-                />
-              </th>
-              <th>Producto</th>
-              <th>Marca</th>
-              <th>Vida Útil Actual</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && products.length === 0 ? (
-              <tr><td colSpan={4} style={{ textAlign: "center" }}>Cargando productos...</td></tr>
-            ) : filteredProducts.length === 0 ? (
-              <tr><td colSpan={4} style={{ textAlign: "center" }}>No hay productos que coincidan.</td></tr>
-            ) : (
-              filteredProducts.map(p => (
-                <tr key={p.id} style={{ opacity: selectedIds.has(p.id) ? 1 : 0.85 }}>
-                  <td style={{ textAlign: "center" }}>
-                    <input 
-                      type="checkbox" 
-                      checked={selectedIds.has(p.id)}
-                      onChange={() => toggleSelection(p.id)}
-                    />
-                  </td>
-                  <td style={{ fontWeight: 600 }}>{p.name}</td>
-                  <td>{p.brand || "—"}</td>
-                  <td>
-                    {p.open_shelf_life_days ? (
-                      <Badge tone="exito">{p.open_shelf_life_days} días</Badge>
-                    ) : (
-                      <Badge tone="neutro">Sin asignar</Badge>
-                    )}
-                  </td>
+      {loading && products.length === 0 ? (
+        <div className="carta pila pila--s" aria-busy="true" aria-label="Cargando productos…"><span className="esqueleto" /><span className="esqueleto" /></div>
+      ) : filteredProducts.length === 0 ? (
+        <EmptyState title="Sin productos" icon="search">No hay productos activos que coincidan con la búsqueda.</EmptyState>
+      ) : compact ? (
+        <ul className="lista" aria-label="Productos">
+          <li>
+            <label className="casilla crece">
+              <input type="checkbox" checked={allChecked} onChange={toggleAll} />
+              Marcar los {filteredProducts.length} visibles
+            </label>
+          </li>
+          {filteredProducts.map((p) => (
+            <li key={p.id} aria-selected={selectedIds.has(p.id)}>
+              <label className="casilla crece vida-util__casilla">
+                <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelection(p.id)} />
+                <span className="lista__principal">
+                  <span className="lista__titulo">{p.name}</span>
+                  {p.brand && <span className="lista__meta">{p.brand}</span>}
+                </span>
+              </label>
+              {daysBadge(p)}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <section className="carta carta--sin-relleno" aria-label="Productos">
+          <div className="tabla-marco">
+            <table className="tabla tabla--compacta">
+              <thead>
+                <tr>
+                  <th className="vida-util__marca">
+                    <label className="casilla">
+                      <input type="checkbox" checked={allChecked} onChange={toggleAll} />
+                      <span className="sr">Marcar los {filteredProducts.length} visibles</span>
+                    </label>
+                  </th>
+                  <th>Producto</th>
+                  <th>Marca</th>
+                  <th>Vida útil</th>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </GlassCard>
+              </thead>
+              <tbody>
+                {filteredProducts.map((p) => (
+                  <tr key={p.id} aria-selected={selectedIds.has(p.id)}>
+                    <td className="vida-util__marca">
+                      <label className="casilla">
+                        <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelection(p.id)} />
+                        <span className="sr">Marcar {p.name}</span>
+                      </label>
+                    </td>
+                    <td className="fuerte">{p.name}</td>
+                    <td className={p.brand ? undefined : "apagada"}>{p.brand || "—"}</td>
+                    <td>{daysBadge(p)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+    </>
   );
 }

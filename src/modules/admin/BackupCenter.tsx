@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { Button, GlassCard } from "../../shared/ui";
+import { Button, Message } from "../../shared/ui";
 import { backupService } from "../../shared/backup/backupService";
 import { downloadFile, generateFullBackup, jsonToCSV, saveBackupToDisk } from "../../shared/backup/export";
 import { chooseBackupDirectory, tryWritePendingOperationsBackup } from "../../shared/offline/backup";
@@ -20,7 +20,7 @@ const CSV_TABLES: { table: string; label: string }[] = [
   { table: "audit_history", label: "Historial de cambios" }
 ];
 
-type Message = { tone: "ok" | "error"; text: string } | null;
+type Result = { tone: "ok" | "error"; text: string } | null;
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
@@ -31,7 +31,7 @@ const errorText = (error: unknown) => (error instanceof Error ? error.message : 
  */
 export function BackupCenter() {
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<Message>(null);
+  const [message, setMessage] = useState<Result>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function run(context: string, action: () => Promise<string>) {
@@ -78,42 +78,51 @@ export function BackupCenter() {
   });
 
   return (
-    <div className="pos-setup" style={{ maxWidth: "none", gridColumn: "1 / -1" }}>
-      <GlassCard className="pos-panel">
-        <h2 style={{ marginTop: 0 }}>Ventas pendientes de este equipo</h2>
-        <p className="field-help">
-          Las ventas hechas sin conexión viven en este equipo hasta que se envían. Elegí una carpeta (puede ser
-          la de Google Drive o un pendrive) para guardar una segunda copia automática.
-        </p>
-        <div className="pos-qty" style={{ flexWrap: "wrap" }}>
-          <Button variant="secundario" onClick={() => void chooseFolder()} disabled={busy}>Elegir carpeta para la segunda copia</Button>
-          <Button variant="fantasma" onClick={() => fileRef.current?.click()} disabled={busy}>Recuperar desde un respaldo…</Button>
+    <>
+      {message && <Message tone={message.tone === "ok" ? "exito" : "error"}>{message.text}</Message>}
+
+      <section className="carta pila" aria-labelledby="respaldo-pendientes">
+        <div className="pila pila--s">
+          <h3 className="titulo-seccion" id="respaldo-pendientes">Ventas pendientes de este equipo</h3>
+          <p className="cuerpo-s suave">
+            Las ventas hechas sin conexión viven en este equipo hasta que se envían. Elegí una carpeta (puede ser
+            la de Google Drive o un pendrive) para guardar una segunda copia automática.
+          </p>
+        </div>
+        <div className="fila">
+          <Button variant="secundario" icon="folder_open" onClick={() => void chooseFolder()} disabled={busy}>Elegir carpeta para la segunda copia</Button>
+          <Button variant="fantasma" icon="settings_backup_restore" onClick={() => fileRef.current?.click()} disabled={busy}>Recuperar desde un respaldo…</Button>
           <input ref={fileRef} type="file" accept="application/json" hidden
             onChange={(e) => { const file = e.target.files?.[0]; if (file) void recoverPending(file); e.target.value = ""; }} />
         </div>
-        <p className="field-help">Recuperar no borra nada: solo agrega las operaciones que falten en este equipo.</p>
-      </GlassCard>
+        <p className="meta">Recuperar no borra nada: sólo agrega las operaciones que falten en este equipo.</p>
+      </section>
 
-      <GlassCard className="pos-panel">
-        <h2 style={{ marginTop: 0 }}>Copia completa de la base</h2>
-        <p className="field-help">
-          Descarga todos los datos del negocio en un archivo. Para <strong>restaurar</strong> la base se sigue
-          el procedimiento de <code>docs/runbooks/restaurar-base.md</code>: no se hace desde el navegador porque
-          pisaría los datos actuales sin poder deshacerlo.
-        </p>
-        <Button onClick={() => void downloadFull()} loading={busy}>Descargar copia completa</Button>
-      </GlassCard>
+      <div className="reja-2">
+        <section className="carta pila" aria-labelledby="respaldo-completo">
+          <div className="pila pila--s">
+            <h3 className="titulo-seccion" id="respaldo-completo">Copia completa de la base</h3>
+            <p className="cuerpo-s suave">
+              Descarga todos los datos del negocio en un archivo. Para <strong>restaurar</strong> la base se sigue
+              el procedimiento de <span className="codigo">docs/runbooks/restaurar-base.md</span>: no se hace desde el navegador porque
+              pisaría los datos actuales sin poder deshacerlo.
+            </p>
+          </div>
+          <Button icon="download" onClick={() => void downloadFull()} loading={busy}>Descargar copia completa</Button>
+        </section>
 
-      <GlassCard className="pos-panel">
-        <h2 style={{ marginTop: 0 }}>Exportar a Excel (CSV)</h2>
-        <div className="pos-qty" style={{ flexWrap: "wrap" }}>
-          {CSV_TABLES.map(({ table, label }) => (
-            <Button key={table} variant="secundario" onClick={() => void exportCsv(table, label)} disabled={busy}>{label}</Button>
-          ))}
-        </div>
-      </GlassCard>
-
-      <p className="pos-feedback" data-tone={message?.tone} role={message?.tone === "error" ? "alert" : "status"}>{message?.text}</p>
-    </div>
+        <section className="carta pila" aria-labelledby="respaldo-csv">
+          <div className="pila pila--s">
+            <h3 className="titulo-seccion" id="respaldo-csv">Exportar a Excel (CSV)</h3>
+            <p className="cuerpo-s suave">Un archivo por tabla, para abrir con Excel o una planilla de Google.</p>
+          </div>
+          <div className="fila">
+            {CSV_TABLES.map(({ table, label }) => (
+              <Button key={table} variant="secundario" size="compacto" icon="download" onClick={() => void exportCsv(table, label)} disabled={busy}>{label}</Button>
+            ))}
+          </div>
+        </section>
+      </div>
+    </>
   );
 }

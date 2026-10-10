@@ -41,7 +41,7 @@ export function CounterBulkSheet() {
               presentationName: pr.name,
               internalBarcode: pr.internal_barcode,
               manufacturerBarcode: p.manufacturer_barcode,
-              categoryName: p.category?.name || "Sin Rubro",
+              categoryName: p.category?.name || "Sin rubro",
               baseUnit: p.base_unit,
               baseQuantity: pr.base_quantity,
               salePrice: pr.sale_price,
@@ -67,12 +67,13 @@ export function CounterBulkSheet() {
     window.print();
   };
 
-  if (loading) return <div>Cargando planilla...</div>;
+  if (loading) return <div className="pila pila--s" aria-busy="true" aria-label="Cargando planilla…"><span className="esqueleto" /><span className="esqueleto" /></div>;
 
   if (items.length === 0) {
     return (
-      <EmptyState title="No hay códigos generados">
-        No hay presentaciones marcadas "Balanza" con código. Marcalas en Administración → Balanza y generá sus códigos en la pestaña de gestión.
+      <EmptyState title="Todavía no hay códigos para imprimir" icon="barcode">
+        Aparecen acá las presentaciones marcadas «Balanza» que ya tienen código. Marcalas en Balanza y generá
+        sus códigos en la pestaña Códigos internos.
       </EmptyState>
     );
   }
@@ -85,45 +86,31 @@ export function CounterBulkSheet() {
   }, {} as Record<string, BulkPresentationItem[]>);
 
   return (
-    <div className="bulk-sheet-container">
-      <div className="bulk-sheet-actions no-print" style={{ marginBottom: "var(--esp-m)" }}>
-        <Button variant="primario" onClick={handlePrint}>🖨️ Imprimir Planilla</Button>
-        <p style={{ color: "var(--color-tinta-suave)", fontSize: "0.9rem", marginTop: "var(--esp-xs)" }}>
-          Esta planilla está optimizada para papel A4. Al imprimir se ocultarán los menúes.
-        </p>
+    <div className="pila">
+      <div className="fila fila--entre no-print">
+        <p className="cuerpo-s suave">Hoja A4 en blanco y negro. Al imprimir no salen los menús.</p>
+        <Button icon="print" onClick={handlePrint}>Imprimir planilla</Button>
       </div>
 
-      <div className="bulk-sheet-print-area" style={{ background: "white", color: "black", padding: "20px", borderRadius: "8px" }}>
-        <h1 style={{ textAlign: "center", borderBottom: "2px solid black", paddingBottom: "10px", margin: "0 0 20px 0" }}>
-          Códigos de Mostrador — Granel (RF-22)
-        </h1>
-        
-        <p style={{ textAlign: "center", fontStyle: "italic", marginBottom: "20px" }}>
-          * Escanear el código al momento de pesar. El sistema solicitará ingresar el peso leído de la balanza.
-        </p>
+      <div className="bulk-sheet-print-area planilla">
+        <h1 className="planilla__titulo">Códigos de mostrador · granel</h1>
+        <p className="planilla__nota">Escanear el código al pesar: la caja pide el peso que marca la balanza.</p>
 
         {Object.entries(grouped).map(([category, catItems]) => (
-          <div key={category} style={{ marginBottom: "30px", pageBreakInside: "avoid" }}>
-            <h2 style={{ background: "#f0f0f0", padding: "5px 10px", margin: "0 0 15px 0", borderLeft: "4px solid black" }}>
-              {category}
-            </h2>
-            <div style={{ 
-              display: "grid", 
-              gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", 
-              gap: "20px" 
-            }}>
+          <div key={category} className="planilla__rubro">
+            <h2 className="planilla__rubro-titulo">{category}</h2>
+            <div className="planilla__reja">
               {catItems.map(item => (
-                <div key={item.presentationId} style={{ border: "1px dashed #ccc", padding: "10px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
-                  <strong style={{ fontSize: "1.1rem", marginBottom: "4px" }}>{item.productName}</strong>
-                  <span style={{ fontSize: "0.85rem", color: "#555", marginBottom: "10px" }}>{item.presentationName} · Balanza: pesar y escanear</span>
-                  
+                <div key={item.presentationId} className="planilla__codigo">
+                  <strong>{item.productName}</strong>
+                  <span>{item.presentationName} · pesar y escanear</span>
                   {item.internalBarcode ? (
-                    <BarcodeSvg 
-                      code={item.internalBarcode} 
-                      width={180} 
-                      height={60} 
-                      barColor="#000" 
-                      bgColor="transparent" 
+                    <BarcodeSvg
+                      code={item.internalBarcode}
+                      width={180}
+                      height={60}
+                      barColor="#000"
+                      bgColor="transparent"
                     />
                   ) : (
                     <Badge tone="error">Sin código</Badge>
