@@ -14,22 +14,40 @@ import type { ShiftSummary } from "./shiftSummary";
 import { PAYMENT_LABELS, type CartLine, type CurrentShift, type PaymentMethod, type PosEntry } from "./types";
 import { useScanner } from "./useScanner";
 import { useBranch } from "../../shared/branch/BranchContext";
+import { useCurrentProfile } from "../../shared/auth/AuthGate";
 import { registerBranchWarning } from "./registerBranch";
 import { loadAccounts } from "../customers/api";
 import { exceedsLimit, filterAccounts } from "../customers/balance";
 import type { CustomerAccount } from "../customers/types";
 
-type Stage = { kind: "loading" } | { kind: "register" } | { kind: "open"; register: RegisterOption } | { kind: "selling"; shift: CurrentShift };
+type Stage = { kind: "loading" } | { kind: "register" } | { kind: "open"; register: RegisterOption } | { kind: "selling"; shift: CurrentShift } | { kind: "blocked"; message: string };
 
 export function PosPage() {
   const [stage, setStage] = useState<Stage>({ kind: "loading" });
+  const profile = useCurrentProfile();
+  const { isAdmin, workingBranchId } = useBranch();
 
   const resolveStage = useCallback(async () => {
-    const shift = await currentShift();
-    if (shift) return setStage({ kind: "selling", shift });
+    const shift = await currentShift(profile.id);
+    if (shift) {
+      const unsafeEmployeeShift = !isAdmin && (
+        shift.ownerUserId !== profile.id ||
+        !workingBranchId ||
+        !shift.branchId ||
+        shift.branchId !== workingBranchId
+      );
+      const selectedBranchMismatch = isAdmin && workingBranchId && shift.branchId && shift.branchId !== workingBranchId;
+      if (unsafeEmployeeShift || selectedBranchMismatch) {
+        return setStage({ kind: "blocked", message: "Hay un turno local de otra cuenta o sucursal. No se habilitó la venta para evitar operar una caja ajena. Administración debe revisar y cerrar el turno anterior." });
+      }
+      return setStage({ kind: "selling", shift });
+    }
     const register = await assignedRegister();
+    if (register && !isAdmin && (!workingBranchId || register.branchId !== workingBranchId)) {
+      return setStage({ kind: "register" });
+    }
     setStage(register ? { kind: "open", register } : { kind: "register" });
-  }, []);
+  }, [profile.id, isAdmin, workingBranchId]);
 
   useEffect(() => { void resolveStage(); }, [resolveStage]);
 
@@ -53,6 +71,10 @@ export function PosPage() {
       );
     case "selling":
       return <Register shift={stage.shift} onClosed={() => void resolveStage()} />;
+    case "blocked":
+      return <SetupCard title="No se puede abrir esta caja">
+        <Message tone="error">{stage.message}</Message>
+      </SetupCard>;
   }
 }
 
@@ -134,7 +156,7 @@ function OpenShiftForm({ register, onOpened, onChangeRegister }: {
     setBusy(true);
     setError(null);
     try {
-      onOpened(await openShift(register, amount));
+      onOpened(await openShift(register, amount, useCurrentProfile().id));
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo abrir el turno.");
     } finally {
@@ -557,7 +579,7 @@ function CloseShiftDialog({ shift, onCancel, onClosed }: { shift: CurrentShift; 
   async function confirm() {
     setBusy(true);
     try {
-      const outcome = await closeShift();
+      const outcome = await closeShift(shift.ownerUserId ?? "");
       setResult(outcome);
       setSummary(outcome.summary);
     } catch (err) {
