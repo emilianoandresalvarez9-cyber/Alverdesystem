@@ -1,3 +1,5 @@
+import { isSecretSupabaseKey } from "./secretKeys";
+
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 /**
@@ -6,6 +8,8 @@ const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
  */
 export function isSupabaseConfigValid(url: string, anonKey: string): boolean {
   if (anonKey.trim().length <= 20) return false;
+  // Una clave secreta (service_role / sb_secret_) saltea RLS: en el navegador nunca es válida.
+  if (isSecretSupabaseKey(anonKey)) return false;
   let parsed: URL;
   try {
     parsed = new URL(url.trim());
