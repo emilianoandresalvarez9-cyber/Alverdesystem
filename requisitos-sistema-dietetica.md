@@ -1,7 +1,7 @@
 # Documento de Requisitos — Sistema de Gestión para Dietética
 Antes de que se queden sin tokens o capacidad de procesamiento indicar hasta que parte se quedaron para que otra IA continue y cualquier tipo de cambio deberan notificarlo en los commit en caso de que entre dentro de sus posibilidades
 **Estado:** Requisitos de alcance aprobados; implementación en desarrollo. Revisión documental al 30 de septiembre de 2026. Ver `docs/ESTADO_QA.md` para avance estimado y evidencia.
-**Última actualización:** 30 de septiembre de 2026
+**Última actualización:** 9 de octubre de 2026 (RF-65 a RF-70: varias sucursales con stock y precio propios)
 
 > **Cómo usar este documento:** es la fuente de verdad del proyecto. Antes de pedirle a un agente de código (Claude Code, Codex, Antigravity, u otro) que construya algo, dale este archivo completo en vez de reexplicar el contexto. Cuando se tome una decisión nueva o cambie una regla, se actualiza acá primero.
 
@@ -55,6 +55,9 @@ Facturación electrónica (el local está en negro, pero puede blanquearse) y un
 | Crear/editar productos, precios, categorías | ✔ | ✘ |
 | Anular ventas, perdonar o ajustar deudas | ✔ | ✘ |
 | Usuarios, backups y reportes | ✔ | ✘ |
+| Elegir en qué sucursal trabaja (RF-66) | ✔ cualquiera, o "Todas" para consultar | ✘ la que tiene asignada |
+| Traspasar mercadería entre sucursales (RF-68) | ✔ | ✘ |
+| Definir el precio propio de una sucursal (RF-69) | ✔ | ✘ |
 
 Son dos roles nada más. Los costos y márgenes viven en una tabla separada con acceso restringido a nivel de datos, no solo oculta en pantalla. La copia local del puesto de caja (para el modo offline) no debe incluir esta tabla.
 
@@ -141,6 +144,15 @@ Son dos roles nada más. Los costos y márgenes viven en una tabla separada con 
 - **RF-54.** Los datos viven en la nube como fuente única; la notebook es solo un puesto más, reemplazable sin perder información.
 - **RF-55.** Agregar una caja o una sucursal nueva no requiere cambios estructurales, solo dar de alta un registro.
 
+### Sucursales (agregado el 9/10/2026)
+El negocio puede tener más de un local. El catálogo, los clientes y el fiado son de la empresa; el stock es de cada local, porque una sucursal puede tener un producto que otra no tiene.
+- **RF-65.** Cada lote pertenece a una sucursal y el stock de una sucursal no se mezcla con el de otra. La venta, la anulación, el ajuste, el fraccionamiento, el ingreso de mercadería y el descuento por vencimiento (RF-09) trabajan solo con los lotes de la sucursal donde se opera. La regla de una sola bolsa abierta por producto (RF-12) es por sucursal. El stock que exista al activar esta función pasa a la sucursal más antigua.
+- **RF-66.** El Administrador elige en qué sucursal está trabajando, desde cualquier pantalla, o "Todas" para consultar el total (con "Todas" no se puede ingresar mercadería: hay que elegir una). El Empleado trabaja siempre en la sucursal asignada a su usuario y no la puede cambiar; si no tiene una asignada, trabaja en la sucursal principal (la más antigua). La caja descuenta stock de la sucursal a la que pertenece la caja/puesto del equipo. La elección vale también sin conexión.
+- **RF-67.** El Administrador asigna a cada usuario su sucursal desde la pantalla de sucursales.
+- **RF-68.** Solo el Administrador puede traspasar mercadería de una sucursal a otra (por ejemplo, 10 kg de almendras de Centro a Norte). El traspaso es una sola operación: descuenta del lote de origen y crea en la sucursal de destino un lote con el mismo producto, proveedor, costo y vencimiento. Queda registrado quién lo hizo, cuándo, cuánto, desde qué lote y hacia qué sucursal.
+- **RF-69.** Cada presentación tiene un precio base y puede tener un precio propio en cada sucursal. Si una sucursal no tiene precio propio, usa el base. La caja, el catálogo (también sin conexión) y el control de precio de las ventas usan el precio de la sucursal donde se vende. La actualización masiva (RF-28) y el historial de precios (RF-27) indican a qué sucursal se aplicó cada cambio. Solo el Administrador define precios.
+- **RF-70.** Los faltantes (RF-49/50), los casos de stock negativo (RF-38) y los reportes de ventas (RF-61 a RF-63) se pueden ver por sucursal; el Administrador también los puede ver todos juntos.
+
 ### Auditoría y trazabilidad
 - **RF-56.** No se borran productos: se archivan, para no romper el historial de ventas pasadas.
 - **RF-57.** Descartar o ajustar stock (rotura, vencido, error de conteo u otro motivo) se registra como un movimiento con su motivo, no como un simple cambio de número. Tanto Administrador como Empleado pueden hacerlo, porque es parte del trabajo diario en la caja; lo que queda exclusivo para Administrador es anular una venta ya cerrada o perdonar una deuda.
@@ -202,6 +214,7 @@ Por el momento no quedan preguntas pendientes. Si surge alguna nueva durante la 
 - El empleado puede agregar o quitar stock (con motivo) porque lo necesita en el día a día de la caja. Anular una venta cerrada o perdonar una deuda sigue siendo exclusivo del administrador.
 - La arquitectura es un MPA, con transiciones animadas resueltas por la View Transitions API entre documentos, y el modo offline resuelto con un Service Worker.
 - El frontend va a ser React (ver sección 11 para el detalle y por qué).
+- Varias sucursales (9/10/2026): stock por sucursal; catálogo, clientes y fiado compartidos; precio base con precio propio opcional por sucursal; el Administrador elige sucursal, el Empleado trabaja fijo en la suya; los traspasos entre sucursales los hace solo el Administrador.
 
 ## 11. Stack tecnológico (definición inicial)
 
@@ -373,8 +386,12 @@ Esta es la traducción de los requerimientos funcionales a tablas concretas. El 
 
 | Campo | Notas |
 |---|---|
-| sucursal: id, nombre, dirección | hoy hay una sola (RF-53) |
-| puesto: id, sucursal_id, nombre o identificador | hoy hay uno solo, el de la caja actual |
+| sucursal: id, nombre, dirección | puede haber varias (RF-65 a RF-70) |
+| puesto: id, sucursal_id, nombre o identificador | la caja descuenta stock de la sucursal de su puesto (RF-66) |
+| usuario: sucursal_id | sucursal fija del Empleado (RF-66, RF-67) |
+| lote: sucursal_id | el stock es por sucursal (RF-65) |
+| traspaso: lote_origen, lote_destino, sucursal_origen, sucursal_destino, cantidad, usuario, fecha | RF-68 |
+| precio_sucursal: sucursal_id, presentación_id, precio | opcional; si no existe rige el precio base (RF-69) |
 
 **Marca, Rubro, Etiqueta** (tablas de referencia)
 
