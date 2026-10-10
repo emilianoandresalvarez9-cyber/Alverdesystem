@@ -39,7 +39,7 @@ describe("abrir turno (RF-66)", () => {
     vi.stubGlobal("navigator", { onLine: false });
     const shift = await openShift(register, 5000, "cajera");
     expect(shift.persisted).toBe(false);
-    expect((await currentShift())?.initialBalance).toBe(5000);
+    expect((await currentShift("cajera"))?.initialBalance).toBe(5000);
     expect(upsert).not.toHaveBeenCalled();
   });
 
@@ -53,7 +53,7 @@ describe("abrir turno (RF-66)", () => {
   it("con conexión y la base de acuerdo, queda registrado", async () => {
     vi.stubGlobal("navigator", { onLine: true });
     upsert.mockResolvedValue({ error: null });
-    await openShift(register, 0);
+    await openShift(register, 0, "cajera");
     expect((await currentShift())?.persisted).toBe(true);
   });
 });
