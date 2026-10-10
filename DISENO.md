@@ -1,117 +1,72 @@
-# DISEÑO — Sistema de diseño Alverde (Agente D · RNF-06 a RNF-09)
+# DISEÑO — Sistema de diseño Alverde (RNF-06 a RNF-09)
 
-> Guía de uso para los agentes A, B y C. Leé esto antes de escribir cualquier estilo o componente.
+> Leé esto antes de escribir cualquier estilo o componente. La fuente de verdad es el paquete de
+> Claude Design: [`docs/diseno/sistema-de-diseno.md`](docs/diseno/sistema-de-diseno.md) (reglas,
+> decisiones, tokens, componentes, pantallas e inventario de acciones).
 
-## Regla única
+## Reglas
 
-**No inventés valores.** Si necesitás un color, radio, espacio o duración, usá una variable de `tokens.css`. Si no existe, agregala ahí y documentala en este archivo.
+- **No inventés valores.** Todo color, tamaño, espacio, radio o duración sale de un token:
+  `src/styles/tokens.css` (lo que no cambia con el tema) y `src/styles/themes/*.css` (colores,
+  superficies y sombras, con los mismos nombres en los dos temas).
+- **Un solo acento por pantalla:** `--color-acento` es la acción principal y el estado activo.
+  Nunca para totales, títulos ni gráficos.
+- **Vidrio sólo en la cabecera y el modal.** Todo lo demás es opaco (`.carta`).
+- **Ningún estado sólo por color:** ícono y palabra en estados, tilde en chips y opciones.
+- **Lo que no se deshace pide confirmación** en un diálogo (Anular venta, Unir con…, convertir a balanza).
+- Español rioplatense con voseo, tipo oración, sin emojis ni códigos internos (RF-xx, FEFO) en pantalla.
+- **RNF-04:** el empleado nunca ve costos, márgenes ni multiplicadores.
 
-## Tokens (`src/styles/tokens.css`)
+## Temas
 
-| Variable | Valor | Uso |
-|---|---|---|
-| `--color-fondo` | `#10221a` | Fondo general |
-| `--color-acento` | `#d5ef89` | Botón primario, foco, marca |
-| `--color-acento-tinta` | `#11221b` | Texto sobre el acento |
-| `--color-tinta` | `#eef8ed` | Texto principal |
-| `--color-tinta-suave` | `#d8ead7` | Texto secundario |
-| `--color-tinta-apagada` | `#afd8a5` | Texto terciario, estados de carga |
-| `--color-error` | `#ffc1ba` | Mensajes de error |
-| `--color-aviso` | `#ffc36c` | Advertencias, offline |
-| `--color-exito` | `#b9e88b` | Confirmaciones |
-| `--glass-blur` | `14px` | Blur para glassmorfismo |
-| `--radio-control` | `.7rem` | Botones, inputs |
-| `--radio-carta` | `1.25rem` | Tarjetas |
-| `--radio-pastilla` | `999px` | Tags, badges |
-| `--esp-xs/s/m/l/xl` | `.35–2.5rem` | Espaciado |
-| `--mov-rapido` | `120ms` | Transiciones rápidas |
-| `--mov-normal` | `220ms` | Transiciones normales |
+El paquete los llama `botanical` y `midnight`; en el código son `data-theme="alverde-botanical"`
+(predeterminado, también en `:root`) y `data-theme="midnight-bio"`. Se conservaron los nombres del
+código para no perder el tema que eligió cada equipo (`localStorage["alverde-tema"]`).
+
+## Hojas
+
+| Archivo | Qué tiene |
+|---|---|
+| `src/styles/global.css` | Importa fuentes, tokens, temas y el sistema. Al final, el **puente** para el marcado de páginas que todavía no pasaron al sistema. |
+| `src/styles/design-system.css` | Generado del `bundle.css` del paquete (secciones 1–18 y 20) + adaptaciones a React (sección 21). Clases en español: `boton`, `campo`, `entrada`, `selector`, `chip`, `estado`, `carta`, `kpis`, `tabla`, `lista`, `modal`, `opciones`, `nav-sec`, shell `app-sidebar` / `app-header` / `app-content`. |
+| `src/styles/pos.css`, `catalog.css`… | Hojas por página, sólo con tokens (`tests/theme/pageStyles.test.ts`). |
 
 ## Componentes (`src/shared/ui/`)
 
-```typescript
-import { Button, GlassCard, TextField, SelectField, Badge, Tag, EmptyState, Modal } from "../shared/ui";
-```
-
-### `Button`
 ```tsx
-<Button variant="primario">Guardar</Button>
-<Button variant="secundario">Cancelar</Button>
-<Button variant="fantasma">Más opciones</Button>
-<Button variant="peligro">Eliminar</Button>
+import { Button, GlassCard, TextField, SelectField, Badge, Tag, EmptyState, Modal, Icon, Options, Message } from "../shared/ui";
+
+<Button>Cobrar</Button>                                  // primario: una sola por pantalla
+<Button variant="secundario" icon="download">Exportar</Button>
+<Button variant="fantasma">Cancelar</Button>
+<Button variant="peligro">Archivar</Button>
+<Button variant="peligro" confirmar>Anular venta</Button> // relleno: sólo dentro de su confirmación
+<Button size="grande" block>Cobrar $17.120</Button>      // sólo Cobrar
+
+<GlassCard>…</GlassCard>                                 // .carta (opaca, pese al nombre)
+<GlassCard padding="none">tabla con cabecera</GlassCard>
+
+<TextField label="Peso" suffix="g" numeric />           // etiqueta arriba, ayuda o error abajo
+<TextField label="Código" icon="barcode_scanner" autoFocus />
+<SelectField label="Caja">…</SelectField>
+
+<Badge tone="aviso">Crítico · 3 días</Badge>              // aviso/error/exito/critico traen ícono
+<Badge tone="neutro" icon="lock">Cerrado</Badge>
+<Tag active>Sin TACC</Tag>                               // chip con aria-pressed y tilde
+<Options name="medio" legend="Medio de pago" value={m} onChange={setM}
+  options={[{ value: "cash", label: "Efectivo", icon: "payments" }]} />   // variant: mosaico | segmento | lista | tres
+<Message tone="exito">Guardado.</Message>               // error → role="alert"
+<EmptyState title="Todavía no hay clientes">Creá el primero con Nuevo cliente.</EmptyState>
+<Modal open title="Peso de Nuez mariposa" onClose={…} footer={…}>…</Modal>   // wide para tablas
+<Icon name="scale" />                                    // Material Symbols como máscara, sin red
 ```
 
-### `GlassCard`
-```tsx
-<GlassCard>Contenido</GlassCard>
-<GlassCard padding="compact">Tarjeta compacta</GlassCard>
-```
+## Transiciones entre páginas (RNF-07/RNF-08)
 
-### `TextField`
-```tsx
-<TextField
-  label="Nombre"
-  value={val}
-  onChange={(e) => setVal(e.target.value)}
-  placeholder="Ej. Arcor"
-/>
-<TextField label="Buscar" error="Campo requerido" />
-```
-
-### `SelectField`
-```tsx
-<SelectField
-  label="Marca"
-  value={val}
-  onChange={(e) => setVal(e.target.value)}
->
-  <option value="">Seleccionar marca</option>
-  <option value="1">Del local</option>
-</SelectField>
-```
-
-### `Badge`
-```tsx
-<Badge tone="exito">Activo</Badge>
-<Badge tone="aviso">Offline</Badge>
-<Badge tone="error">Error</Badge>
-<Badge tone="neutro">Inactivo</Badge>
-```
-
-### `Tag`
-```tsx
-<Tag active={isSelected} onClick={() => setIsSelected(!isSelected)}>
-  Vegano
-</Tag>
-```
-
-### `EmptyState`
-```tsx
-<EmptyState title="Sin productos" action={<Button variant="primario">Agregar producto</Button>}>
-  Agregá el primero desde el formulario superior.
-</EmptyState>
-```
-
-### `Modal`
-```tsx
-<Modal open={open} onClose={() => setOpen(false)} title="Nuevo producto">
-  <p>Contenido del modal</p>
-  <Button variant="secundario" onClick={() => setOpen(false)}>Cerrar</Button>
-</Modal>
-```
-
-## Modo sin-blur (hardware modesto)
-
-La notebook Celeron/Atom de la caja puede tener lag con `backdrop-filter`:
-```html
-<html class="sin-blur">
-```
-Las superficies `.glass` desactivan el desenfoque (`backdrop-filter: none`) y pasan a un fondo más opaco con excelente legibilidad y rendimiento fluido.
-
-## View Transitions entre páginas
-
-Activas en `global.css`:
-```css
-@view-transition { navigation: auto; }
-```
-Funciona automáticamente en navegadores compatibles al navegar entre las páginas HTML de entrada configuradas en Vite.
+- `@view-transition { navigation: auto; }` y los nombres de bloque están en `design-system.css`
+  (secciones 17 y 18): la barra lateral queda quieta, la pastilla del ítem activo se desliza y
+  sólo el título y el contenido cambian. Con movimiento reducido, sólo un fundido.
+- Para que la página nueva tenga el marco en su **primer cuadro**: el script de cada página lleva
+  `blocking="render"` (plugin en `vite.config.ts`), cada entrada monta con `mountPage()` (render
+  síncrono) y `AuthGate` dibuja con el último perfil verificado mientras verifica la sesión.
+  `tests/theme/viewTransition.test.tsx` y `appShell.test.tsx` lo cubren.

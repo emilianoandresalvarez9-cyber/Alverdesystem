@@ -8,7 +8,7 @@ const inlineScript = `<script>
           var t = localStorage.getItem("alverde-tema");
           var valid = t === "midnight-bio" ? "midnight-bio" : "alverde-botanical";
           document.documentElement.setAttribute("data-theme", valid);
-          var c = {"alverde-botanical":"#f9faf6","midnight-bio":"#101410"};
+          var c = {"alverde-botanical":"#f1f3ed","midnight-bio":"#111511"};
           var m = document.querySelector('meta[name="theme-color"]');
           if (m) m.setAttribute("content", c[valid]);
         } catch(e) {}
@@ -18,7 +18,7 @@ const inlineScript = `<script>
 
 for (const file of htmlFiles) {
   let content = readFileSync(file, 'utf8');
-  content = content.replace(/<meta name="theme-color"[^>]*>/, '<meta name="theme-color" content="#f9faf6" />');
+  content = content.replace(/<meta name="theme-color"[^>]*>/, '<meta name="theme-color" content="#f1f3ed" />');
   
   if (content.includes('localStorage.getItem("alverde-tema")')) {
     console.log(`Skipping ${file}, already has inline script`);

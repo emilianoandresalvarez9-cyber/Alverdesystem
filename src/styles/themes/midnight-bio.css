@@ -1,140 +1,42 @@
 /*
- * Alverde · tema "Midnight Bio Precision" (oscuro, denso, consola de laboratorio)
- * ------------------------------------------------------------------------------
- * Fuente: Disenos_Alverde/stitch_essay_writ/.../DESIGN.md (name: Midnight Bio Precision;
- * la carpeta se llama "alverde_botanical_living" por error de exportación).
+ * Alverde · tema "Midnight Bio Precision" (oscuro: lima suave sobre verde casi negro)
+ * ---------------------------------------------------------------------------------
+ * Valores del paquete de Claude Design (tokens.json, 10/10/2026). Mismos nombres
+ * que alverde-botanical.css (tests/theme/themeTokens.test.ts).
  *
- * Mismo contrato semántico que alverde-botanical.css: si se agrega un token en
- * un tema, se agrega en el otro (themeTokens.test.ts lo verifica).
- *
- * Nota sobre el DESIGN.md: el YAML dice primary #ffffff, pero la prosa y la
- * especificación del botón "Primary Bio Glow" usan #d3fa99 (Lime Pulse) como
- * color de acción. Se sigue la especificación de componentes.
+ * Reglas del sistema (ver decisiones del paquete):
+ *   · Sin glow ni sombras de color: la lima desaturada ya es lo más luminoso de la pantalla.
+ *   · Nada de blanco puro sobre negro puro: la tinta es gris verdoso (#d6dccf, 13:1).
+ *   · --foco-anillo es un COLOR, para outline: 2px solid.
  */
 
 [data-theme="midnight-bio"] {
-  color-scheme: dark;
+  --color-fondo: #111511;
+  --color-tinta: #d6dccf;
+  --color-tinta-suave: #a9b1a2;
+  --color-tinta-apagada: #8b9485;
+  --color-acento: #a8cc80;
+  --color-acento-tinta: #142011;
+  --color-exito: #86d2c8;
+  --color-aviso: #e0b45a;
+  --color-error: #e97a89;
+  --color-error-fuerte: #f4b0ba;
+  --color-linea: #283028;
+  --color-hover: #ffffff0d;
 
-  /* ---- 1. Paleta cruda (DESIGN.md → colors) ---- */
-  --ds-surface: #101410;
-  --ds-surface-bright: #363a35;
-  --ds-surface-container-lowest: #0b0f0b;
-  --ds-surface-container-low: #181d18;
-  --ds-surface-container: #1c211c;
-  --ds-surface-container-high: #272b26;
-  --ds-surface-container-highest: #323631;
-  --ds-on-surface: #e0e4dc;
-  --ds-on-surface-variant: #c4c8b7;
-  --ds-outline: #8e9382;
-  --ds-outline-variant: #44483b;
-  --ds-primary-container: #c9ef90;
-  --ds-secondary: #4de082;
-  --ds-secondary-container: #00b55d;
-  --ds-error: #ffb4ab;
-  --ds-error-container: #93000a;
-  --ds-obsidian: #080c08;
-  --ds-carbon: #121912;
-  --ds-carbon-light: #192219;
-  --ds-porcelain: #f5f5f7;
-  --ds-muted-lead: #86868b;
-  --ds-seed-deep: #1c3a13;
-  --ds-seed-glow: #72c052;
-  --ds-lime-pulse: #d3fa99;
-  --ds-critical-crimson: #ff453a;
-  --ds-warning-amber: #ff9f0a;
-  --ds-apple-blue: #0071e3;
-  --ds-glass-border: rgba(255, 255, 255, 0.08);
-  --ds-glass-surface: rgba(18, 26, 18, 0.72);
+  --glass-fondo: #181d18e6;
+  --glass-borde: #ffffff17;
+  --glass-sombra: 0 1px 0 #0000004d, 0 8px 24px -12px #000000b3;
 
-  /* ---- 2a. Fondo y tinta ---- */
-  --color-fondo: var(--ds-surface);
-  --color-fondo-profundo: var(--ds-obsidian);
-  --color-tinta: var(--ds-on-surface);
-  --color-tinta-suave: var(--ds-on-surface-variant);
-  --color-tinta-apagada: var(--ds-muted-lead);          /* micro-etiquetas y cabeceras: 5.1:1 sobre #101410 */
+  --carta-fondo: #181d18;
+  --carta-borde: #262d26;
+  --carta-sombra: 0 1px 2px #00000040;
+  --carta-hover-sombra: 0 2px 4px #00000040, 0 8px 20px -6px #00000080;
 
-  /* ---- 2b. Acentos ---- */
-  --color-acento: var(--ds-lime-pulse);
-  --color-acento-tinta: var(--ds-obsidian);
-  --color-dorado: var(--ds-warning-amber);
-  --color-verde-medio: var(--ds-seed-glow);
+  --input-fondo: #0d110d;
+  --input-borde: #656f61;
+  --foco-anillo: #a8cc80;
 
-  /* ---- 2c. Estados ---- */
-  --color-exito: var(--ds-secondary);
-  --color-exito-tinta: var(--ds-obsidian);
-  --color-aviso: var(--ds-warning-amber);
-  --color-aviso-tinta: #34230a;
-  --color-error: var(--ds-error);
-  --color-error-fuerte: var(--ds-critical-crimson);
-  --color-error-tinta: #2b0f0a;
-
-  /* ---- 2d. Lienzo y superficies (Elevation & Depth) ---- */
-  --fondo-pagina:
-    radial-gradient(circle at 8% 8%, color-mix(in srgb, var(--ds-seed-deep) 70%, transparent) 0, transparent 29rem),
-    radial-gradient(circle at 92% 92%, color-mix(in srgb, var(--ds-seed-glow) 10%, transparent) 0, transparent 28rem),
-    var(--ds-surface);
-  /* Bio-Glass Floating Shield: barras y superficies flotantes */
-  --glass-fondo: var(--ds-glass-surface);
-  --glass-fondo-lite: rgba(18, 25, 18, 0.6);
-  --glass-fondo-opaco: var(--ds-carbon);                /* html.sin-blur */
-  --glass-borde: var(--ds-glass-border);
-  --glass-sombra: 0 12px 32px 0 rgba(0, 0, 0, 0.6);
-  --glass-blur: 24px;                                   /* valor del diseño; si la caja se siente lenta, html.sin-blur */
-  --glass-saturacion: 180%;
-  /* Dark Neu Flat: tarjeta por defecto */
-  --carta-fondo: linear-gradient(145deg, #151d15, #0f150f);
-  --carta-borde: rgba(255, 255, 255, 0.06);
-  --carta-sombra: 6px 6px 16px rgba(0, 0, 0, 0.65), -4px -4px 12px rgba(255, 255, 255, 0.035);
-  /* Dark Neu Convex: héroe y modales */
-  --carta-destacada-fondo: linear-gradient(135deg, #1a241a 0%, #111811 100%);
-  --carta-destacada-borde: rgba(211, 250, 153, 0.12);
-  --carta-destacada-sombra: 8px 8px 20px rgba(0, 0, 0, 0.7), -4px -4px 14px rgba(211, 250, 153, 0.04);
-  --carta-hover-sombra: 0 0 0 1px rgba(211, 250, 153, 0.12), 8px 8px 20px rgba(0, 0, 0, 0.7);
-  --backdrop: rgba(0, 0, 0, 0.8);
-
-  /* ---- 2e. Campos (Dark Neu Pressed) ---- */
-  --input-fondo: #0d130d;
-  --input-borde: rgba(255, 255, 255, 0.08);
-  --input-sombra: inset 4px 4px 8px rgba(0, 0, 0, 0.75), inset -3px -3px 6px rgba(255, 255, 255, 0.04);
-  --foco-anillo: 0 0 0 1px var(--ds-lime-pulse);
-
-  /* ---- 2f. Interacción, líneas y tablas ---- */
-  --color-hover: color-mix(in srgb, var(--ds-carbon-light) 40%, transparent);
-  --color-linea: rgba(255, 255, 255, 0.06);
-  --color-badge-fondo: #0d130d;
-  --tabla-cabecera-fondo: var(--ds-surface-container-lowest);
-  --tabla-cabecera-tinta: var(--ds-muted-lead);
-
-  /* ---- 2g. Botones (Primary Bio Glow / Secondary Neumorphic) ---- */
-  --boton-sombra: 0 0 18px rgba(211, 250, 153, 0.28), inset 0 1px 1px rgba(255, 255, 255, 0.4);
-  --boton-secundario-fondo: linear-gradient(145deg, #151d15, #0f150f);
-  --boton-secundario-tinta: var(--ds-porcelain);
-  --boton-secundario-borde: rgba(255, 255, 255, 0.08);
-
-  /* ---- 2h. Tipografía: Plus Jakarta Sans (interfaz) + JetBrains Mono (telemetría y datos) ---- */
-  --fuente: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --fuente-titulos: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --fuente-datos: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
-  --texto-xs: .75rem;                                   /* caption 12px */
-  --texto-s: .8125rem;                                  /* body-sm 13px */
-  --texto-m: .875rem;                                   /* body-md 14px */
-  --texto-l: 1.125rem;                                  /* headline-md 18px */
-  --texto-titulo: clamp(1.625rem, 3.2vw + .5rem, 2.75rem); /* headline-lg 26px → display-hero 44px */
-  --titulo-tracking: -0.04em;
-  --titulo-peso: 800;
-
-  /* ---- 2i. Formas (Shapes) ---- */
-  --radio-control: 1rem;                                /* inputs y bloques internos: rounded-2xl */
-  --radio-boton: 9999px;                                /* acciones y chips: pastilla */
-  --radio-panel: 1rem;
-  --radio-carta: 1.75rem;                               /* 28px apple-card-radius */
-  --radio-carta-grande: 1.75rem;
-  --radio-pastilla: 9999px;
-
-  /* ---- 2j. Espaciado (denso) ---- */
-  --esp-xs: .25rem;
-  --esp-s: .5rem;
-  --esp-m: .875rem;
-  --esp-l: 1.5rem;
-  --esp-xl: 1.75rem;
+  --boton-secundario-fondo: #232a23;
+  --boton-sombra: 0 1px 2px #00000059;
 }

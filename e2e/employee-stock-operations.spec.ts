@@ -30,11 +30,11 @@ test("Empleado puede ingresar, fraccionar y ajustar stock desde Stock", async ({
   await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
   await page.getByRole("button", { name: "Confirmar Movimiento" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Guardado en este dispositivo" })).toContainText("pendiente de sincronización");
-  await expect(page.locator(".sync-status")).toContainText("1 operación pendiente");
+  await expect(page.locator(".conexion .conexion__largo")).toHaveText("Sin conexión · 1 operación pendiente");
   await expect(sourceLot).toContainText("825 / 1000 gram");
   await page.getByRole("button", { name: "Cancelar" }).click();
   await page.context().setOffline(false);
-  await expect(page.locator(".sync-status")).toContainText("0 operaciones pendientes", { timeout: 15000 });
+  await expect(page.locator(".conexion .conexion__largo")).toHaveText("Conectado", { timeout: 15000 });
   await expect(sourceLot).toContainText("825 / 1000 gram");
 
   await page.getByLabel("Escanear código de barras").fill("7790000000008");

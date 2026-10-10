@@ -3,6 +3,37 @@ import { getSupabase } from "../supabase/client";
 import { parseRole, type Profile } from "./roles";
 
 const PROFILE_CACHE_PREFIX = "alverde.profile.";
+/** Último perfil verificado en este equipo: sólo para dibujar el marco en el primer cuadro (RNF-08). */
+export const LAST_PROFILE_KEY = "alverde.ultimo-perfil";
+
+type ProfileStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+
+const defaultStorage = (): ProfileStorage | null => {
+  try { return typeof localStorage === "undefined" ? null : localStorage; } catch { return null; }
+};
+
+/**
+ * Perfil con el que se dibuja la página mientras se verifica la sesión. No da acceso a
+ * nada: los datos los sigue cuidando RLS, y AuthGate redirige si la verificación falla.
+ */
+export function readLastProfile(storage: ProfileStorage | null = defaultStorage()): Profile | null {
+  try {
+    const raw = storage?.getItem(LAST_PROFILE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<Profile>;
+    if (typeof parsed.id !== "string" || parsed.active !== true) return null;
+    return { id: parsed.id, role: parseRole(parsed.role), active: true };
+  } catch {
+    return null;
+  }
+}
+
+export function storeLastProfile(profile: Profile | null, storage: ProfileStorage | null = defaultStorage()): void {
+  try {
+    if (profile?.active) storage?.setItem(LAST_PROFILE_KEY, JSON.stringify(profile));
+    else storage?.removeItem(LAST_PROFILE_KEY);
+  } catch { /* sin almacenamiento: se verifica antes de dibujar, como siempre */ }
+}
 
 export async function currentSession(): Promise<Session | null> {
   const { data, error } = await getSupabase().auth.getSession();
@@ -11,6 +42,7 @@ export async function currentSession(): Promise<Session | null> {
 }
 
 export async function signIn(email: string, password: string): Promise<void> {
+  storeLastProfile(null); // otra persona puede ingresar en el mismo equipo
   const { error } = await getSupabase().auth.signInWithPassword({ email, password });
   if (error) throw error;
 }
@@ -18,6 +50,7 @@ export async function signIn(email: string, password: string): Promise<void> {
 export async function signOut(): Promise<void> {
   const session = await currentSession().catch(() => null);
   if (session) localStorage.removeItem(PROFILE_CACHE_PREFIX + session.user.id);
+  storeLastProfile(null);
   const { error } = await getSupabase().auth.signOut();
   if (error) throw error;
 }

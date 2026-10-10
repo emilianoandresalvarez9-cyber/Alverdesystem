@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import type { PropsWithChildren } from "react";
 import { AuthGate, useCurrentProfile } from "../auth/AuthGate";
 import { signOut } from "../auth/session";
@@ -6,6 +7,7 @@ import { ThemeToggle } from "../theme/ThemeToggle";
 import { OfflineIndicator } from "./OfflineIndicator";
 import { BranchProvider } from "../branch/BranchContext";
 import { BranchSelector } from "../branch/BranchSelector";
+import { Icon, type IconName } from "../ui/Icon";
 
 export type ShellSection = "catalog" | "pos" | "customers" | "stock" | "admin";
 
@@ -26,85 +28,129 @@ export function AppShell({ active, title, requiredRole, children }: AppShellProp
 
 const ROLE_LABELS: Record<AppRole, string> = { administrator: "Administrador", employee: "Empleado" };
 
-type NavItem = { id: ShellSection; href: string; label: string; adminOnly?: boolean };
+type NavItem = { id: ShellSection; href: string; label: string; short?: string; icon: IconName; adminOnly?: boolean };
 
 const NAV: NavItem[] = [
-  { id: "pos", href: "/pos.html", label: "Caja" },
-  { id: "catalog", href: "/catalog.html", label: "Catálogo" },
-  { id: "stock", href: "/stock.html", label: "Stock" },
-  { id: "customers", href: "/customers.html", label: "Clientes" },
-  { id: "admin", href: "/admin.html", label: "Administración", adminOnly: true }
+  { id: "pos", href: "/pos.html", label: "Caja", icon: "point_of_sale" },
+  { id: "catalog", href: "/catalog.html", label: "Catálogo", icon: "inventory_2" },
+  { id: "stock", href: "/stock.html", label: "Stock", icon: "package_2" },
+  { id: "customers", href: "/customers.html", label: "Clientes", icon: "group" },
+  { id: "admin", href: "/admin.html", label: "Administración", short: "Admin", icon: "admin_panel_settings", adminOnly: true }
 ];
 
+const leave = () => void signOut().then(() => location.assign("/"));
+
 /**
- * Barra lateral + cabecera + panel central, cada bloque con su propio
- * view-transition-name (RNF-08): al cambiar de página se anima cada sección
- * por separado en vez de toda la página como un solo bloque.
+ * Marco de todas las páginas (RNF-06/RNF-08): barra lateral de 240 px, cabecera de vidrio
+ * y contenido. Cada bloque declara su view-transition-name en design-system.css
+ * (app-sidebar, nav-activo, app-header, app-titulo, app-content): al cambiar de página la
+ * barra queda quieta, la pastilla del ítem activo se desliza y sólo el título y el
+ * contenido cambian. En celular la barra pasa abajo y sucursal, tema y Salir van al
+ * menú de la cabecera.
  */
 export function ShellLayout({ active, title, children }: PropsWithChildren<{ active: ShellSection; title: string }>) {
   const profile = useCurrentProfile();
   const isAdmin = profile.role === "administrator";
   const items = NAV.filter((item) => !item.adminOnly || isAdmin);
+  const roleLabel = ROLE_LABELS[profile.role];
 
   return (
     <BranchProvider isAdmin={isAdmin}>
-    <div className="app-shell">
-      <aside className="app-sidebar glass" style={{ viewTransitionName: "app-sidebar" }}>
-        <a className="brand" href="/catalog.html" aria-label="Alverde, catálogo">
-          <span className="brand-mark">A</span>
-          <span className="brand-text">Alverde<small>Sistema de gestión</small></span>
-        </a>
-        <nav className="app-nav" aria-label="Navegación principal">
-          <p className="app-nav-label">Secciones</p>
-          {items.map((item) => (
-            <a key={item.id} className={active === item.id ? "active" : ""} href={item.href}
-              aria-current={active === item.id ? "page" : undefined}>
-              <NavIcon section={item.id} />
-              <span>{item.label}</span>
-            </a>
-          ))}
-        </nav>
-        <BranchSelector />
-        <div className="app-sidebar-foot">
-          <ThemeToggle />
-          <button className="button button-ghost" onClick={() => void signOut().then(() => location.assign("/"))}>
-            Salir
-          </button>
-        </div>
-      </aside>
+      <div className="app">
+        <aside className="app-sidebar" aria-label="Navegación principal">
+          <div className="marca">
+            <span className="marca__nombre">alverde</span>
+            <span className="marca__bajada">Dietética natural</span>
+          </div>
+          <BranchSelector />
+          <nav className="nav" aria-label="Secciones">
+            {items.map((item) => {
+              const current = active === item.id;
+              return (
+                <a key={item.id} className="nav__item" href={item.href} aria-current={current ? "page" : undefined}>
+                  {current ? <span className="nav__indicador" aria-hidden="true" /> : null}
+                  <Icon name={item.icon} />
+                  {item.short ? (
+                    <>
+                      <span className="nav__larga">{item.label}</span>
+                      <span className="nav__corta">{item.short}</span>
+                    </>
+                  ) : (
+                    <span>{item.label}</span>
+                  )}
+                </a>
+              );
+            })}
+          </nav>
+          <div className="app-sidebar__pie">
+            <ThemeToggle />
+            <button type="button" className="boton boton--fantasma" onClick={leave}>
+              <Icon name="logout" />
+              Salir
+            </button>
+          </div>
+        </aside>
 
-      <header className="app-header glass" style={{ viewTransitionName: "app-header" }}>
-        <div className="page-heading app-heading">
-          <p className="eyebrow">Alverde · sistema de gestión</p>
-          <h1>{title}</h1>
+        <div className="app-main">
+          <header className="app-header">
+            <h1 className="app-titulo">{title}</h1>
+            <OfflineIndicator />
+            <span className="app-header__sep" aria-hidden="true" />
+            <span className="estado estado--neutro rol-insignia" title="Rol de la sesión">
+              <Icon name="person" size="s" />
+              {roleLabel}
+            </span>
+            <HeaderMenu roleLabel={roleLabel} />
+          </header>
+          <main className="app-content">{children}</main>
         </div>
-        <div className="app-header-status">
-          <OfflineIndicator />
-          <span className="badge app-role" title="Rol de la sesión">{ROLE_LABELS[profile.role]}</span>
-        </div>
-      </header>
-
-      <main className="app-content" style={{ viewTransitionName: "app-content" }}>
-        {children}
-      </main>
-    </div>
+      </div>
     </BranchProvider>
   );
 }
 
-/** Iconos de línea, inline para que funcionen sin conexión (nada externo). */
-function NavIcon({ section }: { section: ShellSection }) {
-  const paths: Record<ShellSection, string> = {
-    pos: "M3 7h18v10H3zM3 11h18M7 15h3",
-    catalog: "M4 5h16v14H4zM8 5v14M4 10h16",
-    stock: "M4 8l8-4 8 4v8l-8 4-8-4zM4 8l8 4 8-4M12 12v8",
-    customers: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20a8 8 0 0 1 16 0",
-    admin: "M4 6h16M4 12h16M4 18h16M8 4v4M14 10v4M10 16v4"
-  };
+/** Celular: el botón de menú de la cabecera abre rol, sucursal, tema y Salir. */
+function HeaderMenu({ roleLabel }: { roleLabel: string }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
+    const onPointer = (event: PointerEvent) => {
+      if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onPointer);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onPointer);
+    };
+  }, [open]);
+
   return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
-      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d={paths[section]} />
-    </svg>
+    <div ref={ref}>
+      <button
+        type="button"
+        className="boton boton--fantasma boton--icono app-header__menu"
+        aria-label="Menú: sucursal, tema y salir"
+        aria-expanded={open}
+        aria-controls="menu-cabecera"
+        onClick={() => setOpen((value) => !value)}
+      >
+        <Icon name={open ? "close" : "menu"} />
+      </button>
+      {open ? (
+        <div className="app-header__panel" id="menu-cabecera">
+          <p className="rol"><Icon name="person" />{roleLabel}</p>
+          <BranchSelector />
+          <ThemeToggle />
+          <button type="button" className="boton boton--fantasma" onClick={leave}>
+            <Icon name="logout" />
+            Salir
+          </button>
+        </div>
+      ) : null}
+    </div>
   );
 }

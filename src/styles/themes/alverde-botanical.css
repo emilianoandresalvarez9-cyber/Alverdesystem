@@ -1,147 +1,46 @@
 /*
- * Alverde · tema "Alverde Botanical Living" (claro, glassmorfismo botánico)
+ * Alverde · tema "Botanical Living" (claro: verde bosque sobre blanco hueso)
  * ------------------------------------------------------------------------
- * Fuente: Disenos_Alverde/.../alverde_botanical_living/DESIGN.md
- * Continuación directa del RNF-06 original. Es el tema PREDETERMINADO: también
- * aplica sobre :root, así la página se ve bien aunque falte el atributo data-theme.
+ * Valores del paquete de Claude Design (tokens.json, 10/10/2026). Es el tema
+ * PREDETERMINADO: también aplica sobre :root, así la página se ve bien aunque
+ * falte el atributo data-theme. Los dos temas definen EXACTAMENTE los mismos nombres
+ * (tests/theme/themeTokens.test.ts).
  *
- * Dos capas:
- *   1. --ds-*  → paleta cruda, copiada tal cual del DESIGN.md (nombres del sistema).
- *   2. resto   → contrato semántico que consumen global.css y los componentes.
- *                Ambos temas definen EXACTAMENTE los mismos nombres.
- *
- * Nota sobre el DESIGN.md: el YAML dice primary #195e08, pero la prosa y la
- * especificación de botones usan #347822 (primary-container) como verde de acción.
- * Se sigue la especificación de componentes: --color-acento = #347822.
+ * Reglas del sistema (ver decisiones del paquete):
+ *   · Un solo acento por pantalla: --color-acento es la acción principal y el estado activo.
+ *   · Fondo casi neutro, sin gradientes ambientales: el verde queda para la marca y el acento.
+ *   · Sobre el acento o --color-error-fuerte, la tinta es --color-acento-tinta.
+ *   · --foco-anillo es un COLOR, para outline: 2px solid.
  */
 
 :root,
 [data-theme="alverde-botanical"] {
-  color-scheme: light;
+  --color-fondo: #f1f3ed;
+  --color-tinta: #1b2318;
+  --color-tinta-suave: #465042;
+  --color-tinta-apagada: #5f6a5a;
+  --color-acento: #2c6620;
+  --color-acento-tinta: #f7faf3;
+  --color-exito: #0e6472;
+  --color-aviso: #7f5c00;
+  --color-error: #b4234a;
+  --color-error-fuerte: #8e1b3a;
+  --color-linea: #dde2d6;
+  --color-hover: #1b23180d;
 
-  /* ---- 1. Paleta cruda (DESIGN.md → colors) ---- */
-  --ds-surface: #f2fde8;
-  --ds-surface-dim: #d3ddca;
-  --ds-surface-container-lowest: #ffffff;
-  --ds-surface-container-low: #ecf7e3;
-  --ds-surface-container: #e7f1dd;
-  --ds-surface-container-high: #e1ecd7;
-  --ds-surface-container-highest: #dbe6d2;
-  --ds-on-surface: #151e12;
-  --ds-on-surface-variant: #41493c;
-  --ds-inverse-surface: #2a3325;
-  --ds-outline: #717a6b;
-  --ds-outline-variant: #c0c9b8;
-  --ds-primary: #195e08;
-  --ds-primary-container: #347822;
-  --ds-on-primary: #ffffff;
-  --ds-secondary: #216d00;
-  --ds-secondary-container: #a3f87f;
-  --ds-tertiary: #7d4200;
-  --ds-tertiary-container: #a15600;
-  --ds-tertiary-fixed: #ffdcc3;
-  --ds-error: #ba1a1a;
-  --ds-error-container: #ffdad6;
-  --ds-on-error-container: #93000a;
-  --ds-surface-linen: #f9faf6;
-  --ds-surface-cream: #f2f7f0;
-  --ds-sprout-green: #72c052;
-  --ds-leaf-green: #55a437;
-  --ds-matcha-subtle: #e2efe0;
-  --ds-mint-mist: #eef7ed;
-  --ds-clay-amber: #b45309;
-  --ds-herbal-charcoal: #212a1d;
-  --ds-border-glass: rgba(255, 255, 255, 0.65);
-  --ds-border-glass-tint: rgba(52, 120, 34, 0.12);
+  --glass-fondo: #fbfcf9e6;
+  --glass-borde: #1b231817;
+  --glass-sombra: 0 1px 0 #1b23180d, 0 8px 24px -12px #1b231829;
 
-  /* ---- 2a. Fondo y tinta ---- */
-  --color-fondo: var(--ds-surface-linen);
-  --color-fondo-profundo: var(--ds-surface-container-lowest);
-  --color-tinta: var(--ds-on-surface);
-  --color-tinta-suave: var(--ds-inverse-surface);
-  --color-tinta-apagada: var(--ds-on-surface-variant); /* #41493c: 8.9:1 sobre linen (el outline #717a6b no llega a 4.5:1) */
+  --carta-fondo: #fbfcf9;
+  --carta-borde: #dfe4d8;
+  --carta-sombra: 0 1px 2px #1b23180f;
+  --carta-hover-sombra: 0 2px 4px #1b23180f, 0 8px 20px -6px #1b231824;
 
-  /* ---- 2b. Acentos ---- */
-  --color-acento: var(--ds-primary-container);        /* verde bosque: acción principal, foco, marca */
-  --color-acento-tinta: var(--ds-on-primary);
-  --color-dorado: var(--ds-clay-amber);
-  --color-verde-medio: var(--ds-leaf-green);
+  --input-fondo: #ffffff;
+  --input-borde: #7f8977;
+  --foco-anillo: #2c6620;
 
-  /* ---- 2c. Estados ---- */
-  --color-exito: var(--ds-secondary);
-  --color-exito-tinta: #ffffff;
-  --color-aviso: var(--ds-clay-amber);                 /* advertencias, fiado, vencimientos */
-  --color-aviso-tinta: #ffffff;
-  --color-error: var(--ds-error);
-  --color-error-fuerte: var(--ds-error);
-  --color-error-tinta: #ffffff;
-
-  /* ---- 2d. Lienzo y superficies (Elevation & Depth) ---- */
-  --fondo-pagina:
-    radial-gradient(circle at 8% 8%, var(--ds-matcha-subtle) 0, transparent 29rem),
-    radial-gradient(circle at 92% 92%, color-mix(in srgb, var(--ds-tertiary-fixed) 55%, transparent) 0, transparent 28rem),
-    var(--ds-surface-linen);
-  /* Surface 1: tarjetas y paneles de datos */
-  --glass-fondo: rgba(255, 255, 255, 0.82);
-  --glass-fondo-lite: rgba(255, 255, 255, 0.7);
-  --glass-fondo-opaco: #ffffff;                         /* html.sin-blur */
-  --glass-borde: var(--ds-border-glass-tint);
-  --glass-sombra: 0 4px 16px -2px rgba(33, 42, 29, 0.04), 0 2px 6px -1px rgba(33, 42, 29, 0.02);
-  --glass-blur: 8px;                                    /* calibrado por el diseño para netbooks de caja */
-  --glass-saturacion: 100%;
-  --carta-fondo: var(--glass-fondo);
-  --carta-borde: var(--ds-border-glass-tint);
-  --carta-sombra: var(--glass-sombra);
-  /* Surface 2: modales, cajón de la caja, selectores flotantes */
-  --carta-destacada-fondo: rgba(255, 255, 255, 0.92);
-  --carta-destacada-borde: rgba(255, 255, 255, 0.9);
-  --carta-destacada-sombra: 0 12px 32px -4px rgba(33, 42, 29, 0.1), 0 4px 12px -2px rgba(33, 42, 29, 0.05);
-  --carta-hover-sombra: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 8px 24px rgba(52, 120, 34, 0.08);
-  --backdrop: rgba(33, 42, 29, 0.35);
-
-  /* ---- 2e. Campos (Input Fields & Scale Barcode Scanners) ---- */
-  --input-fondo: rgba(255, 255, 255, 0.85);
-  --input-borde: rgba(52, 120, 34, 0.2);
-  --input-sombra: none;
-  --foco-anillo: 0 0 0 3px rgba(85, 164, 55, 0.18);
-
-  /* ---- 2f. Interacción, líneas y tablas ---- */
-  --color-hover: rgba(52, 120, 34, 0.06);
-  --color-linea: rgba(33, 42, 29, 0.08);
-  --color-badge-fondo: var(--ds-matcha-subtle);
-  --tabla-cabecera-fondo: var(--ds-surface-cream);
-  --tabla-cabecera-tinta: var(--ds-on-surface-variant);
-
-  /* ---- 2g. Botones (Components → Buttons) ---- */
-  --boton-sombra: inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  --boton-secundario-fondo: rgba(242, 247, 240, 0.7);
-  --boton-secundario-tinta: var(--ds-primary-container);
-  --boton-secundario-borde: rgba(52, 120, 34, 0.2);
-
-  /* ---- 2h. Tipografía: Plus Jakarta Sans (títulos) + Manrope (datos y cuerpo) ---- */
-  --fuente: "Manrope", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --fuente-titulos: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --fuente-datos: "Manrope", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --texto-xs: .75rem;                                   /* label-md 12px */
-  --texto-s: .875rem;                                   /* label-lg 14px */
-  --texto-m: .875rem;                                   /* body-md 14px */
-  --texto-l: 1.25rem;                                   /* headline-sm 20px */
-  --texto-titulo: clamp(1.625rem, 3vw + .75rem, 2.5rem);/* headline-lg-mobile 26px → display-lg 40px */
-  --titulo-tracking: -0.02em;
-  --titulo-peso: 700;
-
-  /* ---- 2i. Formas (Shapes: roundedness 2) ---- */
-  --radio-control: .5rem;
-  --radio-boton: .5rem;
-  --radio-panel: 1rem;
-  --radio-carta: 1rem;
-  --radio-carta-grande: 1.5rem;
-  --radio-pastilla: 9999px;
-
-  /* ---- 2j. Espaciado (múltiplos de 4px) ---- */
-  --esp-xs: .25rem;
-  --esp-s: .5rem;
-  --esp-m: 1rem;
-  --esp-l: 1.5rem;
-  --esp-xl: 2rem;
+  --boton-secundario-fondo: #e7ebe2;
+  --boton-sombra: 0 1px 2px #1b231829;
 }

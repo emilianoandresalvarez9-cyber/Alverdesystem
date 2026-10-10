@@ -29,8 +29,8 @@ export const THEME_LABELS: Record<ThemeId, string> = {
 
 /** Color de la barra del navegador / ventana PWA (<meta name="theme-color">). */
 export const THEME_COLORS: Record<ThemeId, string> = {
-  "alverde-botanical": "#f9faf6",
-  "midnight-bio": "#101410"
+  "alverde-botanical": "#f1f3ed",
+  "midnight-bio": "#111511"
 };
 
 /** Normaliza lo leído de localStorage: cualquier valor desconocido o corrupto cae al predeterminado. */
