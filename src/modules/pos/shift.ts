@@ -7,6 +7,7 @@ import type { CurrentShift } from "./types";
 
 const REGISTER_KEY = "pos-register";
 const SHIFT_KEY = "pos-current-shift";
+const shiftKey = (userId: string) => `${SHIFT_KEY}:${userId}`;
 
 export type RegisterOption = { id: string; name: string; branchName: string; branchId?: string };
 
@@ -36,8 +37,9 @@ export async function listRegisters(branchId: string | null = null): Promise<Reg
   });
 }
 
-export async function currentShift(): Promise<CurrentShift | undefined> {
-  return readSetting<CurrentShift>(SHIFT_KEY);
+export async function currentShift(userId: string): Promise<CurrentShift | undefined> {
+  if (!userId) return undefined;
+  return readSetting<CurrentShift>(shiftKey(userId));
 }
 
 /**
@@ -45,13 +47,14 @@ export async function currentShift(): Promise<CurrentShift | undefined> {
  * crea en la nube apenas haya red; las ventas lo referencian, por eso la sincronización lo
  * persiste antes de enviar la cola.
  */
-export async function openShift(register: RegisterOption, initialBalance: number): Promise<CurrentShift> {
-  const existing = await currentShift();
+export async function openShift(register: RegisterOption, initialBalance: number, userId: string): Promise<CurrentShift> {
+  const existing = await currentShift(userId);
   if (existing) return existing;
 
   const resumed = await findOwnOpenShift(register);
   const shift: CurrentShift = resumed ?? {
     id: crypto.randomUUID(),
+    ownerUserId: userId,
     registerId: register.id,
     registerName: register.name,
     ...(register.branchId ? { branchId: register.branchId } : {}),
@@ -59,7 +62,7 @@ export async function openShift(register: RegisterOption, initialBalance: number
     initialBalance,
     persisted: false
   };
-  await writeSetting(SHIFT_KEY, shift);
+  await writeSetting(shiftKey(userId), shift);
   if (!shift.persisted) {
     try {
       await persistShift();
@@ -67,11 +70,11 @@ export async function openShift(register: RegisterOption, initialBalance: number
       // La base rechazó el turno recién abierto (caja de otra sucursal, caja ocupada…). Todavía no
       // tiene ventas: se descarta en el equipo para no quedar trabado con un turno que nunca va a
       // existir en la nube. Sin conexión no llega acá: persistShift no intenta y el turno sigue.
-      if (!resumed) await writeSetting(SHIFT_KEY, undefined);
+      if (!resumed) await writeSetting(shiftKey(userId), undefined);
       throw error;
     }
   }
-  return (await currentShift()) ?? shift;
+  return (await currentShift(userId)) ?? shift;
 }
 
 /** Si la cajera dejó un turno abierto en esta caja (por ejemplo, se cortó la luz), lo retoma. */
@@ -89,6 +92,7 @@ async function findOwnOpenShift(register: RegisterOption): Promise<CurrentShift 
   if (!data) return undefined;
   return {
     id: data.id as string,
+    ownerUserId: auth.user.id,
     registerId: register.id,
     registerName: register.name,
     ...(register.branchId ? { branchId: register.branchId } : {}),
@@ -100,11 +104,12 @@ async function findOwnOpenShift(register: RegisterOption): Promise<CurrentShift 
 
 /** Crea en la nube el turno abierto sin conexión. Idempotente. */
 export async function persistShift(): Promise<void> {
-  const shift = await currentShift();
-  if (!shift || shift.persisted || !navigator.onLine) return;
-
   const { data: auth } = await getSupabase().auth.getUser();
   if (!auth.user) return;
+  const shift = await currentShift(auth.user.id);
+  if (!shift || shift.persisted || !navigator.onLine) return;
+
+  if (shift.ownerUserId && shift.ownerUserId !== auth.user.id) return;
 
   const { error } = await getSupabase().from("cash_shifts").upsert(
     {
@@ -122,7 +127,7 @@ export async function persistShift(): Promise<void> {
     }
     throw new Error(`No se pudo registrar el turno: ${error.message}`);
   }
-  await writeSetting(SHIFT_KEY, { ...shift, persisted: true });
+  await writeSetting(shiftKey(auth.user.id), { ...shift, ownerUserId: auth.user.id, persisted: true });
 }
 
 registerPreSyncStep(persistShift);
@@ -140,13 +145,13 @@ export type CloseResult =
  * turno en la nube y descarga el respaldo. Sin conexión no se cierra: las ventas siguen a salvo
  * en el dispositivo y el turno queda abierto hasta poder enviarlas.
  */
-export async function closeShift(): Promise<CloseResult> {
-  const shift = await currentShift();
+export async function closeShift(userId: string): Promise<CloseResult> {
+  const shift = await currentShift(userId);
   if (!shift) throw new Error("No hay un turno abierto en este equipo.");
 
   await synchronizePendingOperations();
   const summary = await shiftSummary(shift);
-  const refreshed = await currentShift();
+  const refreshed = await currentShift(userId);
 
   if (!navigator.onLine || !refreshed?.persisted) {
     return { closed: false, summary, reason: "Para cerrar el turno hace falta conexión. Las ventas siguen guardadas en este equipo." };
@@ -181,6 +186,6 @@ export async function closeShift(): Promise<CloseResult> {
     backupError = error instanceof Error ? error.message : "No se pudo generar el respaldo.";
   }
 
-  await writeSetting(SHIFT_KEY, undefined);
+  await writeSetting(shiftKey(userId), undefined);
   return { closed: true, summary, expectedCash, ...(backupError ? { backupError } : {}) };
 }
