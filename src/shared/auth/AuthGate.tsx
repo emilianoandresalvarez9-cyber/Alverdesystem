@@ -2,6 +2,7 @@ import { createContext, type PropsWithChildren, useContext, useEffect, useState 
 import { hasSupabaseConfig } from "../config/env";
 import { currentProfile, currentSession, readLastProfile, storeLastProfile } from "./session";
 import { canAccess, homeFor, type AppRole, type Profile } from "./roles";
+import { EmptyState } from "../ui/EmptyState";
 
 /** Exportado para que los tests rendericen el shell sin pasar por Supabase. */
 export const ProfileContext = createContext<Profile | null>(null);
@@ -47,7 +48,13 @@ export function AuthGate({ requiredRole, children }: AuthGateProps) {
   }, [requiredRole]);
 
   if (!profile) {
-    return <main className="login-page"><p className="glass loading-card">Comprobando acceso…</p></main>;
+    return (
+      <main className="login" aria-busy="true">
+        <div className="carta login__carta" role="status">
+          <EmptyState title="Comprobando acceso…" icon="lock" />
+        </div>
+      </main>
+    );
   }
 
   return <ProfileContext.Provider value={profile}>{children}</ProfileContext.Provider>;
