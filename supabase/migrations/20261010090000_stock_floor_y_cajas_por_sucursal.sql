@@ -58,6 +58,45 @@ create trigger stock_lots_negative_floor
 comment on function public.guard_stock_lot_negative_floor() is
   'RF-38: limita el stock neto por presentación y sucursal a -10; serializa las mutaciones para evitar sobreventa concurrente.';
 
+
+-- La nueva política de lectura de cajas oculta sucursales ajenas. El trigger necesita leer el
+-- nombre de esa caja para devolver un error útil; lo hace como definer, validando el JWT activo.
+create or replace function public.guard_cash_shift_branch()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $
+declare
+  v_register_branch uuid;
+  v_register_branch_name text;
+  v_register_name text;
+begin
+  if auth.uid() is null or not public.is_active_staff() or public.is_administrator() then
+    return new;
+  end if;
+  if tg_op = 'UPDATE' and new.register_id is not distinct from old.register_id then
+    return new;
+  end if;
+
+  select r.branch_id, b.name, r.name
+    into v_register_branch, v_register_branch_name, v_register_name
+  from public.registers r
+  join public.branches b on b.id = r.branch_id
+  where r.id = new.register_id;
+
+  if v_register_branch is distinct from public.current_branch_id() then
+    raise exception '% es de la sucursal %, y tu usuario trabaja en otra. Usá una caja de tu sucursal o pedile a administración que te asigne a %.',
+      coalesce(v_register_name, 'La caja'), coalesce(v_register_branch_name, '(desconocida)'), coalesce(v_register_branch_name, 'esa sucursal')
+      using errcode = '42501';
+  end if;
+  return new;
+end;
+$;
+revoke all on function public.guard_cash_shift_branch() from public, anon, authenticated;
+comment on function public.guard_cash_shift_branch() is
+  'RF-66: valida la sucursal del turno y obtiene el nombre de cajas ajenas sin exponerlas mediante RLS.';
+
 -- RLS también limita la lectura de cajas, no alcanza con que la interfaz filtre la lista.
 drop policy if exists "personal activo lee cajas" on public.registers;
 drop policy if exists "personal activo lee cajas de su sucursal" on public.registers;
