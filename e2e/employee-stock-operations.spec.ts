@@ -14,9 +14,12 @@ test("Empleado puede ingresar, fraccionar y ajustar stock desde Stock", async ({
   await expect(page).toHaveURL(/\/stock\.html(?:$|[?#])/);
   await expect(page.getByRole("heading", { name: "Ingreso rápido" })).toBeVisible();
 
-  const sourceLot = page.getByRole("row", { name: /Lenteja E2E.*Granel E2E/ });
+  const sourceGroup = page.getByRole("row", { name: /Lenteja E2E.*Granel E2E/ });
+  await expect(sourceGroup).toBeVisible();
+  await sourceGroup.getByRole("button", { name: /Ver \\d+ lotes/ }).click();
+  const sourceLot = page.getByRole("row", { name: /Más acciones para Lenteja E2E/ });
   await expect(sourceLot).toBeVisible();
-  // Todas las acciones del lote están en «Más acciones» (la que corresponde además va a la vista).
+  // Los detalles conservan las acciones particulares de cada lote.
   const lotAction = async (name: string) => {
     await sourceLot.getByRole("button", { name: "Más acciones para Lenteja E2E" }).click();
     await page.getByRole("group", { name: "Más acciones para Lenteja E2E" }).getByRole("button", { name }).click();
