@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { ActionsMenu, Badge, Button, EmptyState, useCompact, type MenuAction } from "../../shared/ui";
 import type { IconName } from "../../shared/ui";
 import { LotStatusBadge } from "./LotStatusBadge";
@@ -57,6 +57,7 @@ export function StockLotsTable({
   enableFractioning = false,
   onFraction
 }: StockLotsTableProps) {
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set());
   const [lotToAdjust, setLotToAdjust] = useState<StockLot | null>(null);
   const [lotToTransfer, setLotToTransfer] = useState<StockLot | null>(null);
   const compact = useCompact();
@@ -95,7 +96,6 @@ export function StockLotsTable({
   );
   const stock = (lot: StockLot) => `${formatAmount(lot.current_quantity)} / ${formatAmount(lot.initial_quantity)} ${unitLabel(lot.base_unit)}`;
 
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set());
   const groups = Array.from(lots.reduce((map, lot) => {
     const key = `${lot.branch_id ?? "sin-sucursal"}:${lot.presentation_id}`;
     const group = map.get(key) ?? { key, lots: [] as StockLot[] };
@@ -172,8 +172,8 @@ export function StockLotsTable({
                 const expiries = group.lots.filter((lot) => lot.effective_expiry_date).sort((a, b) => a.effective_expiry_date!.localeCompare(b.effective_expiry_date!));
                 const nextExpiry = expiries[0];
                 const left = remaining(group.lots.reduce((sum, lot) => sum + lot.current_quantity, 0), group.lots.reduce((sum, lot) => sum + lot.initial_quantity, 0));
-                return <>
-                  <tr key={group.key}>
+                return <Fragment key={group.key}>
+                  <tr>
                     <td><div className="celda"><span className="celda__titulo">{first.product_name}</span><span className="suave">{meta(first)}</span></div></td>
                     <td><div className="celda"><span className="cifra">{groupedStock(group)}</span>
                       <span className={left.tone === "normal" ? "medidor lote__medidor" : `medidor medidor--${left.tone} lote__medidor`}
@@ -201,7 +201,7 @@ export function StockLotsTable({
                       </div></td>
                     </tr>;
                   })}
-                </>;
+                </Fragment>;
               })}
             </tbody>
           </table>
