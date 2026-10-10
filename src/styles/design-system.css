@@ -684,3 +684,9 @@ dialog.modal.modal--ancho { width: min(720px, 100%); }
   .app-main { overflow: visible; }
   .app-content { padding: 0; }
 }
+
+/* «Más acciones» de una fila: fijo respecto del botón, para que una tabla con scroll no lo recorte. */
+.menu--flotante { position: fixed; z-index: 40; }
+.menu button:disabled { opacity: 0.5; cursor: not-allowed; }
+.menu button:disabled:hover { background: transparent; }
+.menu__motivo { margin: calc(var(--esp-xs) * -1) 0 var(--esp-xs); padding: 0 calc(var(--esp-s) + var(--esp-xs)) 0 calc(var(--esp-s) * 2 + var(--esp-xs) + 20px); max-width: 260px; font: 400 var(--texto-xs)/16px var(--fuente); color: var(--color-tinta-apagada); }

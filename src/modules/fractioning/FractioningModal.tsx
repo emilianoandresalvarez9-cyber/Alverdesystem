@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { useCurrentProfile } from "../../shared/auth/AuthGate";
-import { Modal, Button, TextField, SelectField, GlassCard, Badge } from "../../shared/ui";
+import { Modal, Button, Message, Options, TextField, SelectField } from "../../shared/ui";
+import { formatQuantity, unitLabel } from "../stock/format";
+import "../../styles/stock.css";
 import { getSupabase } from "../../shared/supabase/client";
 import { loadCatalogSnapshot } from "../../shared/offline/queue";
 import { queueStockOperation, watchStockOperationSync } from "../stock/offlineStock";
@@ -182,139 +184,103 @@ export function FractioningModal({ originLot, open, onClose, onSuccess }: Fracti
 
   if (!originLot) return null;
 
+  const unit = originLot.base_unit;
+
   return (
     <Modal
       open={open}
-      title="Fraccionamiento de Mercadería"
+      title="Fraccionamiento de mercadería"
+      subtitle={<>{originLot.product_name} · {originLot.presentation_name} · bolsa de <span className="cifra">{formatQuantity(originLot.current_quantity, unit)}</span></>}
       onClose={onClose}
       footer={
         <>
-          <Button variant="fantasma" onClick={onClose} disabled={loading}>
-            Cancelar
-          </Button>
+          <Button variant="fantasma" onClick={onClose} disabled={loading}>Cancelar</Button>
           <Button
-            variant="primario"
+            icon="call_split"
             onClick={handleSubmit}
-            disabled={loading || Boolean(statusMessage) || !calc || overCapacity || emptyButMarkedOpen || invalidRealRemaining || targetPresentations.length === 0}
+            loading={loading}
+            disabled={Boolean(statusMessage) || !calc || overCapacity || emptyButMarkedOpen || invalidRealRemaining || targetPresentations.length === 0}
           >
-            {loading ? "Guardando..." : statusMessage ? "Fraccionamiento guardado" : "Confirmar Fraccionamiento"}
+            {loading ? "Guardando…" : statusMessage ? "Fraccionamiento guardado" : "Confirmar fraccionamiento"}
           </Button>
         </>
       }
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--esp-m)" }}>
-        
-        {/* Contexto de Origen */}
-        <div style={{ padding: "var(--esp-s)", background: "var(--glass-fondo-lite)", borderRadius: "var(--radio-panel)" }}>
-          <p style={{ margin: 0, fontSize: "var(--texto-s)", color: "var(--color-tinta-suave)" }}>Lote de Origen:</p>
-          <div style={{ fontWeight: 700, fontSize: "var(--texto-m)" }}>{originLot.product_name} - {originLot.presentation_name}</div>
-          <div style={{ marginTop: 4 }}>
-            <Badge tone="neutro">Disp: {originLot.current_quantity} {originLot.base_unit}</Badge>
-          </div>
-        </div>
+      {error && <Message tone="error">{error}</Message>}
+      {statusMessage && <Message tone="aviso">{statusMessage}</Message>}
 
-        {error && (
-          <p role="alert" style={{ color: "var(--color-error)", margin: 0 }}>{error}</p>
-        )}
-        {statusMessage && <p role="status" style={{ color: "var(--color-aviso)", margin: 0 }}>{statusMessage}</p>}
+      {targetPresentations.length === 0 ? (
+        <Message tone="aviso">Este producto no tiene otras presentaciones (bolsitas) en el catálogo. No se puede fraccionar.</Message>
+      ) : (
+        <>
+          <SelectField
+            label="Presentación destino"
+            value={selectedPresentationId}
+            onChange={(e) => setSelectedPresentationId(e.target.value)}
+          >
+            {targetPresentations.map((p) => (
+              <option key={p.presentation_id} value={p.presentation_id}>
+                {p.presentation_name} ({formatQuantity(p.base_quantity, p.base_unit)} c/u)
+              </option>
+            ))}
+          </SelectField>
 
-        {targetPresentations.length === 0 ? (
-          <GlassCard style={{ padding: "var(--esp-m)" }}>
-            <p style={{ margin: 0, color: "var(--color-aviso)" }}>
-              Este producto no tiene otras presentaciones (bolsitas) creadas en el catálogo. No se puede fraccionar.
-            </p>
-          </GlassCard>
-        ) : (
-          <>
-            <SelectField
-              label="Presentación destino"
-              value={selectedPresentationId}
-              onChange={(e) => setSelectedPresentationId(e.target.value)}
-            >
-              {targetPresentations.map((p) => (
-                <option key={p.presentation_id} value={p.presentation_id}>
-                {p.presentation_name} ({p.base_quantity} {p.base_unit}/u)
-                </option>
-              ))}
-            </SelectField>
+          <TextField
+            label="Cantidad de bolsitas generadas"
+            type="number"
+            numeric
+            suffix="u"
+            min="1"
+            step="1"
+            value={packetsToProduce}
+            onChange={(e) => setPacketsToProduce(e.target.value)}
+            placeholder="Ej: 15"
+            error={overCapacity ? "Stock insuficiente en el lote de origen para esa cantidad." : undefined}
+          />
 
+          {emptyButMarkedOpen && (
+            <Message tone="error">La bolsa quedaría vacía. Marcala como terminada para cerrar el lote.</Message>
+          )}
+
+          {/* RF-15: pregunta de cierre */}
+          <Options
+            name="bolsa-origen"
+            legend="¿La bolsa de origen queda abierta o se terminó?"
+            showLegend
+            variant="segmento"
+            value={bagFinished ? "terminada" : "abierta"}
+            onChange={(value) => setBagFinished(value === "terminada")}
+            options={[{ value: "abierta", label: "Queda abierta" }, { value: "terminada", label: "Se terminó" }]}
+          />
+
+          {bagFinished && (
             <TextField
-              label="Cantidad de bolsitas generadas"
+              label="Cantidad real que quedó en la bolsa"
               type="number"
-              min="1"
-              step="1"
-              value={packetsToProduce}
-              onChange={(e) => setPacketsToProduce(e.target.value)}
-              placeholder="Ej: 15"
+              numeric
+              suffix={unitLabel(unit)}
+              min="0"
+              max={Math.max(0, theoreticalRemaining)}
+              step="0.001"
+              value={realRemainingQuantity}
+              onChange={(e) => setRealRemainingQuantity(e.target.value)}
+              error={invalidRealRemaining ? `Ingresá un remanente entre 0 y ${formatQuantity(Math.max(0, theoreticalRemaining), unit)}.` : undefined}
+              help="La diferencia con el remanente teórico queda registrada como merma."
             />
+          )}
 
-            {overCapacity && (
-              <p style={{ color: "var(--color-error)", fontSize: "var(--texto-s)", margin: 0 }}>
-                Stock insuficiente en el lote origen para esta cantidad.
-              </p>
-            )}
-            {emptyButMarkedOpen && (
-              <p role="alert" style={{ color: "var(--color-error)", fontSize: "var(--texto-s)", margin: 0 }}>
-                La bolsa quedaría vacía. Marcala como terminada para cerrar el lote.
-              </p>
-            )}
-
-            {/* RF-15: Pregunta de cierre */}
-            <SelectField
-              label="¿La bolsa de origen queda abierta o se terminó? (RF-15)"
-              value={bagFinished ? "terminada" : "abierta"}
-              onChange={(e) => setBagFinished(e.target.value === "terminada")}
-            >
-              <option value="abierta">Queda abierta (tiene más stock utilizable)</option>
-              <option value="terminada">Se terminó (vacía / descartada)</option>
-            </SelectField>
-
-            {bagFinished && (
-              <TextField
-                label={`Cantidad real que quedó en la bolsa (${originLot.base_unit})`}
-                type="number"
-                min="0"
-                max={Math.max(0, theoreticalRemaining)}
-                step="0.001"
-                value={realRemainingQuantity}
-                onChange={(e) => setRealRemainingQuantity(e.target.value)}
-                error={invalidRealRemaining ? `Ingresá un remanente entre 0 y ${Math.max(0, theoreticalRemaining)} ${originLot.base_unit}.` : undefined}
-                help="La diferencia con el remanente teórico queda registrada como merma (RF-16)."
-              />
-            )}
-
-            {/* Vista previa de cálculos (RF-14, RF-16) */}
-            {calc && !overCapacity && (
-              <div style={{ 
-                padding: "var(--esp-m)", 
-                background: "var(--color-fondo)", 
-                border: "1px solid var(--glass-borde)",
-                borderRadius: "var(--radio-panel)",
-                display: "flex", flexDirection: "column", gap: "var(--esp-xs)"
-              }}>
-                <div style={{ fontSize: "var(--texto-s)", display: "flex", justifyContent: "space-between" }}>
-                  <span>Gramos a descontar:</span>
-                  <strong>{calc.gramsNeeded} {originLot.base_unit}</strong>
-                </div>
-                
-                {bagFinished && calc.merma > 0 && (
-                  <div style={{ fontSize: "var(--texto-s)", display: "flex", justifyContent: "space-between", color: "var(--color-error)" }}>
-                    <span>Merma (RF-16):</span>
-                    <strong>{calc.merma} {originLot.base_unit}</strong>
-                  </div>
-                )}
-                
-                <div style={{ fontSize: "var(--texto-s)", display: "flex", justifyContent: "space-between", marginTop: "var(--esp-xs)", paddingTop: "var(--esp-xs)", borderTop: "1px dashed var(--glass-borde)" }}>
-                  <span>Stock resultante en origen:</span>
-                  <strong>{calc.newOriginQuantity} {originLot.base_unit}</strong>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </div>
+          {/* Cuenta antes de confirmar (RF-14, RF-16) */}
+          {calc && !overCapacity && (
+            <div className="cuenta" aria-label="Cuenta del fraccionamiento">
+              <p className="par"><span>A descontar de la bolsa</span><span className="cifra">{formatQuantity(calc.gramsNeeded, unit)}</span></p>
+              {bagFinished && calc.merma > 0 && (
+                <p className="par par--error"><span>Merma</span><span className="cifra">{formatQuantity(calc.merma, unit)}</span></p>
+              )}
+              <p className="par par--total"><span>Queda en la bolsa de origen</span><span className="cifra">{formatQuantity(calc.newOriginQuantity, unit)}</span></p>
+            </div>
+          )}
+        </>
+      )}
     </Modal>
   );
 }
-
-

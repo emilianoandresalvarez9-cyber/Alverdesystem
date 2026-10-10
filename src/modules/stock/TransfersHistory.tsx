@@ -2,17 +2,18 @@ import { useEffect, useState } from "react";
 import { getSupabase } from "../../shared/supabase/client";
 import { useBranch } from "../../shared/branch/BranchContext";
 import type { Database } from "../../shared/supabase/database.types";
-import { EmptyState, GlassCard } from "../../shared/ui";
+import { EmptyState, Message, useCompact } from "../../shared/ui";
+import { formatQuantity } from "./format";
 
 type Row = Database["public"]["Functions"]["stock_transfers_list"]["Returns"][number];
-const DATE = new Intl.DateTimeFormat("es-AR", { dateStyle: "short", timeStyle: "short" });
-const UNIT: Record<string, string> = { gram: "g", millilitre: "ml", unit: "u." };
+const DATE = new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
 
 /** RF-68: quién traspasó qué, cuánto, de dónde y a dónde. Solo administradora. */
 export function TransfersHistory({ refreshKey = 0 }: { refreshKey?: number }) {
   const { filterId, branches, isAdmin } = useBranch();
   const [rows, setRows] = useState<Row[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const compact = useCompact();
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -24,30 +25,44 @@ export function TransfersHistory({ refreshKey = 0 }: { refreshKey?: number }) {
   }, [filterId, isAdmin, refreshKey]);
 
   if (!isAdmin || branches.length < 2) return null;
+  const when = (iso: string) => DATE.format(new Date(iso)).replace(",", "");
   return (
-    <GlassCard>
-      <h3 style={{ marginTop: 0 }}>Traspasos entre sucursales (RF-68)</h3>
-      {error && <p className="form-error" role="alert">{error}</p>}
-      {rows && rows.length === 0 && <EmptyState title="Todavía no hubo traspasos" />}
-      {rows && rows.length > 0 && (
-        <div className="table-wrap">
-          <table>
-            <thead><tr><th>Cuándo</th><th>Producto</th><th>Cantidad</th><th>Desde → Hacia</th><th>Quién</th><th>Nota</th></tr></thead>
+    <section className="carta carta--sin-relleno" aria-labelledby="traspasos-titulo">
+      <div className="carta__cabecera"><h2 className="titulo-seccion" id="traspasos-titulo">Traspasos entre sucursales</h2></div>
+      {error && <div className="lotes__mensaje"><Message tone="error">{error}</Message></div>}
+      {rows && rows.length === 0 && <EmptyState title="Todavía no hubo traspasos" icon="swap_horiz" />}
+      {rows && rows.length > 0 && (compact ? (
+        <ul className="lista lista--plana">
+          {rows.map((r) => (
+            <li key={r.id}>
+              <div className="lista__principal">
+                <span className="lista__titulo">{r.product_name} · {r.presentation_name}</span>
+                <span className="lista__meta">{r.from_branch_name} → {r.to_branch_name} · {r.user_name} · <span className="cifra">{when(r.created_at)}</span></span>
+                {r.note && <span className="lista__meta">{r.note}</span>}
+              </div>
+              <span className="lista__valor">{formatQuantity(Number(r.quantity), r.base_unit)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="tabla-marco">
+          <table className="tabla tabla--compacta">
+            <thead><tr><th>Cuándo</th><th>Producto</th><th className="num">Cantidad</th><th>Desde → hacia</th><th>Quién</th><th>Nota</th></tr></thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.id}>
-                  <td style={{ whiteSpace: "nowrap" }}>{DATE.format(new Date(r.created_at))}</td>
-                  <td>{r.product_name}<br /><span className="field-help">{r.presentation_name}</span></td>
-                  <td>{Number(r.quantity)} {UNIT[r.base_unit] ?? r.base_unit}</td>
-                  <td>{r.from_branch_name} → <strong>{r.to_branch_name}</strong></td>
+                  <td className="cifra">{when(r.created_at)}</td>
+                  <td>{r.product_name} · {r.presentation_name}</td>
+                  <td className="num">{formatQuantity(Number(r.quantity), r.base_unit)}</td>
+                  <td className="nowrap">{r.from_branch_name} → {r.to_branch_name}</td>
                   <td>{r.user_name}</td>
-                  <td>{r.note ?? "—"}</td>
+                  <td className="suave">{r.note ?? "—"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      )}
-    </GlassCard>
+      ))}
+    </section>
   );
 }

@@ -4,9 +4,10 @@ import { useBranch } from "../../shared/branch/BranchContext";
 import { getSupabase } from "../../shared/supabase/client";
 import { loadCatalogSnapshot } from "../../shared/offline/queue";
 import { queueStockOperation, watchStockOperationSync } from "../stock/offlineStock";
-import { Button, TextField, GlassCard, Badge } from "../../shared/ui";
+import { Button, Icon, Message, TextField } from "../../shared/ui";
 import type { PresentationLookupResult } from "./types";
 import type { CatalogProduct } from "../catalog/types";
+import "../../styles/stock.css";
 
 interface QuickRestockProps {
   onSuccess?: () => void;
@@ -185,39 +186,43 @@ export function QuickRestock({ onSuccess }: QuickRestockProps) {
   };
 
   return (
-    <GlassCard>
-      <h3 style={{ margin: "0 0 var(--esp-m)" }}>Ingreso Rápido de Mercadería (RF-51)</h3>
-      <p>El costo del lote se calcula con el costo por envase y contenido del proveedor principal del producto. Si falta esa información, el lote queda sin costo y no se muestra un margen desactualizado.</p>
-      {needsBranch
-        ? <p className="notice" role="status">Estás viendo todas las sucursales. Para ingresar mercadería elegí una sucursal en la barra lateral.</p>
-        : <p className="field-help">La mercadería entra en <strong>{branch.label}</strong>.</p>}
-      <form onSubmit={handleSearch} style={{ display: "flex", gap: "var(--esp-s)", flexWrap: "wrap", alignItems: "flex-end" }}>
+    <section className="carta pila" aria-labelledby="ingreso-titulo">
+      <div className="fila fila--entre">
+        <h2 className="titulo-seccion" id="ingreso-titulo">Ingreso rápido</h2>
+        {!needsBranch && <p className="meta">La mercadería entra en <strong className="fuerte">{branch.label}</strong>.</p>}
+      </div>
+      {needsBranch && (
+        <Message tone="aviso">Elegí en qué sucursal entra la mercadería: estás viendo todas las sucursales.</Message>
+      )}
+      <form onSubmit={handleSearch} className="ingreso__busqueda">
         <TextField
+          className="crece"
           label="Escanear código de barras"
-          placeholder="Código de barras fabricante o interno..."
+          icon="barcode_scanner"
+          placeholder="Código de fabricante o interno"
           value={barcode}
           onChange={(e) => setBarcode(e.target.value)}
           autoFocus
         />
-        <Button variant="primario" type="submit" disabled={searching || !barcode.trim()}>
-          {searching ? "Buscando..." : "Buscar"}
+        <Button variant="secundario" icon="search" type="submit" disabled={searching || !barcode.trim()}>
+          {searching ? "Buscando…" : "Buscar"}
         </Button>
       </form>
 
-      {error && <p role="alert" style={{ color: "var(--color-error)", marginTop: "var(--esp-s)" }}>{error}</p>}
-      {successMsg && <p role="status" style={{ color: "var(--color-exito)", marginTop: "var(--esp-s)" }}>{successMsg}</p>}
+      {error && <Message tone="error">{error}</Message>}
+      {successMsg && <Message tone="exito">{successMsg}</Message>}
 
       {foundPresentation && (
-        <div style={{ marginTop: "var(--esp-m)", padding: "var(--esp-m)", borderRadius: "var(--radio-panel)", background: "var(--glass-fondo-lite)" }}>
-          <div style={{ display: "flex", gap: "var(--esp-s)", alignItems: "center", marginBottom: "var(--esp-s)" }}>
-            <span style={{ fontWeight: 700, fontSize: "var(--texto-l)" }}>{foundPresentation.product_name}</span>
-            <Badge tone="exito">{foundPresentation.presentation_name}</Badge>
-          </div>
-
-          <div style={{ display: "flex", gap: "var(--esp-s)", flexWrap: "wrap", alignItems: "flex-end" }}>
+        <div className="pila ingreso__encontrado">
+          <p className="fila">
+            <Icon name="check_circle" />
+            <span><strong className="fuerte">{foundPresentation.product_name}</strong> <span className="suave">· {foundPresentation.presentation_name}</span></span>
+          </p>
+          <form className="form-fila" onSubmit={(e) => { e.preventDefault(); void handleRestock(); }}>
             <TextField
               label="Cantidad a ingresar"
               type="number"
+              numeric
               min="0.001"
               step={0.001}
               value={quantity}
@@ -229,18 +234,15 @@ export function QuickRestock({ onSuccess }: QuickRestockProps) {
               value={expiryDate}
               onChange={(e) => setExpiryDate(e.target.value)}
             />
-            <Button variant="primario" onClick={handleRestock} disabled={loading || !quantity || needsBranch}>
-              {loading ? "Guardando..." : "Ingresar Lote"}
-            </Button>
-            <Button variant="fantasma" onClick={() => setFoundPresentation(null)}>
-              Cancelar
-            </Button>
-          </div>
+            <div className="fila ingreso__acciones">
+              <Button variant="fantasma" onClick={() => setFoundPresentation(null)}>Cancelar</Button>
+              <Button type="submit" icon="add" loading={loading} disabled={!quantity || needsBranch}>
+                {loading ? "Guardando…" : "Ingresar lote"}
+              </Button>
+            </div>
+          </form>
         </div>
       )}
-    </GlassCard>
+    </section>
   );
 }
-
-
-
