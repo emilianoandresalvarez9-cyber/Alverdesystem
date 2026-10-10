@@ -33,7 +33,7 @@ export function ProductCard({ product, onToggle, expanded = false, actions }: Pr
         <span className="product-card__name">{product.name}</span>
         {lowestPrice != null && (
           <span className="product-card__price">
-            desde <strong>${lowestPrice.toLocaleString("es-AR")}</strong>
+            desde <strong className="pos-num">${lowestPrice.toLocaleString("es-AR")}</strong>
           </span>
         )}
       </span>
@@ -60,7 +60,8 @@ export function ProductCard({ product, onToggle, expanded = false, actions }: Pr
         <span className="product-card__presentations">
           {product.presentations.filter(p => p.active).map(pr => (
             <span key={pr.id} className="product-card__presentation">
-              {pr.name} — {presentationPriceLabel(pr, ars)}{pr.sold_by_weight ? " · Balanza" : ""}
+              <span>{pr.name}{pr.sold_by_weight ? <Badge tone="neutro" className="product-card__scale">Balanza</Badge> : null}</span>
+              <span className="pos-num">{presentationPriceLabel(pr, ars)}</span>
             </span>
           ))}
         </span>
