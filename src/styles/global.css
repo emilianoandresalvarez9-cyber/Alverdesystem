@@ -2,9 +2,8 @@
  * Alverde · hoja global (RNF-06 a RNF-09)
  * ---------------------------------------
  * Orden: fuentes → tokens → temas → sistema de diseño (design-system.css).
- * Después va el PUENTE: estilos para el marcado que todavía no pasó a las clases
- * del sistema (Ingreso y la espera de AuthGate). Usan sólo tokens, así ya toman los
- * colores y las letras nuevas. Cada PR de página reemplaza su marcado y borra de acá lo que deja de usar.
+ * Todas las páginas usan las clases del sistema; los ajustes propios de cada una van
+ * en su hoja (pos.css, catalog.css, stock.css, customers.css, admin.css), sólo con tokens.
  */
 
 @import "./fonts.css";
@@ -12,68 +11,3 @@
 @import "./themes/alverde-botanical.css";
 @import "./themes/midnight-bio.css";
 @import "./design-system.css";
-
-/* ===================================================================== */
-/* PUENTE · marcado anterior                                              */
-/* ===================================================================== */
-
-a { color: inherit; }
-code { font-family: var(--fuente-datos); font-size: .95em; color: var(--color-tinta-suave); }
-
-/* Superficies: sin desenfoque (sólo cabecera y modal lo tienen) */
-.glass {
-  background: var(--carta-fondo);
-  border: 1px solid var(--carta-borde);
-  border-radius: var(--radio-carta);
-  box-shadow: var(--carta-sombra);
-}
-
-/* Títulos y párrafos sin clase: los del sistema siempre llevan clase */
-h1:not([class]) { margin: 0 0 var(--esp-l); font: 600 var(--texto-titulo)/32px var(--fuente-titulos); letter-spacing: -0.01em; }
-p:not([class]) { margin: 0 0 var(--esp-s); line-height: 1.5; }
-
-/* Formularios sin clase */
-form:not([class]) { display: grid; gap: var(--esp-m); }
-label:not([class]) { display: grid; gap: var(--esp-s); font: 600 var(--texto-s)/20px var(--fuente); color: var(--color-tinta-suave); }
-:is(input:not([type="checkbox"], [type="radio"], [type="file"]), select, textarea):not(.entrada *, .selector *, .opcion *, .casilla *) {
-  width: 100%;
-  min-height: 44px;
-  padding: 0 var(--esp-m);
-  border: 1px solid var(--input-borde);
-  border-radius: var(--radio-control);
-  background: var(--input-fondo);
-  color: var(--color-tinta);
-  font: 400 var(--texto-m)/24px var(--fuente);
-  font-variant-numeric: tabular-nums;
-}
-textarea:not(.entrada *) { padding: var(--esp-s) var(--esp-m); }
-:is(input, select, textarea):not(.entrada *, .selector *, .opcion *, .casilla *):focus-visible { outline: 2px solid var(--foco-anillo); outline-offset: 1px; border-color: var(--foco-anillo); }
-:is(input, select, textarea)[aria-invalid="true"]:not(.entrada *, .selector *) { border-color: var(--color-error); }
-input::placeholder { color: var(--color-tinta-apagada); opacity: 1; }
-
-.form-error { margin: 0; font: 500 var(--texto-s)/20px var(--fuente); color: var(--color-error); }
-
-/* Avisos: el aspecto de .mensaje, neutro */
-.notice {
-  margin: 0;
-  padding: calc(var(--esp-s) + var(--esp-xs)) var(--esp-m);
-  border: 1px solid var(--color-linea);
-  border-radius: var(--radio-control);
-  background: var(--boton-secundario-fondo);
-  color: var(--color-tinta);
-  font: 500 var(--texto-s)/20px var(--fuente);
-}
-.notice p { margin: 0; }
-
-/* Cargando (Comprobando acceso…, hasta el PR de Ingreso) */
-.loading-card { padding: var(--esp-xl); border-radius: var(--radio-carta); font: 500 var(--texto-s)/20px var(--fuente); color: var(--color-tinta-apagada); animation: esqueleto 1.2s ease-in-out infinite alternate; }
-@media (prefers-reduced-motion: reduce) { .loading-card { animation: none; } }
-
-/* Ingreso (hasta su PR) */
-.login-page { position: relative; display: grid; min-height: 100vh; padding: var(--esp-l); place-items: center; }
-.login-theme { position: absolute; top: var(--esp-l); right: var(--esp-l); }
-.login-card { width: min(100%, 400px); padding: var(--esp-l); }
-.brand { display: inline-flex; align-items: center; gap: var(--esp-s); font: 700 var(--texto-titulo)/32px var(--fuente-titulos); letter-spacing: -0.02em; color: var(--color-acento); }
-.brand-mark { display: none; }
-.lockup { margin-bottom: var(--esp-l); }
-.eyebrow { margin: 0 0 var(--esp-xs); font: 600 var(--texto-xs)/16px var(--fuente); letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-tinta-apagada); }

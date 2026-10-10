@@ -3,7 +3,12 @@ import { hasSupabaseConfig } from "../shared/config/env";
 import { signIn, signOut, currentSession, currentProfile, storeLastProfile } from "../shared/auth/session";
 import { homeFor } from "../shared/auth/roles";
 import { ThemeToggle } from "../shared/theme/ThemeToggle";
+import { Button, Message, TextField } from "../shared/ui";
 
+/**
+ * Ingresar (IngresarEscritorio / IngresarCelular del sistema de diseño): marca, título, correo,
+ * contraseña e Ingresar. El tema se elige abajo, antes de entrar.
+ */
 export function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -35,25 +40,29 @@ export function LoginPage() {
   }
 
   return (
-    <main className="login-page">
-      <div className="login-theme"><ThemeToggle /></div>
-      <section className="login-card glass">
-        <div className="brand lockup"><span className="brand-mark">A</span><span>Alverde</span></div>
-        <p className="eyebrow">Sistema de gestión para dietética</p>
-        <h1>Todo el local, claro y en orden.</h1>
+    <main className="login">
+      <section className="carta login__carta" aria-labelledby="login-titulo">
+        <div className="marca">
+          <span className="marca__nombre">alverde</span>
+          <span className="marca__bajada">Dietética natural</span>
+        </div>
+        <h1 className="titulo-modal" id="login-titulo">Todo el local, claro y en orden.</h1>
         {!hasSupabaseConfig ? (
-          <div className="notice">
-            <strong>Configuración pendiente.</strong>
-            <p>Copiá <code>.env.example</code> a <code>.env.local</code> y cargá las credenciales públicas de Supabase.</p>
-          </div>
+          <Message tone="aviso">
+            Falta configurar la conexión. Copiá <span className="codigo">.env.example</span> a{" "}
+            <span className="codigo">.env.local</span> y cargá las credenciales públicas de Supabase.
+          </Message>
         ) : (
-          <form onSubmit={submit}>
-            <label>Correo electrónico<input autoComplete="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
-            <label>Contraseña<input autoComplete="current-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>
-            {message && <p className="form-error" role="alert">{message}</p>}
-            <button className="boton boton--primario boton--bloque" disabled={loading} type="submit">{loading ? "Ingresando…" : "Ingresar"}</button>
+          <form className="pila" onSubmit={submit}>
+            <TextField label="Correo electrónico" type="email" autoComplete="email" required
+              value={email} onChange={(event) => setEmail(event.target.value)} />
+            <TextField label="Contraseña" type="password" autoComplete="current-password" required
+              value={password} onChange={(event) => setPassword(event.target.value)} />
+            {message && <Message tone="error">{message}</Message>}
+            <Button type="submit" block loading={loading}>{loading ? "Ingresando…" : "Ingresar"}</Button>
           </form>
         )}
+        <div className="fila login__tema"><ThemeToggle /></div>
       </section>
     </main>
   );
