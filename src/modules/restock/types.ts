@@ -18,6 +18,9 @@ export interface MissingItem {
   note: string | null;
   resolved: boolean;
   created_at: string;
+  /** RF-70: sucursal donde falta. */
+  branch_id: string | null;
+  branch_name: string | null;
   product?: MissingItemProduct;
   supplier?: Supplier | null;
 }

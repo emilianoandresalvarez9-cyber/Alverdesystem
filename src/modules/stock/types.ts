@@ -32,6 +32,9 @@ export interface StockLot {
   sold_by_weight: boolean;
   open_shelf_life_days: number | null;
   supplier_name: string | null;
+  /** RF-65: sucursal del lote. */
+  branch_id: string | null;
+  branch_name: string | null;
 
   // Calculados dinámicamente por lógica de vencimiento efectivo (RF-08)
   effective_expiry_date: string | null;

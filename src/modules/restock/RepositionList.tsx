@@ -3,6 +3,7 @@ import { getSupabase } from "../../shared/supabase/client";
 import { Button, GlassCard, Badge, EmptyState } from "../../shared/ui";
 import { preferredSupplier } from "./preferredSupplier";
 import type { MissingItem } from "./types";
+import { useBranch } from "../../shared/branch/BranchContext";
 
 interface RepositionListProps {
   refreshTrigger?: number;
@@ -13,16 +14,19 @@ export function RepositionList({ refreshTrigger, onResolve }: RepositionListProp
   const [items, setItems] = useState<MissingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // RF-70: faltantes de la sucursal de trabajo; la administradora puede verlos todos juntos.
+  const { workingBranchId, isAdmin, filterId, branches } = useBranch();
+  const showBranch = isAdmin && filterId === null && branches.length > 1;
 
   const fetchMissingItems = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const supabase = getSupabase();
-      const { data, error: err } = await supabase
+      let query = supabase
         .from("missing_items")
         .select(`
-          id, product_id, reported_by, note, resolved, created_at,
+          id, product_id, reported_by, note, resolved, created_at, branch_id, branch:branches(name),
             product:products(
               id, name, manufacturer_barcode, base_unit,
             supplier_products(
@@ -33,6 +37,8 @@ export function RepositionList({ refreshTrigger, onResolve }: RepositionListProp
         `)
         .eq("resolved", false)
         .order("created_at", { ascending: false });
+      if (workingBranchId) query = query.eq("branch_id", workingBranchId);
+      const { data, error: err } = await query;
 
       if (err) throw err;
 
@@ -47,6 +53,8 @@ export function RepositionList({ refreshTrigger, onResolve }: RepositionListProp
           note: row.note,
           resolved: row.resolved,
           created_at: row.created_at,
+          branch_id: row.branch_id,
+          branch_name: row.branch?.name ?? null,
           product: prod ? {
             id: prod.id,
             name: prod.name,
@@ -63,7 +71,7 @@ export function RepositionList({ refreshTrigger, onResolve }: RepositionListProp
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [workingBranchId]);
 
   useEffect(() => {
     fetchMissingItems();
@@ -137,7 +145,10 @@ export function RepositionList({ refreshTrigger, onResolve }: RepositionListProp
                   }}
                 >
                   <div>
-                    <div style={{ fontWeight: 700 }}>{item.product?.name ?? "Producto desconocido"}</div>
+                    <div style={{ fontWeight: 700 }}>
+                      {item.product?.name ?? "Producto desconocido"}
+                      {showBranch && item.branch_name && <> <Badge tone="neutro">{item.branch_name}</Badge></>}
+                    </div>
                     {item.note && (
                       <span style={{ fontSize: "var(--texto-xs)", color: "var(--color-tinta-apagada)" }}>
                         Nota: {item.note}

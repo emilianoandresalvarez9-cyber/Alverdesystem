@@ -13,8 +13,8 @@ insert into public.customers (id, name) values ('00000000-0000-0000-0000-0000000
 insert into public.products (id, name, base_unit) values ('00000000-0000-0000-0000-0000000000f1', 'Nueces', 'unit');
 insert into public.product_presentations (id, product_id, name, base_quantity, sale_price)
   values ('00000000-0000-0000-0000-0000000000c1', '00000000-0000-0000-0000-0000000000f1', 'Bolsa', 1, 1500);
-insert into public.stock_lots (id, presentation_id, initial_quantity, current_quantity, purchase_cost, status)
-  values ('00000000-0000-0000-0000-00000000a001', '00000000-0000-0000-0000-0000000000c1', 10, 2, 100, 'open');
+insert into public.stock_lots (id, presentation_id, initial_quantity, current_quantity, purchase_cost, status, branch_id)
+  values ('00000000-0000-0000-0000-00000000a001', '00000000-0000-0000-0000-0000000000c1', 10, 2, 100, 'open', '00000000-0000-0000-0000-000000000b01');
 
 create function pg_temp.vender(p_local uuid, p_metodo text, p_cantidad int) returns boolean language sql as $$
   select public.process_offline_sale(jsonb_build_object('localId', p_local, 'deviceId', gen_random_uuid(), 'kind', 'sale',

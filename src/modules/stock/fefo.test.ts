@@ -23,6 +23,8 @@ function mockLot(overrides: Partial<StockLot>): StockLot {
     sold_by_weight: false,
     open_shelf_life_days: null,
     supplier_name: null,
+    branch_id: "centro",
+    branch_name: "Centro",
     effective_expiry_date: overrides.effective_expiry_date ?? null,
     expiry_status: "good",
     days_until_expiry: 100,

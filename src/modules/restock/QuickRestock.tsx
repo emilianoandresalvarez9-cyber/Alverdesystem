@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useCurrentProfile } from "../../shared/auth/AuthGate";
+import { useBranch } from "../../shared/branch/BranchContext";
 import { getSupabase } from "../../shared/supabase/client";
 import { loadCatalogSnapshot } from "../../shared/offline/queue";
 import { queueStockOperation, watchStockOperationSync } from "../stock/offlineStock";
@@ -51,6 +52,9 @@ function findCachedPresentation(rows: unknown[], code: string): PresentationLook
 
 export function QuickRestock({ onSuccess }: QuickRestockProps) {
   const profile = useCurrentProfile();
+  // RF-65/66: el ingreso entra en la sucursal de trabajo; con "Todas" hay que elegir una.
+  const branch = useBranch();
+  const needsBranch = branch.writeId === null;
   const [barcode, setBarcode] = useState("");
   const [searching, setSearching] = useState(false);
   const [foundPresentation, setFoundPresentation] = useState<PresentationLookupResult | null>(null);
@@ -134,6 +138,10 @@ export function QuickRestock({ onSuccess }: QuickRestockProps) {
 
   const handleRestock = async () => {
     if (!foundPresentation) return;
+    if (needsBranch) {
+      setError("Elegí en qué sucursal entra la mercadería (arriba a la izquierda, en Sucursal).");
+      return;
+    }
     const qty = parseFloat(quantity);
     if (isNaN(qty) || qty <= 0) {
       setError("La cantidad debe ser un número mayor a 0");
@@ -158,6 +166,8 @@ export function QuickRestock({ onSuccess }: QuickRestockProps) {
         baseQuantity: foundPresentation.base_quantity,
         soldByWeight: foundPresentation.sold_by_weight ?? false,
         openShelfLifeDays: foundPresentation.open_shelf_life_days ?? null,
+        ...(typeof branch.writeId === "string" ? { branchId: branch.writeId } : {}),
+        branchName: branch.label,
       }, profile.id);
 
       setSuccessMsg(`Ingreso guardado en este dispositivo. Se sincronizará al reconectar.`);
@@ -178,6 +188,9 @@ export function QuickRestock({ onSuccess }: QuickRestockProps) {
     <GlassCard>
       <h3 style={{ margin: "0 0 var(--esp-m)" }}>Ingreso Rápido de Mercadería (RF-51)</h3>
       <p>El costo del lote se calcula con el costo por envase y contenido del proveedor principal del producto. Si falta esa información, el lote queda sin costo y no se muestra un margen desactualizado.</p>
+      {needsBranch
+        ? <p className="notice" role="status">Estás viendo todas las sucursales. Para ingresar mercadería elegí una sucursal en la barra lateral.</p>
+        : <p className="field-help">La mercadería entra en <strong>{branch.label}</strong>.</p>}
       <form onSubmit={handleSearch} style={{ display: "flex", gap: "var(--esp-s)", flexWrap: "wrap", alignItems: "flex-end" }}>
         <TextField
           label="Escanear código de barras"
@@ -216,7 +229,7 @@ export function QuickRestock({ onSuccess }: QuickRestockProps) {
               value={expiryDate}
               onChange={(e) => setExpiryDate(e.target.value)}
             />
-            <Button variant="primario" onClick={handleRestock} disabled={loading || !quantity}>
+            <Button variant="primario" onClick={handleRestock} disabled={loading || !quantity || needsBranch}>
               {loading ? "Guardando..." : "Ingresar Lote"}
             </Button>
             <Button variant="fantasma" onClick={() => setFoundPresentation(null)}>

@@ -275,6 +275,7 @@ export type Database = {
           resolved: boolean
           created_at: string
           updated_at: string
+          branch_id: string | null
         }
         Insert: {
           id?: string
@@ -284,6 +285,7 @@ export type Database = {
           resolved?: boolean
           created_at?: string
           updated_at?: string
+          branch_id?: string | null
         }
         Update: {
           id?: string
@@ -293,8 +295,10 @@ export type Database = {
           resolved?: boolean
           created_at?: string
           updated_at?: string
+          branch_id?: string | null
         }
         Relationships: [
+          { foreignKeyName: "missing_items_branch_id_fkey"; columns: ["branch_id"]; isOneToOne: false; referencedRelation: "branches"; referencedColumns: ["id"] },
           { foreignKeyName: "missing_items_product_id_fkey"; columns: ["product_id"]; isOneToOne: false; referencedRelation: "products"; referencedColumns: ["id"] },
           { foreignKeyName: "missing_items_reported_by_fkey"; columns: ["reported_by"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] }
         ]
@@ -689,6 +693,7 @@ export type Database = {
           portioned_at: string | null
           status: Database["public"]["Enums"]["stock_lot_status"]
           created_at: string
+          branch_id: string
         }
         Insert: {
           id?: string
@@ -703,6 +708,7 @@ export type Database = {
           portioned_at?: string | null
           status?: Database["public"]["Enums"]["stock_lot_status"]
           created_at?: string
+          branch_id: string
         }
         Update: {
           id?: string
@@ -717,8 +723,10 @@ export type Database = {
           portioned_at?: string | null
           status?: Database["public"]["Enums"]["stock_lot_status"]
           created_at?: string
+          branch_id?: string
         }
         Relationships: [
+          { foreignKeyName: "stock_lots_branch_id_fkey"; columns: ["branch_id"]; isOneToOne: false; referencedRelation: "branches"; referencedColumns: ["id"] },
           { foreignKeyName: "stock_lots_presentation_id_fkey"; columns: ["presentation_id"]; isOneToOne: false; referencedRelation: "product_presentations"; referencedColumns: ["id"] },
           { foreignKeyName: "stock_lots_supplier_id_fkey"; columns: ["supplier_id"]; isOneToOne: false; referencedRelation: "suppliers"; referencedColumns: ["id"] }
         ]
@@ -735,6 +743,7 @@ export type Database = {
           user_id: string
           occurred_at: string
           created_at: string
+          branch_id: string | null
         }
         Insert: {
           id?: string
@@ -747,6 +756,7 @@ export type Database = {
           user_id: string
           occurred_at: string
           created_at?: string
+          branch_id?: string | null
         }
         Update: {
           id?: string
@@ -759,8 +769,10 @@ export type Database = {
           user_id?: string
           occurred_at?: string
           created_at?: string
+          branch_id?: string | null
         }
         Relationships: [
+          { foreignKeyName: "stock_movements_branch_id_fkey"; columns: ["branch_id"]; isOneToOne: false; referencedRelation: "branches"; referencedColumns: ["id"] },
           { foreignKeyName: "stock_movements_lot_id_fkey"; columns: ["lot_id"]; isOneToOne: false; referencedRelation: "stock_lots"; referencedColumns: ["id"] },
           { foreignKeyName: "stock_movements_product_id_fkey"; columns: ["product_id"]; isOneToOne: false; referencedRelation: "products"; referencedColumns: ["id"] },
           { foreignKeyName: "stock_movements_user_id_fkey"; columns: ["user_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] }
@@ -921,6 +933,8 @@ export type Database = {
           sold_by_weight: boolean | null
           supplier_name: string | null
           created_at: string | null
+          branch_id: string | null
+          branch_name: string | null
         }
         Relationships: []
       }
@@ -943,6 +957,12 @@ export type Database = {
           p_operation: Json
         }
         Returns: boolean
+      }
+      assert_lot_branch_access: {
+        Args: {
+          p_lot_id: string
+        }
+        Returns: undefined
       }
       assign_classifier: {
         Args: {
@@ -1005,6 +1025,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: Database["public"]["Enums"]["app_role"]
       }
+      current_branch_id: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
       customer_movements: {
         Args: {
           p_customer_id: string
@@ -1019,6 +1043,10 @@ export type Database = {
           occurred_at: string
           user_name: string
         }[]
+      }
+      default_branch_id: {
+        Args: Record<PropertyKey, never>
+        Returns: string
       }
       effective_expiry_date: {
         Args: {
@@ -1094,6 +1122,7 @@ export type Database = {
           p_quantity: number
           p_expiry_date: string
           p_purchase_cost?: number
+          p_branch_id?: string
         }
         Returns: string
       }
@@ -1103,6 +1132,12 @@ export type Database = {
           p_resolution: string
         }
         Returns: undefined
+      }
+      resolve_work_branch: {
+        Args: {
+          p_branch_id: string
+        }
+        Returns: string
       }
       save_supplier_product_cost: {
         Args: {
@@ -1137,6 +1172,7 @@ export type Database = {
       stock_warnings_for_review: {
         Args: {
           p_include_resolved?: boolean
+          p_branch_id?: string
         }
         Returns: {
           id: string
@@ -1154,6 +1190,8 @@ export type Database = {
           resolved_at: string
           resolved_by_name: string
           resolution: string
+          branch_id: string
+          branch_name: string
         }[]
       }
       sync_offline_customer: {

@@ -24,9 +24,9 @@ insert into public.product_presentations (id, product_id, name, base_quantity, s
   values ('00000000-0000-0000-0000-0000000000c2', '00000000-0000-0000-0000-0000000000f1', 'Nueces granel por kg', 1000, 12000);
 -- Lote A: fábrica vence en 1 año, pero se abrió hace 2 días → vence efectivamente en 3 días.
 -- Lote B: fábrica vence en 30 días, cerrado. El FEFO viejo (por fábrica) elegía B primero.
-insert into public.stock_lots (id, presentation_id, initial_quantity, current_quantity, purchase_cost, manufacturer_expiry_date, opened_at, status, received_at) values
-  ('00000000-0000-0000-0000-00000000a001', '00000000-0000-0000-0000-0000000000c1', 10, 2, 100, current_date + 365, now() - interval '2 days', 'open', now() - interval '10 days'),
-  ('00000000-0000-0000-0000-00000000a002', '00000000-0000-0000-0000-0000000000c1', 10, 10, 100, current_date + 30, null, 'open', now() - interval '5 days');
+insert into public.stock_lots (id, presentation_id, initial_quantity, current_quantity, purchase_cost, manufacturer_expiry_date, opened_at, status, received_at, branch_id) values
+  ('00000000-0000-0000-0000-00000000a001', '00000000-0000-0000-0000-0000000000c1', 10, 2, 100, current_date + 365, now() - interval '2 days', 'open', now() - interval '10 days', '00000000-0000-0000-0000-000000000b01'),
+  ('00000000-0000-0000-0000-00000000a002', '00000000-0000-0000-0000-0000000000c1', 10, 10, 100, current_date + 30, null, 'open', now() - interval '5 days', '00000000-0000-0000-0000-000000000b01');
 
 select has_column('public', 'employee_catalog', 'sold_by_weight', 'La vista de empleado expone sold_by_weight');
 select is((select sold_by_weight from public.product_presentations where id = '00000000-0000-0000-0000-0000000000c2'), false,

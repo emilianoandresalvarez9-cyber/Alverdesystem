@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useCurrentProfile } from "../../shared/auth/AuthGate";
+import { useBranch } from "../../shared/branch/BranchContext";
 import { getSupabase } from "../../shared/supabase/client";
 import { loadStockLotsSnapshot, pendingOperations, saveStockLotsSnapshot, subscribeToQueueChanges } from "../../shared/offline/queue";
 import { getDaysUntilExpiry, evaluateExpiryStatus } from "./expiry";
@@ -27,6 +28,8 @@ interface EmployeeStockLotRow {
   sold_by_weight: boolean;
   supplier_name: string | null;
   created_at: string;
+  branch_id: string;
+  branch_name: string;
 }
 
 const DEFAULT_FILTERS: StockLotFilters = {
@@ -38,6 +41,8 @@ const DEFAULT_FILTERS: StockLotFilters = {
 
 export function useStockLots() {
   const profile = useCurrentProfile();
+  // RF-65/66: el empleado ya recibe solo su sucursal desde la vista; la administradora filtra por la elegida.
+  const { filterId } = useBranch();
   const [lots, setLots] = useState<StockLot[]>([]);
   const [loading, setLoading] = useState(true);
   const hasLoadedLots = useRef(false);
@@ -79,7 +84,7 @@ export function useStockLots() {
           received_at, manufacturer_expiry_date, opened_at, portioned_at, status,
           effective_expiry_date, product_id, product_name, base_unit,
           open_shelf_life_days, presentation_name, base_quantity, sold_by_weight,
-          supplier_name, created_at
+          supplier_name, created_at, branch_id, branch_name
         `)
         .order("created_at", { ascending: false });
 
@@ -110,6 +115,8 @@ export function useStockLots() {
           sold_by_weight: row.sold_by_weight,
           open_shelf_life_days: row.open_shelf_life_days,
           supplier_name: row.supplier_name,
+          branch_id: row.branch_id,
+          branch_name: row.branch_name,
 
           effective_expiry_date: row.effective_expiry_date,
           days_until_expiry: days,
@@ -141,9 +148,11 @@ export function useStockLots() {
 
   useEffect(() => subscribeToQueueChanges(() => { void fetchLots(); }), [fetchLots]);
 
-  const hasActiveOpenBag = useCallback((productId: string) => {
+  // RF-12 por sucursal: la bolsa abierta que cuenta es la de la misma sucursal del lote.
+  const hasActiveOpenBag = useCallback((productId: string, branchId: string | null = null) => {
     return lots.some(
       (l) => l.product_id === productId && l.sold_by_weight && l.status === "open" && l.opened_at !== null && l.current_quantity > 0
+        && (branchId === null || l.branch_id === null || l.branch_id === branchId)
     );
   }, [lots]);
 
@@ -160,7 +169,7 @@ export function useStockLots() {
 
   // Filtrado y ordenamiento de lotes (RF-10)
   const visibleLots = useMemo(() => {
-    let result = [...lots];
+    let result = filterId ? lots.filter((l) => l.branch_id === filterId || l.branch_id === null) : [...lots];
 
     // Filtro por estado del lote (abierto / cerrado)
     if (filters.status !== "all") {
@@ -202,11 +211,11 @@ export function useStockLots() {
     });
 
     return result;
-  }, [lots, filters]);
+  }, [lots, filters, filterId]);
 
   // Contadores resumen para KPI cards
   const stats = useMemo(() => {
-    const openLots = lots.filter((l) => l.status === "open");
+    const openLots = lots.filter((l) => l.status === "open" && (!filterId || l.branch_id === filterId || l.branch_id === null));
     let expired = 0;
     let critical = 0;
     let warning = 0;
@@ -226,7 +235,7 @@ export function useStockLots() {
       warning,
       good,
     };
-  }, [lots]);
+  }, [lots, filterId]);
 
   return {
     lots: visibleLots,
