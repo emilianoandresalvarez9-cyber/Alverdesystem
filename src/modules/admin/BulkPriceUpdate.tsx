@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { getSupabase } from "../../shared/supabase/client";
 import { exportToExcel } from "../../shared/export/excel";
-import { Badge, Button, EmptyState, GlassCard, SelectField, TextField } from "../../shared/ui";
+import { Button, EmptyState, Icon, Message, Options, SelectField, TextField } from "../../shared/ui";
+import { formatDayTime } from "../../shared/format/date";
 import { formatMoney } from "../pos/money";
 import { useBranch } from "../../shared/branch/BranchContext";
 import {
@@ -87,19 +88,19 @@ export function BulkPriceUpdate() {
   const summary = preview ? summarizePreview(preview) : null;
 
   return (
-    <div style={{ display: "grid", gap: "var(--esp-m)" }}>
-      <GlassCard>
-        <h2>Actualización masiva de precios</h2>
-        <p className="field-help">
+    <>
+      <section className="carta pila" aria-labelledby="actualizacion-masiva">
+        <h3 className="titulo-seccion" id="actualizacion-masiva">Actualización masiva de precios</h3>
+        <p className="cuerpo-s suave">
           Primero se muestra qué cambiaría; nada se guarda hasta que confirmes. Los precios se aplican todos juntos:
           si algo falla, no cambia ninguno.
         </p>
 
-        <div style={{ display: "flex", gap: "var(--esp-m)", alignItems: "flex-end", flexWrap: "wrap" }}>
-          <SelectField label="Aplicar a" value={scope}
-            onChange={(e) => { setScope(e.target.value as PriceScope); setScopeId(""); setPreview(null); }}>
-            {(Object.keys(SCOPE_LABELS) as PriceScope[]).map((s) => <option key={s} value={s}>{SCOPE_LABELS[s]}</option>)}
-          </SelectField>
+        <Options name="alcance" legend="Aplicar a" showLegend variant="segmento" value={scope}
+          onChange={(value) => { setScope(value); setScopeId(""); setPreview(null); }}
+          options={[{ value: "all", label: "Todo" }, { value: "brand", label: "Marca" }, { value: "category", label: "Rubro" }, { value: "supplier", label: "Proveedor" }]} />
+
+        <div className="form-fila">
           {scope !== "all" && (
             <SelectField label={SCOPE_LABELS[scope].replace("Un ", "").replace("Una ", "")} value={scopeId}
               onChange={(e) => { setScopeId(e.target.value); setPreview(null); }}>
@@ -113,71 +114,73 @@ export function BulkPriceUpdate() {
               {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
             </SelectField>
           )}
-          <TextField label="Porcentaje (%)" inputMode="decimal" value={percentage}
-            onChange={(e) => { setPercentage(e.target.value); setPreview(null); }} help="Negativo para bajar" />
-          <label style={{ display: "flex", gap: ".5rem", alignItems: "center", paddingBottom: ".6rem" }}>
+          <TextField label="Porcentaje" inputMode="decimal" numeric suffix="%" value={percentage}
+            onChange={(e) => { setPercentage(e.target.value); setPreview(null); }} help="Negativo para bajar." />
+        </div>
+        <div className="fila fila--entre">
+          <label className="casilla">
             <input type="checkbox" checked={roundTo100} onChange={(e) => { setRoundTo100(e.target.checked); setPreview(null); }} />
-            Redondear a múltiplo de $100 (RF-29)
+            Redondear a múltiplo de $100
           </label>
-          <Button variant="secundario" onClick={() => void run(false)} loading={busy === "preview"} disabled={busy !== null}>
+          <Button variant="secundario" icon="visibility" onClick={() => void run(false)} loading={busy === "preview"} disabled={busy !== null}>
             Ver qué cambiaría
           </Button>
         </div>
-        {error && <p className="form-error" role="alert" style={{ marginTop: "var(--esp-s)" }}>{error}</p>}
-      </GlassCard>
+        {error && <Message tone="error">{error}</Message>}
+      </section>
 
       {preview && summary && (
-        <GlassCard>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--esp-m)", flexWrap: "wrap" }}>
-            <h3 style={{ margin: 0 }}>Revisá antes de confirmar</h3>
-            <Badge tone={summary.count ? "aviso" : "neutro"}>
-              {summary.count} cambio{summary.count === 1 ? "" : "s"} · {summary.increases} suben · {summary.decreases} bajan
-            </Badge>
-          </div>
-          <p className="field-help">
+        <section className="carta pila" aria-labelledby="revisar-cambios">
+          <h3 className="titulo-seccion" id="revisar-cambios">Revisá antes de confirmar</h3>
+          <p className="meta">
             {priceBranchName ? `Precios de ${priceBranchName}` : "Precio base"} · {SCOPE_LABELS[scope]}{scopeName ? ` · ${scopeName}` : ""} · {percentage.replace(".", ",")} %
             {roundTo100 ? " · redondeado a $100" : ""}
           </p>
+          <div className="kpis" aria-label="Resumen de la actualización">
+            <div className="kpi"><span className="kpi__etiqueta"><Icon name="arrow_forward" />Suben</span><span className="kpi__valor">{summary.increases}</span></div>
+            <div className="kpi"><span className="kpi__etiqueta"><Icon name="remove" />Bajan</span><span className="kpi__valor">{summary.decreases}</span></div>
+            <div className="kpi"><span className="kpi__etiqueta"><Icon name="price_change" />Total de cambios</span><span className="kpi__valor">{summary.count}</span></div>
+          </div>
           {summary.count === 0 ? (
-            <EmptyState title="Ningún precio cambiaría">Con ese porcentaje y redondeo, todos quedan igual.</EmptyState>
+            <EmptyState title="Ningún precio cambiaría" icon="price_change">Con ese porcentaje y redondeo, todos quedan igual.</EmptyState>
           ) : (
             <>
-              <div className="table-wrap">
-                <table>
-                  <thead><tr><th>Producto</th><th>Presentación</th><th>Anterior</th><th>Nuevo</th><th>Diferencia</th></tr></thead>
+              <div className="tabla-marco">
+                <table className="tabla tabla--compacta">
+                  <thead><tr><th>Producto</th><th>Presentación</th><th className="num">Precio actual</th><th className="num">Precio nuevo</th><th className="num">Variación</th></tr></thead>
                   <tbody>
                     {preview.map((row) => (
                       <tr key={row.presentation_id}>
                         <td>{row.product_name}</td>
-                        <td>{row.presentation_name}</td>
-                        <td>{formatPrice(row.old_price, row.sold_by_weight)}</td>
-                        <td><strong>{formatPrice(row.new_price, row.sold_by_weight)}</strong></td>
-                        <td>{formatDiff(row)}</td>
+                        <td className="suave">{row.presentation_name}</td>
+                        <td className="num">{formatPrice(row.old_price, row.sold_by_weight)}</td>
+                        <td className="num fuerte">{formatPrice(row.new_price, row.sold_by_weight)}</td>
+                        <td className="num">{formatDiff(row)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              <div style={{ display: "flex", gap: "var(--esp-s)", marginTop: "var(--esp-m)", flexWrap: "wrap" }}>
+              <div className="acciones-fila">
+                <Button variant="fantasma" onClick={() => setPreview(null)} disabled={busy !== null}>Cancelar</Button>
                 <Button onClick={() => void run(true)} loading={busy === "apply"} disabled={busy !== null}>
                   Confirmar {summary.count} cambio{summary.count === 1 ? "" : "s"}
                 </Button>
-                <Button variant="fantasma" onClick={() => setPreview(null)} disabled={busy !== null}>Cancelar</Button>
               </div>
             </>
           )}
-        </GlassCard>
+        </section>
       )}
 
       {applied && (
-        <p className="notice" role="status">
+        <Message tone="exito">
           Listo: se actualizaron {applied.count} precio{applied.count === 1 ? "" : "s"} en una sola operación.
           La lista para reetiquetar está abajo.
-        </p>
+        </Message>
       )}
 
       <RetagList highlightBatchId={applied?.batchId ?? null} />
-    </div>
+    </>
   );
 }
 
@@ -210,43 +213,41 @@ function RetagList({ highlightBatchId }: { highlightBatchId: string | null }) {
 
   const { branches } = useBranch();
   const batchLabel = (b: Batch) =>
-    `${new Date(b.created_at).toLocaleString("es-AR")} · ${b.branch_id ? branches.find((x) => x.id === b.branch_id)?.name ?? "Sucursal" : "Base"} · ${b.percent > 0 ? "+" : ""}${b.percent} % · ${SCOPE_LABELS[b.scope as PriceScope] ?? b.scope} · ${b.changed_count} cambio${b.changed_count === 1 ? "" : "s"}`;
+    `${formatDayTime(b.created_at)} · ${b.branch_id ? branches.find((x) => x.id === b.branch_id)?.name ?? "Sucursal" : "Base"} · ${b.percent > 0 ? "+" : ""}${b.percent} % · ${SCOPE_LABELS[b.scope as PriceScope] ?? b.scope} · ${b.changed_count} cambio${b.changed_count === 1 ? "" : "s"}`;
 
   return (
-    <GlassCard>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: "var(--esp-m)", flexWrap: "wrap" }}>
-        <div>
-          <h3 style={{ margin: 0 }}>Para reetiquetar (RF-30)</h3>
-          <p className="field-help">Solo los productos cuyo precio cambió en la actualización elegida.</p>
-        </div>
-        {batches.length > 0 && (
-          <SelectField label="Actualización" value={selected} onChange={(e) => setSelected(e.target.value)}>
-            {batches.map((b) => <option key={b.id} value={b.id}>{batchLabel(b)}</option>)}
-          </SelectField>
-        )}
-        <Button variant="secundario" disabled={!rows || rows.length === 0}
+    <section className="carta pila" aria-labelledby="reetiquetar">
+      <div className="fila fila--entre">
+        <h3 className="titulo-seccion" id="reetiquetar">Para reetiquetar</h3>
+        <Button variant="secundario" icon="download" disabled={!rows || rows.length === 0}
           onClick={() => rows && exportToExcel(RETAG_HEADERS, retagMatrix(rows), "reetiquetar")}>
           Exportar a Excel
         </Button>
       </div>
-      {error && <p className="form-error" role="alert">{error}</p>}
-      {batches.length === 0 && <EmptyState title="Todavía no hubo actualizaciones masivas" />}
+      <p className="meta">Sólo los productos cuyo precio cambió en la actualización elegida.</p>
+      {batches.length > 0 && (
+        <SelectField label="Actualización" value={selected} onChange={(e) => setSelected(e.target.value)}>
+          {batches.map((b) => <option key={b.id} value={b.id}>{batchLabel(b)}</option>)}
+        </SelectField>
+      )}
+      {error && <Message tone="error">{error}</Message>}
+      {batches.length === 0 && <EmptyState title="Todavía no hubo actualizaciones masivas" icon="price_change" />}
       {rows && rows.length > 0 && (
-        <div className="table-wrap" style={{ marginTop: "var(--esp-m)" }}>
-          <table>
-            <thead><tr><th>Producto</th><th>Presentación</th><th>Código interno</th><th>Anterior</th><th>Nuevo</th></tr></thead>
+        <div className="tabla-marco">
+          <table className="tabla tabla--compacta">
+            <thead><tr><th>Producto</th><th>Presentación</th><th>Código interno</th><th className="num">Anterior</th><th className="num">Nuevo</th></tr></thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.presentation_id}>
-                  <td>{r.product_name}</td><td>{r.presentation_name}</td>
-                  <td><code>{r.internal_barcode ?? "—"}</code></td>
-                  <td>{formatPrice(r.old_price, r.sold_by_weight)}</td><td><strong>{formatPrice(r.new_price, r.sold_by_weight)}</strong></td>
+                  <td>{r.product_name}</td><td className="suave">{r.presentation_name}</td>
+                  <td className="codigo">{r.internal_barcode ?? "—"}</td>
+                  <td className="num">{formatPrice(r.old_price, r.sold_by_weight)}</td><td className="num fuerte">{formatPrice(r.new_price, r.sold_by_weight)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
-    </GlassCard>
+    </section>
   );
 }

@@ -12,7 +12,7 @@ export function BulkDashboard() {
   return (
     <>
       <SubTabs label="Fraccionamiento y granel" value={activeTab} onChange={setActiveTab}
-        tabs={[{ value: "operations", label: "Lotes y fraccionamiento" }, { value: "shelf_life", label: "Vida útil (masivo)" }]} />
+        tabs={[{ value: "operations", label: "Lotes y fraccionamiento" }, { value: "shelf_life", label: "Vida útil" }]} />
       {activeTab === "operations" ? <StockDashboard enableFractioning onlyBulk /> : <ShelfLifeManager />}
     </>
   );

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { getSupabase } from "../../shared/supabase/client";
-import { Button, GlassCard, TextField } from "../../shared/ui";
+import { Button, Message, TextField } from "../../shared/ui";
 
 type Category = { id: string; name: string; parent_id: string | null };
 type OverrideRow = { category_id: string; multiplier: number };
@@ -60,32 +60,32 @@ export function PriceMultiplierSettings() {
   }
 
   return (
-    <GlassCard>
-      <h2>Multiplicadores de precio</h2>
-      <p>Se aplica el multiplicador del producto; si no tiene, el del rubro más específico configurado; si tampoco, el general.</p>
-      {error && <p role="alert" className="form-error">{error}</p>}
-      {message && <p role="status">{message}</p>}
-      <div style={{ display: "flex", gap: "var(--esp-s)", alignItems: "flex-end", flexWrap: "wrap" }}>
-        <TextField label="Multiplicador general" type="number" min="0.001" step="0.001" value={defaultMultiplier}
+    <section className="carta pila" aria-labelledby="multiplicadores">
+      <h3 className="titulo-seccion" id="multiplicadores">Multiplicadores de precio</h3>
+      <p className="cuerpo-s suave">Se aplica el multiplicador del producto; si no tiene, el del rubro más específico configurado; si tampoco, el general.</p>
+      {error && <Message tone="error">{error}</Message>}
+      {message && <Message tone="exito">{message}</Message>}
+      <div className="form-fila">
+        <TextField label="Multiplicador general" type="number" numeric suffix="×" min="0.001" step="0.001" value={defaultMultiplier}
           onChange={event => setDefaultMultiplier(event.target.value)} help="El valor inicial del proyecto es ×2." />
         <Button onClick={() => void saveDefault()} disabled={saving}>Guardar valor general</Button>
       </div>
-      <h3>Overrides por rubro</h3>
-      {categories.length === 0 ? <p>No hay rubros activos para configurar.</p> : (
-        <div style={{ display: "grid", gap: "var(--esp-xs)" }}>
+      <p className="rotulo-seccion">Por rubro</p>
+      {categories.length === 0 ? <p className="meta">No hay rubros activos para configurar.</p> : (
+        <ul className="lista lista--plana multiplicadores">
           {categories.map(category => (
-            <div key={category.id} style={{ display: "flex", gap: "var(--esp-s)", alignItems: "flex-end", flexWrap: "wrap" }}>
-              <span style={{ minWidth: "12rem", paddingBottom: "0.6rem" }}>
-                {category.parent_id ? `↳ ${categories.find(row => row.id === category.parent_id)?.name ?? "Rubro"} / ` : ""}{category.name}
+            <li key={category.id}>
+              <span className="lista__principal lista__titulo">
+                {category.parent_id ? <span className="suave">{categories.find(row => row.id === category.parent_id)?.name ?? "Rubro"} / </span> : null}{category.name}
               </span>
-              <TextField label={`Multiplicador para ${category.name}`} type="number" min="0.001" step="0.001"
-                value={overrides[category.id] ?? ""} placeholder="Heredar" onChange={event => setOverrides(current => ({ ...current, [category.id]: event.target.value }))}
-                help="Vacío: hereda del rubro padre o del valor general." />
-              <Button variant="secundario" onClick={() => void saveCategory(category.id)} disabled={saving}>Guardar</Button>
-            </div>
+              <TextField label={`Multiplicador para ${category.name}`} hideLabel type="number" numeric suffix="×" min="0.001" step="0.001"
+                value={overrides[category.id] ?? ""} placeholder="Hereda" onChange={event => setOverrides(current => ({ ...current, [category.id]: event.target.value }))} />
+              <Button variant="secundario" size="compacto" onClick={() => void saveCategory(category.id)} disabled={saving}>Guardar</Button>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
-    </GlassCard>
+      <p className="meta">Vacío: el rubro hereda del rubro padre o del valor general.</p>
+    </section>
   );
 }

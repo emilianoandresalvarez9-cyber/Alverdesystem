@@ -1,15 +1,31 @@
-/* src/styles/barcodes.css */
+/*
+ * Planilla de mostrador para granel (RF-22). Es una hoja de papel: blanco y negro en los dos
+ * temas, a propósito, para que en pantalla se vea igual que impresa y el lector la lea bien.
+ */
+.planilla { padding: var(--esp-l); border-radius: var(--radio-control); background: #fff; color: #000; }
+.planilla__titulo { margin: 0 0 var(--esp-m); padding-bottom: var(--esp-s); border-bottom: 2px solid #000; text-align: center; font: 600 var(--texto-titulo)/32px var(--fuente-titulos); }
+.planilla__nota { margin: 0 0 var(--esp-l); text-align: center; font: 400 var(--texto-s)/20px var(--fuente); }
+.planilla__rubro { margin-bottom: var(--esp-xl); break-inside: avoid; }
+.planilla__rubro-titulo { margin: 0 0 var(--esp-m); padding: var(--esp-xs) var(--esp-s); border-left: 4px solid #000; background: #f0f0f0; font: 600 var(--texto-m)/24px var(--fuente); }
+.planilla__reja { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--esp-m); }
+.planilla__codigo { display: flex; flex-direction: column; align-items: center; gap: var(--esp-xs); padding: var(--esp-s); border: 1px dashed #bbb; text-align: center; }
+.planilla__codigo strong { font: 600 var(--texto-m)/24px var(--fuente); }
+.planilla__codigo span { margin-bottom: var(--esp-s); font: 400 var(--texto-xs)/16px var(--fuente); color: #444; }
 
 /* Reglas de impresión exclusivas para la planilla de granel (RF-22) */
 @media print {
-  /* Ocultar la UI del dashboard, navegación y botones */
+  /* Ocultar la navegación de Administración, las pestañas y los botones */
   .no-print,
   .app-sidebar,
-  .page-heading,
+  .nav-sec,
+  .admin__seccion-movil,
+  .admin__contenido > .titulo-modal,
+  .pestanas,
   button,
   header {
     display: none !important;
   }
+  .admin { display: block !important; }
 
   /* El contenedor principal debe tomar toda la hoja sin márgenes de app */
   body, html, .app, .app-main, .app-content {
@@ -20,8 +36,8 @@
     box-shadow: none !important;
   }
 
-  /* Asegurarse que el blur de glassmorfismo no ensucie la hoja de impresión */
-  .glass, .carta {
+  /* La carta que envuelve la planilla no se imprime como recuadro */
+  .carta {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
     background: transparent !important;

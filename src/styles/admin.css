@@ -20,3 +20,47 @@
 .revision__caso { align-items: flex-start; }
 .revision__acciones { margin-top: var(--esp-s); }
 .reposicion__proveedor { gap: 2px; }
+
+/* Productos y precios */
+.productos-barra { flex-wrap: nowrap; }
+.form-fila--tres { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@container (max-width: 720px) { .form-fila--tres { grid-template-columns: minmax(0, 1fr); } .productos-barra { flex-wrap: wrap; } }
+.precio-sucursal { display: inline-flex; width: 8rem; min-height: 36px; }
+.precio-sucursal input { height: 34px; }
+.multiplicadores .campo { width: 9rem; }
+
+/* Marcas, rubros y etiquetas */
+.clasificadores > li { align-items: flex-start; flex-wrap: wrap; }
+.clasificadores__acciones { flex-wrap: nowrap; }
+.clasificadores__asignar { margin-top: var(--esp-s); padding-top: var(--esp-s); border-top: 1px solid var(--color-linea); }
+.asignar__lista { list-style: none; margin: 0; padding: 0; max-height: 16rem; overflow-y: auto; display: flex; flex-direction: column; }
+.asignar__lista .casilla { width: 100%; }
+
+/* Balanza */
+.balanza > li { flex-wrap: wrap; }
+.balanza__precio { width: 11rem; }
+.balanza__acciones { flex-wrap: nowrap; }
+
+/* Sucursales */
+.sucursal__nueva-caja { border-top: 1px solid var(--color-linea); }
+.personal__sucursal .campo { min-width: 12rem; }
+
+/* Trazabilidad */
+.auditoria__que { gap: 0; }
+.auditoria__cambio { display: inline-flex; align-items: center; flex-wrap: wrap; gap: var(--esp-xs); }
+.auditoria__cambio .ic { color: var(--color-tinta-apagada); }
+
+/* Vida útil después de abrir */
+.vida-util__marca { width: 1%; }
+.vida-util__casilla { min-width: 0; }
+
+/* Cartas con lista: la lista y los rellenos alineados con la cabecera de la carta. */
+.admin__contenido .carta--sin-relleno > .lista--plana > li { padding-inline: var(--esp-l); }
+.admin__contenido .carta--sin-relleno .tabla :is(th, td):first-child { padding-left: var(--esp-l); }
+.admin__contenido .carta--sin-relleno .tabla :is(th, td):last-child { padding-right: var(--esp-l); }
+@container (max-width: 720px) {
+  .admin__contenido .carta--sin-relleno .tabla :is(th, td):first-child { padding-left: var(--esp-m); }
+  .admin__contenido .carta--sin-relleno .tabla :is(th, td):last-child { padding-right: var(--esp-m); }
+  .admin__contenido .carta--sin-relleno > .lista--plana > li,
+  .admin__contenido .carta--sin-relleno > .relleno { padding-inline: var(--esp-m); }
+}

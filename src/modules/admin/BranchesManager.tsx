@@ -1,6 +1,6 @@
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { getSupabase } from "../../shared/supabase/client";
-import { Badge, Button, EmptyState, GlassCard, SelectField, TextField } from "../../shared/ui";
+import { Badge, Button, EmptyState, Message, SelectField, TextField } from "../../shared/ui";
 
 type Branch = { id: string; name: string; address: string | null; archived_at: string | null };
 type Register = { id: string; branch_id: string; name: string; archived_at: string | null };
@@ -39,54 +39,70 @@ export function BranchesManager() {
     await load();
   }
 
-  if (loading) return <p className="glass loading-card">Cargando sucursales…</p>;
+  if (loading) {
+    return <div className="carta pila pila--s" aria-busy="true" aria-label="Cargando sucursales…"><span className="esqueleto" /><span className="esqueleto" /></div>;
+  }
+
+  const archive = (register: Register, archived: boolean) =>
+    run(() => getSupabase().from("registers").update({ archived_at: archived ? new Date().toISOString() : null }).eq("id", register.id));
 
   return (
-    <div className="pos-setup" style={{ maxWidth: "none" }}>
-      {error && <p className="form-error" role="alert">{error}</p>}
+    <>
+      {error && <Message tone="error">{error}</Message>}
       <NewBranchForm onCreate={(name, address) => run(() => getSupabase().from("branches").insert({ name, address: address || null }))} />
 
       {branches.length === 0 && (
-        <EmptyState title="Todavía no hay sucursales">Creá la primera para poder agregarle cajas.</EmptyState>
+        <EmptyState title="Todavía no hay sucursales" icon="storefront">Creá la primera para poder agregarle cajas.</EmptyState>
       )}
 
-      <div className="dashboard-grid">
-        {branches.map((branch) => {
-          const own = registers.filter((r) => r.branch_id === branch.id);
-          return (
-            <GlassCard key={branch.id} className="pos-panel">
-              <div className="pos-shift" style={{ marginTop: 0 }}>
-                <div>
-                  <h3 style={{ margin: 0 }}>{branch.name}</h3>
-                  {branch.address && <p className="field-help" style={{ margin: 0 }}>{branch.address}</p>}
+      {branches.length > 0 && (
+        <div className="reja-2">
+          {branches.map((branch) => {
+            const own = registers.filter((r) => r.branch_id === branch.id);
+            return (
+              <section key={branch.id} className="carta carta--sin-relleno" aria-labelledby={`sucursal-${branch.id}`}>
+                <div className="carta__cabecera">
+                  <div className="pila pila--s sucursal__nombre">
+                    <h3 className="titulo-seccion" id={`sucursal-${branch.id}`}>{branch.name}</h3>
+                    {branch.address && <span className="meta">{branch.address}</span>}
+                  </div>
+                  {branch.archived_at && <Badge tone="neutro" icon="archive">Archivada</Badge>}
                 </div>
-                {branch.archived_at && <Badge tone="neutro">Archivada</Badge>}
-              </div>
-              <ul className="pos-lines" style={{ marginTop: "var(--esp-m)" }}>
-                {own.length === 0 && <li className="field-help">Sin cajas.</li>}
-                {own.map((register) => (
-                  <li key={register.id} className="pos-line" style={{ gridTemplateColumns: "minmax(0,1fr) auto" }}>
-                    <span className={register.archived_at ? "field-help" : ""}>
-                      {register.name}{register.archived_at ? " (archivada)" : ""}
-                    </span>
-                    {register.archived_at ? (
-                      <Button variant="fantasma" onClick={() => void run(() => getSupabase().from("registers").update({ archived_at: null }).eq("id", register.id))}>Reactivar</Button>
-                    ) : (
-                      <Button variant="fantasma" onClick={() => void run(() => getSupabase().from("registers").update({ archived_at: new Date().toISOString() }).eq("id", register.id))}>Archivar</Button>
-                    )}
-                  </li>
-                ))}
-              </ul>
-              {!branch.archived_at && (
-                <NewRegisterForm onCreate={(name) => run(() => getSupabase().from("registers").insert({ branch_id: branch.id, name }))} />
-              )}
-            </GlassCard>
-          );
-        })}
-      </div>
+                {own.length === 0 ? (
+                  <p className="relleno cuerpo-s suave">Sin cajas.</p>
+                ) : (
+                  <ul className="lista lista--plana" aria-label={`Cajas de ${branch.name}`}>
+                    {own.map((register) => (
+                      <li key={register.id}>
+                        <div className="lista__principal">
+                          <span className={register.archived_at ? "lista__titulo apagada" : "lista__titulo"}>{register.name}</span>
+                        </div>
+                        {register.archived_at ? (
+                          <>
+                            <Badge tone="neutro">Archivada</Badge>
+                            <Button variant="fantasma" size="compacto" icon="unarchive" onClick={() => void archive(register, false)}>Reactivar</Button>
+                          </>
+                        ) : (
+                          <Button variant="fantasma" size="compacto" icon="archive" onClick={() => void archive(register, true)}>Archivar</Button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {!branch.archived_at && (
+                  <div className="relleno sucursal__nueva-caja">
+                    <NewRegisterForm branchName={branch.name}
+                      onCreate={(name) => run(() => getSupabase().from("registers").insert({ branch_id: branch.id, name }))} />
+                  </div>
+                )}
+              </section>
+            );
+          })}
+        </div>
+      )}
 
       <StaffBranches branches={branches.filter((b) => !b.archived_at)} />
-    </div>
+    </>
   );
 }
 
@@ -120,25 +136,33 @@ function StaffBranches({ branches }: { branches: Branch[] }) {
 
   const mainName = branches[0]?.name ?? "la principal";
   return (
-    <GlassCard className="pos-panel">
-      <h3 style={{ marginTop: 0 }}>Personal por sucursal (RF-67)</h3>
-      <p className="field-help">
-        Cada empleado trabaja solo en su sucursal: vende, ingresa y ajusta stock ahí. Sin asignar, trabaja en {mainName}.
-        La administración puede elegir sucursal desde la barra lateral.
-      </p>
-      {error && <p className="form-error" role="alert">{error}</p>}
-      {saved && <p className="notice" role="status">{saved}</p>}
-      {people && (
-        <div className="table-wrap">
-          <table>
+    <section className="carta carta--sin-relleno" aria-labelledby="personal-por-sucursal">
+      <div className="relleno pila pila--s">
+        <h3 className="titulo-seccion" id="personal-por-sucursal">Personal por sucursal</h3>
+        <p className="cuerpo-s suave">
+          Cada empleado trabaja sólo en su sucursal: vende, ingresa y ajusta stock ahí. Sin asignar, trabaja en {mainName}.
+          La administración puede elegir sucursal desde la barra lateral.
+        </p>
+        {error && <Message tone="error">{error}</Message>}
+        {saved && <Message tone="exito">{saved}</Message>}
+      </div>
+      {!people ? (
+        <div className="relleno pila pila--s" aria-busy="true"><span className="esqueleto" /><span className="esqueleto" /></div>
+      ) : people.length === 0 ? (
+        <EmptyState title="Todavía no hay usuarios" icon="group" />
+      ) : (
+        <div className="tabla-marco">
+          <table className="tabla tabla--compacta">
             <thead><tr><th>Persona</th><th>Rol</th><th>Sucursal</th></tr></thead>
             <tbody>
               {people.map((person) => (
-                <tr key={person.id} style={{ opacity: person.active ? 1 : 0.6 }}>
-                  <td>{person.display_name}{person.active ? "" : " (inactivo)"}</td>
+                <tr key={person.id}>
+                  <td className={person.active ? "fuerte" : "apagada"}>
+                    {person.display_name}{person.active ? null : <> <Badge tone="neutro">Inactivo</Badge></>}
+                  </td>
                   <td>{person.role === "administrator" ? "Administrador" : "Empleado"}</td>
-                  <td>
-                    <SelectField label="" aria-label={`Sucursal de ${person.display_name}`} value={person.branch_id ?? ""}
+                  <td className="personal__sucursal">
+                    <SelectField hideLabel label={`Sucursal de ${person.display_name}`} value={person.branch_id ?? ""}
                       onChange={(e) => void assign(person, e.target.value)}>
                       <option value="">Sin asignar ({mainName})</option>
                       {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
@@ -150,7 +174,7 @@ function StaffBranches({ branches }: { branches: Branch[] }) {
           </table>
         </div>
       )}
-    </GlassCard>
+    </section>
   );
 }
 
@@ -165,17 +189,18 @@ function NewBranchForm({ onCreate }: { onCreate: (name: string, address: string)
     setAddress("");
   }
   return (
-    <GlassCard className="pos-panel">
-      <form className="pos-scan" onSubmit={submit}>
-        <TextField label="Nueva sucursal" required value={name} onChange={(e) => setName(e.target.value)} />
+    <form className="carta pila" onSubmit={submit} aria-labelledby="sucursal-nueva">
+      <h3 className="titulo-seccion" id="sucursal-nueva">Nueva sucursal</h3>
+      <div className="form-fila">
+        <TextField label="Nombre" required value={name} onChange={(e) => setName(e.target.value)} />
         <TextField label="Dirección (opcional)" value={address} onChange={(e) => setAddress(e.target.value)} />
-        <Button type="submit">Crear sucursal</Button>
-      </form>
-    </GlassCard>
+        <Button type="submit" icon="add" disabled={!name.trim()}>Crear sucursal</Button>
+      </div>
+    </form>
   );
 }
 
-function NewRegisterForm({ onCreate }: { onCreate: (name: string) => Promise<void> }) {
+function NewRegisterForm({ branchName, onCreate }: { branchName: string; onCreate: (name: string) => Promise<void> }) {
   const [name, setName] = useState("");
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -184,9 +209,9 @@ function NewRegisterForm({ onCreate }: { onCreate: (name: string) => Promise<voi
     setName("");
   }
   return (
-    <form className="pos-scan" onSubmit={submit} style={{ marginTop: "var(--esp-m)" }}>
+    <form className="form-fila" onSubmit={submit} aria-label={`Nueva caja en ${branchName}`}>
       <TextField label="Nueva caja" placeholder="Ej.: Caja 2" required value={name} onChange={(e) => setName(e.target.value)} />
-      <Button type="submit" variant="secundario">Agregar caja</Button>
+      <Button type="submit" variant="secundario" icon="add" disabled={!name.trim()}>Agregar caja</Button>
     </form>
   );
 }

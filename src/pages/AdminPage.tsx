@@ -19,7 +19,6 @@ import { MarginDashboard } from "../modules/reports/MarginDashboard";
 import {
   ADMIN_GROUPS, sectionFromHash, sectionLabel, type AdminSectionId
 } from "../modules/admin/adminSections";
-import "../styles/pos.css";
 import "../styles/admin.css";
 
 type ViewTransitionDocument = Document & { startViewTransition?: (update: () => void) => unknown };

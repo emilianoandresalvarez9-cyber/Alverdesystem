@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, SubTabs, TextField } from "../../shared/ui";
+import { Button, GlassCard, Message, SubTabs } from "../../shared/ui";
 import { getSupabase } from "../../shared/supabase/client";
 import { generateInternalEan13 } from "./ean13";
 import { CounterBulkSheet } from "./CounterBulkSheet";
@@ -134,9 +134,9 @@ export function BarcodeDashboard() {
       successCount++;
     }
     
-      setFeedback({ kind: "success", message: `Se generaron ${successCount} códigos de barras nuevos (Prefijo 20).` });
+      setFeedback({ kind: "success", message: `Se generaron ${successCount} código${successCount === 1 ? "" : "s"} nuevo${successCount === 1 ? "" : "s"}.` });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Error al generar códigos de barras.";
+      const message = error instanceof Error ? error.message : "No se pudieron generar los códigos.";
       setFeedback({
         kind: "error",
         message: successCount > 0 ? `Se generaron ${successCount} códigos antes del error. ${message}` : message
@@ -147,16 +147,16 @@ export function BarcodeDashboard() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--esp-m)" }}>
+    <>
       <SubTabs label="Códigos y planilla" value={activeTab} onChange={setActiveTab}
-        tabs={[{ value: "sheet", label: "Planilla de mostrador" }, { value: "tester", label: "Probar lector" }, { value: "generator", label: "Generación de códigos" }]} />
+        tabs={[{ value: "sheet", label: "Planilla de mostrador" }, { value: "tester", label: "Probar lector" }, { value: "generator", label: "Códigos internos" }]} />
 
-      {feedback && <p role={feedback.kind === "error" ? "alert" : "status"} style={{ color: feedback.kind === "error" ? "var(--color-error)" : "var(--color-exito)" }}>{feedback.message}</p>}
+      {feedback && <Message tone={feedback.kind === "error" ? "error" : "exito"}>{feedback.message}</Message>}
 
       {activeTab === "sheet" && (
-        <div className="glass" style={{ padding: "var(--esp-m)", borderRadius: "var(--radio-carta)" }}>
+        <GlassCard>
           <CounterBulkSheet />
-        </div>
+        </GlassCard>
       )}
 
       {activeTab === "tester" && (
@@ -164,19 +164,21 @@ export function BarcodeDashboard() {
       )}
 
       {activeTab === "generator" && (
-        <div className="glass" style={{ padding: "var(--esp-m)", borderRadius: "var(--radio-carta)" }}>
-          <h2>Gestión de Códigos Internos (RF-20 / RF-21)</h2>
-          <p>
-            Los productos a granel y de elaboración propia requieren un código de barras EAN-13
-            en el rango reservado interno (prefijo 20-29) para que el lector pueda identificarlos sin confundirlos con productos externos.
-          </p>
-          <div style={{ marginTop: "var(--esp-m)" }}>
-            <Button variant="primario" onClick={handleGenerateMissing} disabled={isGenerating}>
-              {isGenerating ? "Generando..." : "Autogenerar Códigos Faltantes (Granel)"}
+        <GlassCard as="section" className="pila" aria-labelledby="codigos-internos">
+          <div className="pila pila--s">
+            <h3 className="titulo-seccion" id="codigos-internos">Códigos internos</h3>
+            <p className="cuerpo-s suave">
+              Lo que se vende a granel o se elabora acá necesita un código de barras propio. Se generan en el rango
+              reservado para uso interno (empiezan con 20), así el lector no los confunde con los de fábrica.
+            </p>
+          </div>
+          <div className="fila">
+            <Button icon="barcode" onClick={() => void handleGenerateMissing()} loading={isGenerating}>
+              {isGenerating ? "Generando…" : "Generar los códigos que faltan"}
             </Button>
           </div>
-        </div>
+        </GlassCard>
       )}
-    </div>
+    </>
   );
 }

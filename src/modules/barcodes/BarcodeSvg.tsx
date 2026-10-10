@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { encodeEan13Modules } from "./ean13";
+import { Badge } from "../../shared/ui";
 
 interface BarcodeSvgProps {
   id?: string;
@@ -41,9 +42,7 @@ export function BarcodeSvg({
 
   if (!isValid || !modules) {
     return (
-      <div style={{ padding: "1rem", color: "red", border: "1px solid red", background: bgColor }}>
-        Error: Código EAN-13 inválido
-      </div>
+      <Badge tone="error">Código inválido: {code}</Badge>
     );
   }
 

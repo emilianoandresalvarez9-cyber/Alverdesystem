@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getSupabase } from "../../shared/supabase/client";
 import { useBranch } from "../../shared/branch/BranchContext";
-import { Button } from "../../shared/ui";
+import { Button, Message } from "../../shared/ui";
 import { formatMoney } from "../pos/money";
 import { pricePerKiloFromGram, validatePricePerKilo } from "../catalog/scalePricing";
 import type { Presentation } from "../../shared/types";
@@ -35,7 +35,7 @@ export function BranchPricesPanel({ presentations }: { presentations: Presentati
   useEffect(() => { void load(); }, [load]);
 
   if (branches.length < 2) {
-    return <p className="field-help">Con una sola sucursal rige el precio base. Al crear otra sucursal vas a poder darle precios propios acá.</p>;
+    return <p className="meta">Con una sola sucursal rige el precio base. Al crear otra sucursal vas a poder darle precios propios acá.</p>;
   }
 
   const shown = (p: Presentation, value: number) => (p.sold_by_weight ? pricePerKiloFromGram(value) : value);
@@ -83,36 +83,33 @@ export function BranchPricesPanel({ presentations }: { presentations: Presentati
   }
 
   return (
-    <div style={{ display: "grid", gap: "var(--esp-s)" }}>
-      <p className="field-help" style={{ margin: 0 }}>
-        Dejá vacío para usar el precio base. En productos de balanza el precio es por kilo.
-      </p>
-      <div className="table-wrap">
-        <table>
+    <>
+      <p className="meta">Vacío = usa el precio base. En balanza el precio es por kilo.</p>
+      <div className="tabla-marco">
+        <table className="tabla tabla--compacta">
           <thead>
             <tr>
               <th>Presentación</th>
-              <th>Base</th>
-              {branches.map((b) => <th key={b.id}>{b.name}</th>)}
+              <th className="num">Base</th>
+              {branches.map((b) => <th key={b.id} className="num">{b.name}</th>)}
             </tr>
           </thead>
           <tbody>
             {presentations.map((p) => (
               <tr key={p.id}>
                 <td>{p.name}{p.sold_by_weight ? " (por kg)" : ""}</td>
-                <td>{formatMoney(shown(p, Number(p.sale_price)))}</td>
+                <td className="num">{formatMoney(shown(p, Number(p.sale_price)))}</td>
                 {branches.map((b) => {
                   const key: Key = `${b.id}:${p.id}`;
                   return (
-                    <td key={b.id}>
-                      <input
+                    <td key={b.id} className="num">
+                      <span className="entrada entrada--cifra precio-sucursal"><input
                         aria-label={`Precio de ${p.name} en ${b.name}`}
                         inputMode="decimal"
                         placeholder="base"
                         value={valueOf(key, p)}
                         onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
-                        style={{ width: "7.5rem" }}
-                      />
+                      /></span>
                     </td>
                   );
                 })}
@@ -121,9 +118,9 @@ export function BranchPricesPanel({ presentations }: { presentations: Presentati
           </tbody>
         </table>
       </div>
-      {error && <p className="form-error" role="alert">{error}</p>}
-      {saved && <p className="notice" role="status">{saved}</p>}
-      <div><Button variant="secundario" onClick={() => void save()} loading={busy} disabled={Object.keys(draft).length === 0}>Guardar precios por sucursal</Button></div>
-    </div>
+      {error && <Message tone="error">{error}</Message>}
+      {saved && <Message tone="exito">{saved}</Message>}
+      <Button variant="secundario" block onClick={() => void save()} loading={busy} disabled={Object.keys(draft).length === 0}>Guardar precios por sucursal</Button>
+    </>
   );
 }

@@ -3,7 +3,7 @@ import { getSupabase } from "../../shared/supabase/client";
 import { formatMoney } from "../pos/money";
 import { getEffectiveMultiplier, suggestPresentationPrice, type PriceCategory, type PriceCategoryMultiplier } from "../catalog/priceSuggestion";
 import type { Product, Presentation } from "../../shared/types";
-import { Button, GlassCard, SelectField, TextField } from "../../shared/ui";
+import { Badge, Button, Message, SelectField, TextField } from "../../shared/ui";
 import { PriceHistoryPanel } from "./PriceHistoryPanel";
 import { BranchPricesPanel } from "./BranchPricesPanel";
 
@@ -123,76 +123,106 @@ export function ProductPricing({ product, presentations, onPricesSaved }: {
   const baseUnitLabel = product.base_unit === "gram" ? "g" : product.base_unit === "millilitre" ? "ml" : "unidad/es";
 
   return (
-    <GlassCard>
-      <h3 style={{ marginTop: 0 }}>Costo y precio sugerido</h3>
-      <p>El costo se registra por envase. Indicá cuántos {baseUnitLabel} contiene para calcular el costo de cada presentación.</p>
-      {error && <p className="form-error" role="alert">{error}</p>}
-      {message && <p role="status">{message}</p>}
-      {suppliers.length === 0 ? <p>Primero creá un proveedor en la sección Proveedores.</p> : (
-        <form onSubmit={saveSupplierCost} style={{ display: "flex", flexDirection: "column", gap: "var(--esp-s)" }}>
-          <div style={{ display: "flex", gap: "var(--esp-s)", alignItems: "flex-end", flexWrap: "wrap" }}>
-            <SelectField label="Proveedor" value={supplierId} onChange={event => selectSupplier(event.target.value)} required>
-              <option value="">Seleccioná un proveedor</option>
-              {suppliers.map(supplier => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
-            </SelectField>
-            <TextField label="Costo total del envase ($)" type="number" min="0" step="0.01" value={cost}
-              onChange={event => setCost(event.target.value)} required />
-            <TextField label={`Contenido (${baseUnitLabel})`} type="number" min="0.001" step="0.001" value={purchaseQuantity}
-              onChange={event => setPurchaseQuantity(event.target.value)} required
-              help={`Ejemplo: una bolsa de 25 kg se carga como 25.000 ${baseUnitLabel}.`} />
-            <TextField label="Código del proveedor (opcional)" value={supplierCode} onChange={event => setSupplierCode(event.target.value)} />
+    <>
+      <section className="carta pila" aria-labelledby="costo-sugerido">
+        <h3 className="titulo-seccion" id="costo-sugerido">Costo y precio sugerido</h3>
+        <p className="cuerpo-s suave">El costo se registra por envase. Indicá cuántos {baseUnitLabel} contiene para calcular el costo de cada presentación.</p>
+        {error && <Message tone="error">{error}</Message>}
+        {message && <Message tone="exito">{message}</Message>}
+        {suppliers.length === 0 ? <Message>Primero creá un proveedor en la sección Proveedores.</Message> : (
+          <form onSubmit={saveSupplierCost} className="pila">
+            <div className="form-fila">
+              <SelectField label="Proveedor" value={supplierId} onChange={event => selectSupplier(event.target.value)} required>
+                <option value="">Elegí un proveedor</option>
+                {suppliers.map(supplier => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
+              </SelectField>
+              <TextField label="Costo total del envase" type="number" numeric min="0" step="0.01" value={cost}
+                onChange={event => setCost(event.target.value)} required />
+              <TextField label="Contenido" type="number" numeric suffix={baseUnitLabel} min="0.001" step="0.001" value={purchaseQuantity}
+                onChange={event => setPurchaseQuantity(event.target.value)} required
+                help={`Ejemplo: una bolsa de 25 kg se carga como 25.000 ${baseUnitLabel}.`} />
+              <TextField label="Código del proveedor (opcional)" value={supplierCode} onChange={event => setSupplierCode(event.target.value)} />
+            </div>
+            <div className="fila fila--entre">
+              <label className="casilla">
+                <input type="checkbox" checked={isPrimary} onChange={event => setIsPrimary(event.target.checked)} />
+                Proveedor principal
+              </label>
+              <Button type="submit" variant="secundario" disabled={saving || !supplierId}>{selectedCost ? "Actualizar costo y fecha de compra" : "Registrar costo"}</Button>
+            </div>
+          </form>
+        )}
+
+        {supplierCosts.length > 0 && (
+          <div className="tabla-marco">
+            <table className="tabla tabla--compacta">
+              <thead><tr><th>Proveedor</th><th className="num">Costo del envase</th><th className="num">Contenido</th><th>Principal</th><th className="acciones"><span className="sr">Editar</span></th></tr></thead>
+              <tbody>
+                {supplierCosts.map(row => {
+                  const supplier = Array.isArray(row.supplier) ? row.supplier[0] : row.supplier;
+                  return (
+                    <tr key={row.supplier_id}>
+                      <td>{supplier?.name ?? "Proveedor"}</td>
+                      <td className="num">{formatMoney(Number(row.cost))}</td>
+                      <td className="num">{row.purchase_quantity ?? "pendiente"} {row.purchase_quantity ? baseUnitLabel : ""}</td>
+                      <td>{row.is_primary ? <Badge tone="exito" icon="check">Principal</Badge> : null}</td>
+                      <td className="acciones"><Button variant="fantasma" size="compacto" icon="edit" onClick={() => selectSupplier(row.supplier_id)}>Editar</Button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-          <label style={{ display: "flex", gap: "var(--esp-xs)", alignItems: "center" }}>
-            <input type="checkbox" checked={isPrimary} onChange={event => setIsPrimary(event.target.checked)} />
-            Proveedor principal
-          </label>
-          <div><Button type="submit" disabled={saving || !supplierId}>{selectedCost ? "Actualizar costo y fecha de compra" : "Registrar costo"}</Button></div>
-        </form>
-      )}
+        )}
 
-      {supplierCosts.length > 0 && (
-        <ul>
-          {supplierCosts.map(row => {
-            const supplier = Array.isArray(row.supplier) ? row.supplier[0] : row.supplier;
-            return <li key={row.supplier_id}>
-              {supplier?.name ?? "Proveedor"}: {formatMoney(Number(row.cost))} por envase, {row.purchase_quantity ?? "cantidad pendiente"} {baseUnitLabel}
-              {row.is_primary ? " · principal" : ""}
-              <Button variant="fantasma" onClick={() => selectSupplier(row.supplier_id)}>Editar</Button>
-            </li>;
-          })}
-        </ul>
-      )}
+        <p className="rotulo-seccion">Sugerencias por presentación</p>
+        <p className="meta">
+          Último costo registrado × multiplicador efectivo, redondeado hacia arriba al próximo múltiplo de $100.
+          {usableCost ? <> Base: <span className="cifra">{formatMoney(Number(usableCost.cost))}</span> / {usableCost.purchase_quantity} {baseUnitLabel} · {multiplier}×.</> : " Registrá costo y contenido de compra para generar sugerencias."}
+        </p>
+        {usableCost && presentations.length > 0 && (
+          <div className="tabla-marco">
+            <table className="tabla tabla--compacta">
+              <thead><tr><th>Presentación</th><th className="num">Precio actual</th><th className="num">Sugerido</th><th className="acciones"><span className="sr">Aplicar</span></th></tr></thead>
+              <tbody>
+                {presentations.map(presentation => {
+                  const suggestion = suggestPresentationPrice({
+                    packageCost: Number(usableCost.cost),
+                    packageQuantity: Number(usableCost.purchase_quantity),
+                    presentationQuantity: Number(presentation.base_quantity ?? 1),
+                    multiplier,
+                    soldByWeight: presentation.sold_by_weight
+                  });
+                  return (
+                    <tr key={presentation.id}>
+                      <td>{presentation.name}</td>
+                      <td className="num">{formatMoney(Number(presentation.sale_price))}</td>
+                      <td className="num fuerte">{suggestion ? `${formatMoney(suggestion.displayPrice)}${presentation.sold_by_weight ? "/kg" : ""}` : "—"}</td>
+                      <td className="acciones">
+                        {suggestion
+                          ? <Button variant="secundario" size="compacto" disabled={saving} onClick={() => void applySuggestedPrice(presentation, suggestion.salePrice)}>Aplicar sugerido</Button>
+                          : <span className="meta">Revisá costo y contenido</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
-      <h4>Sugerencias para las presentaciones</h4>
-      <p>Se usa el último costo registrado, el multiplicador efectivo y redondeo hacia arriba al próximo múltiplo de $100 (según el requisito del proyecto).</p>
-      {!usableCost ? <p>Registrá costo y contenido de compra para generar sugerencias.</p> : (
-        <p>Base de cálculo: {formatMoney(Number(usableCost.cost))} / {usableCost.purchase_quantity} {baseUnitLabel} · {multiplier}×.</p>
-      )}
-      {presentations.map(presentation => {
-        const suggestion = usableCost ? suggestPresentationPrice({
-          packageCost: Number(usableCost.cost),
-          packageQuantity: Number(usableCost.purchase_quantity),
-          presentationQuantity: Number(presentation.base_quantity ?? 1),
-          multiplier,
-          soldByWeight: presentation.sold_by_weight
-        }) : null;
-        return <div key={presentation.id} style={{ display: "flex", gap: "var(--esp-s)", alignItems: "center", flexWrap: "wrap", marginBlock: "var(--esp-xs)" }}>
-          <span>{presentation.name}: precio actual {formatMoney(Number(presentation.sale_price))}</span>
-          {suggestion ? <>
-            <strong>Sugerido {presentation.sold_by_weight ? "por kg: " : ""}{formatMoney(suggestion.displayPrice)}</strong>
-            <Button variant="secundario" disabled={saving} onClick={() => void applySuggestedPrice(presentation, suggestion.salePrice)}>
-              Aplicar sugerido
-            </Button>
-          </> : <span>Sin sugerencia: revisá el costo y la cantidad del envase.</span>}
-        </div>;
-      })}
-
-      <h4>Precio por sucursal (RF-69)</h4>
-      <BranchPricesPanel presentations={presentations} />
-
-      <h4>Historial de precios (RF-27)</h4>
-      <p className="field-help">Cada cambio de precio de venta, quién lo hizo y la variación; sirve para seguir la inflación del producto.</p>
-      <PriceHistoryPanel key={presentations.map(p => `${p.id}:${p.sale_price}`).join("|")} presentations={presentations} />
-    </GlassCard>
+      <div className="reja-2">
+        <section className="carta pila" aria-labelledby="precio-sucursal">
+          <h3 className="titulo-seccion" id="precio-sucursal">Precio por sucursal</h3>
+          <BranchPricesPanel presentations={presentations} />
+        </section>
+        <section className="carta pila" aria-labelledby="historial-precios">
+          <h3 className="titulo-seccion" id="historial-precios">Historial de precios</h3>
+          <p className="meta">Cada cambio de precio de venta, quién lo hizo y la variación: sirve para seguir la inflación del producto.</p>
+          <PriceHistoryPanel key={presentations.map(p => `${p.id}:${p.sale_price}`).join("|")} presentations={presentations} />
+        </section>
+      </div>
+    </>
   );
 }

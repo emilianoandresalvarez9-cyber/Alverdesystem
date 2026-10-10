@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { getSupabase } from "../../shared/supabase/client";
-import { Badge, Button, TextField } from "../../shared/ui";
+import { Badge, Button, Message, TextField } from "../../shared/ui";
 import { KIND_LABELS, selectableProducts, type AssignKind, type AssignableProduct } from "./bulkAssign";
 
 interface BulkAssignPanelProps {
@@ -69,29 +69,31 @@ export function BulkAssignPanel({ kind, id, name, onDone }: BulkAssignPanelProps
   }
 
   return (
-    <div style={{ display: "grid", gap: "var(--esp-s)" }}>
-      <div style={{ display: "flex", gap: "var(--esp-s)", alignItems: "flex-end", flexWrap: "wrap" }}>
-        <TextField label={`Asignar ${KIND_LABELS[kind]} "${name}" a`} placeholder="Buscar producto" value={query}
-          onChange={(e) => setQuery(e.target.value)} style={{ minWidth: "16rem" }} />
-        <Button variant="fantasma" onClick={selectVisible} disabled={visible.length === 0}>Marcar los {visible.length} visibles</Button>
-        <Button variant="fantasma" onClick={() => setSelected(new Set())} disabled={selected.size === 0}>Desmarcar</Button>
+    <div className="pila pila--s">
+      <div className="form-fila">
+        <TextField label={`Asignar ${KIND_LABELS[kind]} "${name}" a`} icon="search" placeholder="Buscar producto" value={query}
+          onChange={(e) => setQuery(e.target.value)} />
+        <div className="fila">
+          <Button variant="fantasma" size="compacto" onClick={selectVisible} disabled={visible.length === 0}>Marcar los {visible.length} visibles</Button>
+          <Button variant="fantasma" size="compacto" onClick={() => setSelected(new Set())} disabled={selected.size === 0}>Desmarcar</Button>
+        </div>
       </div>
-      {error && <p className="form-error" role="alert">{error}</p>}
+      {error && <Message tone="error">{error}</Message>}
       {products && (
-        <ul style={{ listStyle: "none", margin: 0, padding: 0, maxHeight: "16rem", overflowY: "auto", display: "grid", gap: ".15rem" }}>
+        <ul className="asignar__lista">
           {visible.map((p) => (
             <li key={p.id}>
-              <label style={{ display: "flex", gap: ".5rem", alignItems: "center", fontWeight: 500, padding: ".2rem .4rem", borderRadius: "var(--radio-control)" }}>
+              <label className="casilla">
                 <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggle(p.id)} />
-                <span style={{ flex: 1 }}>{p.name}</span>
+                <span className="crece">{p.name}</span>
                 {has(p) && <Badge tone="exito">ya la tiene</Badge>}
               </label>
             </li>
           ))}
-          {visible.length === 0 && <li className="field-help">Ningún producto coincide.</li>}
+          {visible.length === 0 && <li className="meta">Ningún producto coincide.</li>}
         </ul>
       )}
-      <div style={{ display: "flex", gap: "var(--esp-s)", flexWrap: "wrap" }}>
+      <div className="fila">
         <Button onClick={() => void run(false)} disabled={selected.size === 0 || busy !== null} loading={busy === "assign"}>
           Asignar a {selected.size} producto{selected.size === 1 ? "" : "s"}
         </Button>
