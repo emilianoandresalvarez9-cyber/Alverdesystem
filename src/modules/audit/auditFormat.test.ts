@@ -13,6 +13,14 @@ describe("RF-60: historial legible", () => {
     expect(formatValue("sale_price", "9500.00")).toMatch(/9\.500/);
   });
 
+  it("una corrección de turno de caja se lee como dinero y con fecha corta (RF-32)", () => {
+    expect(entityLabel("cash_shifts")).toBe("Turno de caja");
+    expect(fieldLabel("initial_balance")).toBe("Monto inicial");
+    expect(fieldLabel("final_balance")).toBe("Efectivo esperado");
+    expect(formatValue("initial_balance", "10000.00")).toBe(formatValue("sale_price", 10000));
+    expect(formatValue("closed_at", new Date(2026, 9, 10, 12, 5).toISOString())).toBe("10/10 12:05");
+  });
+
   it("booleanos y vacíos", () => {
     expect(formatValue("active", true)).toBe("Sí");
     expect(formatValue("active", false)).toBe("No");
