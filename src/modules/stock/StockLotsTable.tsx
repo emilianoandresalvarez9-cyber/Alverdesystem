@@ -6,6 +6,7 @@ import { StockAdjustmentModal } from "./StockAdjustmentModal";
 import { TransferModal } from "./TransferModal";
 import { formatAmount, formatDay, remaining, unitLabel } from "./format";
 import type { StockLot } from "./types";
+import { groupStockLots } from "./stockGroups";
 import { useBranch } from "../../shared/branch/BranchContext";
 
 interface StockLotsTableProps {
@@ -96,13 +97,7 @@ export function StockLotsTable({
   );
   const stock = (lot: StockLot) => `${formatAmount(lot.current_quantity)} / ${formatAmount(lot.initial_quantity)} ${unitLabel(lot.base_unit)}`;
 
-  const groups = Array.from(lots.reduce((map, lot) => {
-    const key = `${lot.branch_id ?? "sin-sucursal"}:${lot.presentation_id}`;
-    const group = map.get(key) ?? { key, lots: [] as StockLot[] };
-    group.lots.push(lot);
-    map.set(key, group);
-    return map;
-  }, new Map<string, { key: string; lots: StockLot[] }>()).values());
+  const groups = groupStockLots(lots);
   const toggleGroup = (key: string) => setExpandedGroups((previous) => {
     const next = new Set(previous);
     if (next.has(key)) next.delete(key);
