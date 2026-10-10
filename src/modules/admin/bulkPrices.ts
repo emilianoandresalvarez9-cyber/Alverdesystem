@@ -21,6 +21,8 @@ export interface PriceChange {
   presentation_name: string;
   old_price: number;
   new_price: number;
+  /** Balanza (ADR-001): el precio viene por gramo; se muestra y exporta por kilo. */
+  sold_by_weight: boolean;
 }
 
 export interface RetagRow extends PriceChange {
@@ -60,17 +62,30 @@ export function summarizePreview(rows: PriceChange[]): PreviewSummary {
   );
 }
 
-export const RETAG_HEADERS = ["Producto", "Presentación", "Código interno", "Precio anterior", "Precio nuevo"];
+export const RETAG_HEADERS = ["Producto", "Presentación", "Código interno", "Precio anterior", "Precio nuevo", "Por"];
+
+/** Precio tal como lo piensa la dueña: por kilo en balanza, por unidad en el resto. */
+export function displayPrice(price: number, soldByWeight: boolean): number {
+  return soldByWeight ? Math.round(price * 100000) / 100 : price;
+}
+
+export function formatPrice(price: number, soldByWeight: boolean): string {
+  return `${formatMoney(displayPrice(price, soldByWeight))}${soldByWeight ? "/kg" : ""}`;
+}
 
 /** Filas para el Excel de reetiquetado (RF-30): solo lo que cambió. */
 export function retagMatrix(rows: RetagRow[]): (string | number)[][] {
   return rows
     .filter((row) => row.old_price !== row.new_price)
-    .map((row) => [row.product_name, row.presentation_name, row.internal_barcode ?? "", row.old_price, row.new_price]);
+    .map((row) => [
+      row.product_name, row.presentation_name, row.internal_barcode ?? "",
+      displayPrice(row.old_price, row.sold_by_weight), displayPrice(row.new_price, row.sold_by_weight),
+      row.sold_by_weight ? "kg" : "unidad"
+    ]);
 }
 
 /** "+$ 1.500,00" o "−$ 200,00". */
 export function formatDiff(row: PriceChange): string {
-  const diff = row.new_price - row.old_price;
-  return `${diff > 0 ? "+" : "−"}${formatMoney(Math.abs(diff))}`;
+  const diff = displayPrice(row.new_price, row.sold_by_weight) - displayPrice(row.old_price, row.sold_by_weight);
+  return `${diff > 0 ? "+" : "−"}${formatMoney(Math.abs(diff))}${row.sold_by_weight ? "/kg" : ""}`;
 }

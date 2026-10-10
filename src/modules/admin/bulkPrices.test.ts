@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { parsePercent, retagMatrix, summarizePreview, type PriceChange, type RetagRow } from "./bulkPrices";
+import { formatDiff, formatPrice, parsePercent, retagMatrix, summarizePreview, type PriceChange, type RetagRow } from "./bulkPrices";
 
 const change = (over: Partial<PriceChange>): PriceChange => ({
   presentation_id: "p1", product_id: "x1", product_name: "Almendras", presentation_name: "Granel",
-  old_price: 14800, new_price: 16300, ...over
+  old_price: 14800, new_price: 16300, sold_by_weight: false, ...over
 });
 
 describe("RF-28: porcentaje de la actualización masiva", () => {
@@ -47,6 +47,20 @@ describe("RF-30: lista de reetiquetado", () => {
       row({}),
       row({ presentation_id: "p2", presentation_name: "Paquete", internal_barcode: null, old_price: 4100, new_price: 4100 })
     ]);
-    expect(matrix).toEqual([["Almendras", "Granel", "2000000000017", 14800, 16300]]);
+    expect(matrix).toEqual([["Almendras", "Granel", "2000000000017", 14800, 16300, "unidad"]]);
+  });
+});
+
+describe("Balanza (ADR-001): precio por gramo mostrado por kilo", () => {
+  const scale = change({ old_price: 14.8, new_price: 16.3, sold_by_weight: true });
+
+  it("la pantalla muestra $/kg, no $ por gramo", () => {
+    expect(formatPrice(14.8, true)).toMatch(/14\.800.*\/kg$/);
+    expect(formatDiff(scale)).toMatch(/^\+.*1\.500.*\/kg$/);
+  });
+
+  it("el Excel de reetiquetado lleva el precio por kilo", () => {
+    const matrix = retagMatrix([{ ...scale, internal_barcode: null, changed_at: "2026-10-09T20:00:00Z" }]);
+    expect(matrix).toEqual([["Almendras", "Granel", "", 14800, 16300, "kg"]]);
   });
 });

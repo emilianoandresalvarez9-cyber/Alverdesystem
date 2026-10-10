@@ -991,6 +991,7 @@ export type Database = {
           presentation_name: string
           old_price: number
           new_price: number
+          sold_by_weight: boolean
         }[]
       }
       credit_movement_delta: {
@@ -1079,6 +1080,7 @@ export type Database = {
           old_price: number
           new_price: number
           changed_at: string
+          sold_by_weight: boolean
         }[]
       }
       process_offline_sale: {
