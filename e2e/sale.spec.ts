@@ -27,7 +27,11 @@ test.describe('Flujo de Venta E2E', () => {
     await expect(page.locator('h1').first()).toBeVisible({ timeout: 10000 });
 
     // 3.5 Asignar la caja local sembrada si este navegador todavía no tiene una.
+    // El marco se dibuja enseguida (RNF-08) y la caja todavía puede estar cargando: esperar a
+    // que aparezca una de las dos pantallas antes de decidir.
     const useRegister = page.getByRole('button', { name: /Usar esta caja/i });
+    const openShiftButton = page.getByRole('button', { name: /^Abrir turno$/i });
+    await expect(useRegister.or(openShiftButton)).toBeVisible({ timeout: 10000 });
     if (await useRegister.isVisible()) {
       await page.getByLabel('Caja').selectOption({ label: 'Caja E2E (Central)' });
       await useRegister.click();

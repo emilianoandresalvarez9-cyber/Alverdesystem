@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#f9faf6" />
+    <meta name="theme-color" content="#f1f3ed" />
     <title>Alverde · Ingresar</title>
   <script>
       (function(){
@@ -11,7 +11,7 @@
           var t = localStorage.getItem("alverde-tema");
           var valid = t === "midnight-bio" ? "midnight-bio" : "alverde-botanical";
           document.documentElement.setAttribute("data-theme", valid);
-          var c = {"alverde-botanical":"#f9faf6","midnight-bio":"#101410"};
+          var c = {"alverde-botanical":"#f1f3ed","midnight-bio":"#111511"};
           var m = document.querySelector('meta[name="theme-color"]');
           if (m) m.setAttribute("content", c[valid]);
         } catch(e) {}

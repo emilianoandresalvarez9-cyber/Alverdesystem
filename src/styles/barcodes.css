@@ -12,7 +12,7 @@
   }
 
   /* El contenedor principal debe tomar toda la hoja sin márgenes de app */
-  body, html, .app-shell, .app-content {
+  body, html, .app, .app-main, .app-content {
     background: white !important;
     color: black !important;
     padding: 0 !important;
@@ -21,7 +21,7 @@
   }
 
   /* Asegurarse que el blur de glassmorfismo no ensucie la hoja de impresión */
-  .glass {
+  .glass, .carta {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
     background: transparent !important;

@@ -1,92 +1,69 @@
 /*
- * Alverde · tokens de diseño (Agente D — RNF-06 a RNF-09)
- * ------------------------------------------------------
- * Única fuente de colores, tipografía, radios, espaciado y movimiento.
- * Los demás agentes NO inventan valores nuevos: consumen estas variables.
- * Si falta un token, se agrega acá (y se anota en DISEÑO.md), no se
- * escribe un color suelto en un componente.
+ * Alverde · tokens que no cambian con el tema (RNF-06 a RNF-09)
+ * ------------------------------------------------------------
+ * Valores del paquete de Claude Design (tokens.json). Los colores, superficies y
+ * sombras de cada tema viven en themes/alverde-botanical.css y themes/midnight-bio.css,
+ * con los mismos nombres en los dos. Si falta un token, se agrega acá o en los dos
+ * temas, no se escribe un valor suelto en un componente.
  */
 
 :root {
-  /* ---- Color: fondo y tinta ---- */
-  --color-fondo: #10221a;            /* verde noche, fondo general */
-  --color-fondo-profundo: #06130a;   /* superficies hundidas (inputs) */
-  --color-tinta: #eef8ed;            /* texto principal */
-  --color-tinta-suave: #d8ead7;      /* texto secundario, navegación */
-  --color-tinta-apagada: #afd8a5;    /* texto terciario, estados de carga */
+  /* ---- Espacio: cinco pasos ---- */
+  --esp-xs: 4px;
+  --esp-s: 8px;
+  --esp-m: 16px;
+  --esp-l: 24px;
+  --esp-xl: 32px;
 
-  /* ---- Color: acentos ---- */
-  --color-acento: #d5ef89;           /* lima: acción principal, foco, marca */
-  --color-acento-tinta: #11221b;     /* texto sobre el acento */
-  --color-dorado: #d9ab55;           /* acento cálido del fondo, detalles */
-  --color-verde-medio: #4d956a;      /* aura verde del fondo */
+  /* ---- Radios: un campo y un botón en la misma fila son un par ---- */
+  --radio-control: 8px;
+  --radio-boton: 8px;
+  --radio-carta: 12px;
 
-  /* ---- Color: estados ---- */
-  --color-exito: #b9e88b;
-  --color-aviso: #ffc36c;
-  --color-error: #ffc1ba;
-  --color-error-fuerte: #ff8d80;
+  /* ---- Texto: cinco tamaños + la cifra del TOTAL de la caja ---- */
+  --texto-xs: 12px;
+  --texto-s: 14px;
+  --texto-m: 16px;
+  --texto-l: 20px;
+  --texto-titulo: 24px;
+  --texto-cifra: 48px;
 
-  /* ---- Superficies glass ---- */
-  --glass-fondo: color-mix(in srgb, #f4fff0 13%, transparent);
-  --glass-fondo-lite: color-mix(in srgb, #f4fff0 9%, transparent);
-  --glass-borde: color-mix(in srgb, #efffe9 24%, transparent);
-  --glass-sombra: 0 18px 60px #06130a59;
-  --glass-blur: 14px; /* presupuesto de blur pensado para la notebook de la caja */
+  /* ---- Fuentes (autoalojadas en fonts.css) ---- */
+  --fuente: Manrope, "Segoe UI", system-ui, sans-serif;
+  --fuente-titulos: "Plus Jakarta Sans", Manrope, "Segoe UI", system-ui, sans-serif;
+  --fuente-datos: "JetBrains Mono", Consolas, ui-monospace, monospace;
 
-  /* ---- Radios ---- */
-  --radio-control: .7rem;      /* botones, inputs */
-  --radio-panel: 1rem;         /* barras, toolbars */
-  --radio-carta: 1.25rem;      /* tarjetas */
-  --radio-carta-grande: 1.5rem;/* tarjeta protagonista (login) */
-  --radio-pastilla: 999px;     /* tags y badges */
-
-  /* ---- Espaciado ---- */
-  --esp-xs: .35rem;
-  --esp-s: .6rem;
-  --esp-m: 1rem;
-  --esp-l: 1.5rem;
-  --esp-xl: 2.5rem;
-
-  /* ---- Tipografía ---- */
-  --fuente: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", sans-serif;
-  --texto-xs: .75rem;
-  --texto-s: .85rem;
-  --texto-m: 1rem;
-  --texto-l: 1.25rem;
-  --texto-titulo: clamp(2rem, 6vw, 3.6rem);
+  /* ---- Vidrio: sólo la cabecera y el modal ---- */
+  --glass-blur: 12px;
 
   /* ---- Movimiento ---- */
-  --mov-rapido: 120ms;
+  --mov-rapido: 150ms;
   --mov-normal: 220ms;
-  --mov-curva: cubic-bezier(.2, .7, .3, 1);
+  --mov-curva: cubic-bezier(0.2, 0, 0, 1);
 
-  /* ---- Táctil ----
-   * Área mínima de toque para celulares de empleados: 44×44 px.
-   * Los controles de abajo ya lo cumplen con su padding. */
-}
-
-/*
- * Hardware modesto (RNF-02/RNF-03): el desenfoque es lo más caro de pintar
- * en la notebook Celeron/Atom de la caja. Si una pantalla se siente lenta,
- * agregarle la clase `sin-blur` al <html> de esa página: las superficies
- * glass pasan a un fondo más opaco sin desenfoque, mismo aspecto general.
- */
-html.sin-blur {
-  --glass-blur: 0px;
-  --glass-fondo: color-mix(in srgb, #16281f 88%, transparent);
-  --glass-fondo-lite: color-mix(in srgb, #16281f 82%, transparent);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  :root {
-    --mov-rapido: 0ms;
-    --mov-normal: 0ms;
-  }
-  *, *::before, *::after {
-    animation-duration: .01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: .01ms !important;
-  }
+  /*
+   * ---- Puente: nombres anteriores, mientras cada página pasa al sistema nuevo ----
+   * Apuntan a los tokens nuevos para que pos.css, catalog.css y los estilos en línea
+   * de los módulos sigan resolviendo. Cada PR de página borra los que deja de usar.
+   */
+  --radio-panel: var(--radio-carta);
+  --radio-carta-grande: var(--radio-carta);
+  --radio-pastilla: 999px;
+  --titulo-tracking: -0.01em;
+  --titulo-peso: 600;
+  --fondo-pagina: var(--color-fondo);
+  --color-fondo-profundo: var(--input-fondo);
+  --glass-fondo-lite: var(--carta-fondo);
+  --glass-fondo-opaco: var(--carta-fondo);
+  --glass-saturacion: 100%;
+  --input-sombra: none;
+  --tabla-cabecera-fondo: var(--carta-fondo);
+  --tabla-cabecera-tinta: var(--color-tinta-suave);
+  --boton-secundario-tinta: var(--color-tinta);
+  --boton-secundario-borde: var(--color-linea);
+  --color-badge-fondo: var(--boton-secundario-fondo);
+  --color-exito-tinta: var(--color-acento-tinta);
+  --color-aviso-tinta: var(--color-acento-tinta);
+  --color-error-tinta: var(--color-acento-tinta);
+  --carta-destacada-borde: var(--carta-borde);
 }

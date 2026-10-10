@@ -103,7 +103,7 @@ export function StockWarningsReview() {
                   <Button variant="secundario" onClick={() => void resolve(r.id)} loading={busy === r.id} disabled={busy !== null}>
                     Marcar como revisado
                   </Button>
-                  {r.lot_id && <a className="button button-ghost" href="/stock.html">Ajustar en Stock</a>}
+                  {r.lot_id && <a className="boton boton--fantasma" href="/stock.html">Ajustar en Stock</a>}
                 </div>
               )}
             </li>

@@ -1,6 +1,6 @@
 import { type FormEvent, useState } from "react";
 import { hasSupabaseConfig } from "../shared/config/env";
-import { signIn, signOut, currentSession, currentProfile } from "../shared/auth/session";
+import { signIn, signOut, currentSession, currentProfile, storeLastProfile } from "../shared/auth/session";
 import { homeFor } from "../shared/auth/roles";
 import { ThemeToggle } from "../shared/theme/ThemeToggle";
 
@@ -25,6 +25,7 @@ export function LoginPage() {
         await signOut();
         throw new Error("Tu usuario está desactivado. Pedile a la administradora que lo reactive.");
       }
+      storeLastProfile(profile); // la primera página ya se dibuja con su marco (RNF-08)
       location.assign(homeFor(profile.role));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "No se pudo iniciar sesión.");
@@ -50,7 +51,7 @@ export function LoginPage() {
             <label>Correo electrónico<input autoComplete="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
             <label>Contraseña<input autoComplete="current-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>
             {message && <p className="form-error" role="alert">{message}</p>}
-            <button className="button" disabled={loading} type="submit">{loading ? "Ingresando…" : "Ingresar"}</button>
+            <button className="boton boton--primario boton--bloque" disabled={loading} type="submit">{loading ? "Ingresando…" : "Ingresar"}</button>
           </form>
         )}
       </section>

@@ -1,9 +1,9 @@
 /**
- * Alverde · componentes de base (Agente D — RNF-06 a RNF-09)
+ * Alverde · componentes de base (RNF-06 a RNF-09)
  * Importar siempre desde acá: `import { Button, GlassCard } from "../shared/ui";`
- * La guía de uso está en DISENO.md, en la raíz del repo.
+ * Emiten el marcado del sistema de diseño (src/styles/design-system.css).
  */
-export { Button } from "./Button";
+export { Button, buttonClasses } from "./Button";
 export type { ButtonProps, ButtonVariant } from "./Button";
 export { GlassCard } from "./GlassCard";
 export type { GlassCardProps } from "./GlassCard";
@@ -19,3 +19,9 @@ export { EmptyState } from "./EmptyState";
 export type { EmptyStateProps } from "./EmptyState";
 export { Modal } from "./Modal";
 export type { ModalProps } from "./Modal";
+export { Icon, ICON_NAMES } from "./Icon";
+export type { IconName, IconProps } from "./Icon";
+export { Options } from "./Options";
+export type { OptionItem, OptionsProps } from "./Options";
+export { Message } from "./Message";
+export type { MessageTone } from "./Message";

@@ -1,5 +1,6 @@
 import { useId, forwardRef } from "react";
 import type { InputHTMLAttributes, ForwardedRef } from "react";
+import { Icon, type IconName } from "./Icon";
 
 export type TextFieldProps = InputHTMLAttributes<HTMLInputElement> & {
   /** Texto visible del campo. Obligatorio: ningún input sin etiqueta. */
@@ -8,10 +9,20 @@ export type TextFieldProps = InputHTMLAttributes<HTMLInputElement> & {
   help?: string;
   /** Mensaje de error; al estar presente marca el campo como inválido. */
   error?: string;
+  /** Ícono dentro del campo, a la izquierda (barcode_scanner en el campo del lector, search en buscadores). */
+  icon?: IconName;
+  /** Unidad a la derecha: g, kg, %, días. */
+  suffix?: string;
+  /** Importes, pesos, porcentajes: alineado a la derecha. */
+  numeric?: boolean;
 };
 
+/**
+ * Campo del sistema: etiqueta arriba, entrada de 44 px, ayuda o error abajo.
+ * `className` va al contenedor `.campo`.
+ */
 export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function TextField(
-  { label, help, error, id, className, ...rest },
+  { label, help, error, icon, suffix, numeric, id, className, ...rest },
   ref: ForwardedRef<HTMLInputElement>
 ) {
   const autoId = useId();
@@ -19,24 +30,27 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
   const descriptionId = `${inputId}-desc`;
   const described = Boolean(help) || Boolean(error);
   return (
-    <label htmlFor={inputId} className={className}>
-      {label}
-      <input
-        ref={ref}
-        id={inputId}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={described ? descriptionId : undefined}
-        {...rest}
-      />
+    <div className={["campo", error ? "campo--error" : "", className].filter(Boolean).join(" ")}>
+      <label className="campo__etiqueta" htmlFor={inputId}>{label}</label>
+      <div className={numeric ? "entrada entrada--cifra" : "entrada"}>
+        {icon ? <Icon name={icon} /> : null}
+        <input
+          ref={ref}
+          id={inputId}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={described ? descriptionId : undefined}
+          {...rest}
+        />
+        {suffix ? <span className="entrada__sufijo">{suffix}</span> : null}
+      </div>
       {error ? (
-        <span id={descriptionId} className="field-error" role="alert">
+        <p id={descriptionId} className="campo__ayuda" role="alert">
+          <Icon name="error" size="s" />
           {error}
-        </span>
+        </p>
       ) : help ? (
-        <span id={descriptionId} className="field-help">
-          {help}
-        </span>
+        <p id={descriptionId} className="campo__ayuda">{help}</p>
       ) : null}
-    </label>
+    </div>
   );
 });

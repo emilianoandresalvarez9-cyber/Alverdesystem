@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes } from "react";
+import { Icon } from "./Icon";
 
 export type TagProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   /** Estado del filtro conmutable (RF-02/RF-04: etiquetas combinables). */
@@ -6,28 +7,13 @@ export type TagProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 /**
- * Chip conmutable para filtros de marca, rubro y etiqueta del catálogo.
- * Es un <button> con aria-pressed, así funciona con teclado y lector
- * de pantalla sin trabajo extra.
+ * Chip de filtro: un <button> con aria-pressed, así funciona con teclado y lector de
+ * pantalla. Elegido muestra tilde, no sólo color.
  */
-export function Tag({
-  active = false,
-  className,
-  children,
-  type = "button",
-  ...rest
-}: TagProps) {
-  const classes = ["tag", active ? "tag-activo" : "", className]
-    .filter(Boolean)
-    .join(" ");
-
+export function Tag({ active = false, className, children, type = "button", ...rest }: TagProps) {
   return (
-    <button
-      {...rest}
-      type={type}
-      aria-pressed={active}
-      className={classes}
-    >
+    <button {...rest} type={type} aria-pressed={active} className={["chip", className].filter(Boolean).join(" ")}>
+      <Icon name="check" size="s" />
       {children}
     </button>
   );

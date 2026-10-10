@@ -1,8 +1,25 @@
 /// <reference types="vitest" />
 import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vitest/config";
+import type { Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
+
+/**
+ * RNF-08: la transición entre páginas anima de marco a marco sólo si la página nueva ya
+ * muestra el marco (barra lateral, cabecera) en su primer cuadro. `blocking="render"`
+ * hace que el navegador espere al script de la página antes de pintar, y cada entrada
+ * monta React de forma síncrona (src/shared/components/mountPage.tsx).
+ */
+export function renderBlockingEntries(): Plugin {
+  return {
+    name: "alverde-render-blocking",
+    enforce: "post",
+    transformIndexHtml(html) {
+      return html.replace(/<script type="module"(?![^>]*\bblocking=)/g, '<script type="module" blocking="render"');
+    }
+  };
+}
 
 export default defineConfig({
   test: {
@@ -10,6 +27,7 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    renderBlockingEntries(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'masked-icon.svg'],
@@ -17,8 +35,8 @@ export default defineConfig({
         name: 'Alverde System',
         short_name: 'Alverde',
         description: 'Punto de Venta y Gestión de Stock',
-        theme_color: '#ffffff',
-        background_color: '#ffffff',
+        theme_color: '#f1f3ed',
+        background_color: '#f1f3ed',
         display: 'standalone',
         icons: [
           {
