@@ -33,7 +33,7 @@ export function StockLotsTable({
 
   if (loading) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--esp-s)" }}>
+      <div className="stock-skeletons">
         {Array.from({ length: 5 }).map((_, i) => (
           <GlassCard key={i} className="skeleton" style={{ minHeight: 64 }} />
         ))}
@@ -51,16 +51,16 @@ export function StockLotsTable({
 
   return (
     <>
-      <div className="table-wrap glass">
+      <div className="table-wrap glass stock-table">
         <table>
           <thead>
             <tr>
               <th>Producto / Presentación</th>
-              <th>Stock</th>
+              <th>Remanente</th>
               <th>Ingreso</th>
-              <th>Vencimiento</th>
+              <th>Vencimiento efectivo</th>
               <th>Apertura</th>
-              <th style={{ textAlign: "right" }}>Acciones</th>
+              <th className="stock-table__actions-head">Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -69,95 +69,70 @@ export function StockLotsTable({
               const isPending = lot.id.startsWith("pending:");
               const canOpen = !isPending && !isClosed && !lot.opened_at;
               const hasActiveBag = hasActiveOpenBag ? hasActiveOpenBag(lot.product_id, lot.branch_id) : false;
-              
+              const share = lot.initial_quantity > 0 ? Math.max(0, Math.min(1, lot.current_quantity / lot.initial_quantity)) : 0;
+
               return (
-                <tr key={lot.id} style={{ opacity: isClosed ? 0.6 : 1 }}>
+                <tr key={lot.id} className={isClosed ? "stock-row stock-row--closed" : "stock-row"} data-expiry={lot.expiry_status}>
                   <td>
-                    <div style={{ fontWeight: 700 }}>{lot.product_name}</div>
-                    <div style={{ fontSize: "var(--texto-xs)", color: "var(--color-tinta-suave)" }}>
+                    <div className="stock-row__name">{lot.product_name}</div>
+                    <div className="stock-row__meta">
                       {lot.presentation_name}
-                      {lot.supplier_name && ` • Prov: ${lot.supplier_name}`}
-                      {showBranch && lot.branch_name && <> • <Badge tone="neutro">{lot.branch_name}</Badge></>}
-                      {isPending && <div><Badge tone="aviso">Pendiente de sincronización</Badge></div>}
+                      {lot.sold_by_weight ? <Badge tone="neutro">Granel</Badge> : null}
+                      {lot.supplier_name && <span>Prov: {lot.supplier_name}</span>}
+                      {showBranch && lot.branch_name && <Badge tone="neutro">{lot.branch_name}</Badge>}
+                      {isPending && <Badge tone="aviso">Pendiente de sincronización</Badge>}
                     </div>
                   </td>
 
                   <td>
-                    <span style={{ fontWeight: 800 }}>{lot.current_quantity}</span>{" "}
-                    <span style={{ fontSize: "var(--texto-xs)", color: "var(--color-tinta-apagada)" }}>
-                      / {lot.initial_quantity} {lot.base_unit}
-                    </span>
-                    {isClosed && (
-                      <div style={{ marginTop: 2 }}>
-                        <Badge tone="neutro">Cerrado</Badge>
-                      </div>
-                    )}
+                    <div className="stock-qty">
+                      <span className="stock-qty__now pos-num">{lot.current_quantity}</span>{" "}
+                      <span className="stock-qty__of pos-num">/ {lot.initial_quantity} {lot.base_unit}</span>
+                    </div>
+                    <div className="stock-bar" aria-hidden="true"><span style={{ width: `${Math.round(share * 100)}%` }} /></div>
+                    {isClosed && <Badge tone="neutro">Cerrado</Badge>}
                   </td>
 
-                  <td style={{ fontSize: "var(--texto-xs)" }}>
-                    {new Date(lot.received_at).toLocaleDateString("es-AR")}
-                  </td>
+                  <td className="stock-row__date pos-num">{new Date(lot.received_at).toLocaleDateString("es-AR")}</td>
 
                   <td>
                     <LotStatusBadge
                       status={lot.expiry_status}
                       daysUntilExpiry={lot.days_until_expiry}
-                      effectiveDate={
-                        lot.effective_expiry_date
-                          ? new Date(lot.effective_expiry_date).toLocaleDateString("es-AR")
-                          : null
-                      }
+                      effectiveDate={lot.effective_expiry_date ? new Date(lot.effective_expiry_date).toLocaleDateString("es-AR") : null}
                     />
                   </td>
 
                   <td>
                     {lot.opened_at ? (
-                      <span style={{ fontSize: "var(--texto-xs)", color: "var(--color-tinta-suave)" }}>
-                        Abierto: {new Date(lot.opened_at).toLocaleDateString("es-AR")}
-                      </span>
+                      <span className="stock-row__date">Abierto: {new Date(lot.opened_at).toLocaleDateString("es-AR")}</span>
                     ) : canOpen ? (
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
-                        <Button 
-                          variant="secundario" 
+                      <div className="stock-open">
+                        <Button
+                          variant="secundario"
                           onClick={() => onOpenLot(lot.id)}
                           disabled={hasActiveBag}
                           title={hasActiveBag ? "Ya existe una bolsa abierta para este producto" : "Abrir bolsa (RF-11)"}
                         >
                           Abrir bolsa
                         </Button>
-                        {hasActiveBag && (
-                          <span style={{ fontSize: "10px", color: "var(--color-error)", maxWidth: 100, lineHeight: 1.1 }}>
-                            Ya hay una bolsa abierta (RF-12)
-                          </span>
-                        )}
+                        {hasActiveBag && <span className="stock-open__warn">Ya hay una bolsa abierta (RF-12)</span>}
                       </div>
                     ) : (
                       "—"
                     )}
                   </td>
 
-                  <td style={{ textAlign: "right" }}>
-                    <div style={{ display: "flex", gap: "var(--esp-xs)", justifyContent: "flex-end" }}>
+                  <td>
+                    <div className="stock-actions">
                       {enableFractioning && !isPending && lot.sold_by_weight && !isClosed && (
-                        <Button
-                          variant="primario"
-                          onClick={() => onFraction && onFraction(lot)}
-                        >
-                          Fraccionar
-                        </Button>
+                        <Button variant="primario" onClick={() => onFraction && onFraction(lot)}>Fraccionar</Button>
                       )}
                       {!isPending && !isClosed && (
-                        <Button
-                          variant="fantasma"
-                          onClick={() => setSelectedLotForAdjustment(lot)}
-                        >
-                          Ajustar
-                        </Button>
+                        <Button variant="fantasma" onClick={() => setSelectedLotForAdjustment(lot)}>Ajustar</Button>
                       )}
                       {isAdmin && branches.length > 1 && !isPending && !isClosed && lot.current_quantity > 0 && (
-                        <Button variant="fantasma" onClick={() => setLotToTransfer(lot)} title="Pasar a otra sucursal (RF-68)">
-                          Traspasar
-                        </Button>
+                        <Button variant="fantasma" onClick={() => setLotToTransfer(lot)} title="Pasar a otra sucursal (RF-68)">Traspasar</Button>
                       )}
                     </div>
                   </td>

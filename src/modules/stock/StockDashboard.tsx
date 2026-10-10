@@ -1,158 +1,88 @@
 import { useState } from "react";
 import { useStockLots } from "./useStockLots";
 import { StockLotsTable } from "./StockLotsTable";
-import { GlassCard, TextField, SelectField, Button } from "../../shared/ui";
+import { Button, Tag, TextField, SelectField } from "../../shared/ui";
 import { FractioningModal } from "../fractioning/FractioningModal";
-import { exportToExcel } from "../../shared/export/excel";
-import type { StockLot } from "./types";
+import { useBranch } from "../../shared/branch/BranchContext";
+import type { StockLot, StockLotFilters } from "./types";
 
 interface StockDashboardProps {
   enableFractioning?: boolean;
 }
 
-export function StockDashboard({ enableFractioning = false }: StockDashboardProps) {
-  const {
-    lots,
-    loading,
-    error,
-    filters,
-    setFilters,
-    stats,
-    refreshLots,
-    markLotOpened,
-    hasActiveOpenBag,
-  } = useStockLots();
+type Expiry = StockLotFilters["expiryStatus"];
 
+/**
+ * Lotes y vencimientos (RF-07 a RF-10, RF-65). Las tarjetas cuentan lotes abiertos por
+ * vencimiento efectivo y, al tocarlas, filtran la tabla. Todo sale de los lotes reales.
+ */
+export function StockDashboard({ enableFractioning = false }: StockDashboardProps) {
+  const { lots, loading, error, filters, setFilters, stats, refreshLots, markLotOpened, hasActiveOpenBag } = useStockLots();
+  const { label: branchLabel } = useBranch();
   const [lotToFraction, setLotToFraction] = useState<StockLot | null>(null);
 
+  const toggleExpiry = (value: Expiry) => setFilters({ expiryStatus: filters.expiryStatus === value ? "all" : value, status: "open" });
+
+  const tiles: { key: Expiry; label: string; value: number; tone: "error" | "aviso" | "exito" | "neutro"; help: string }[] = [
+    { key: "expired", label: "Vencidos", value: stats.expired, tone: "error", help: "Retirar de góndola" },
+    { key: "critical", label: "Vencen en 7 días", value: stats.critical, tone: "error", help: "Vender primero" },
+    { key: "warning", label: "Vencen en 30 días", value: stats.warning, tone: "aviso", help: "Atención" },
+    { key: "good", label: "En fecha", value: stats.good, tone: "exito", help: "Más de 30 días" }
+  ];
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--esp-m)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "var(--esp-s)" }}>
+    <div className="stock-page">
+      <div className="stock-head">
         <div>
-          <h2 style={{ margin: 0 }}>Control de Stock y Lotes (RF-07 a RF-10)</h2>
-          <p style={{ margin: "var(--esp-xs) 0 0", color: "var(--color-tinta-suave)", fontSize: "var(--texto-s)" }}>
-            Supervisión de lotes abiertos, fechas de vencimiento efectivo y descartes.
-          </p>
+          <p className="pos-micro">{branchLabel}</p>
+          <h2>Lotes y vencimientos</h2>
+          <p className="field-help">Vencimiento efectivo: el más próximo entre el de fábrica y el de apertura (RF-08). Se vende primero lo que vence antes (RF-09).</p>
         </div>
-        <Button variant="secundario" onClick={refreshLots}>
-          Actualizar
-        </Button>
+        <Button variant="secundario" onClick={refreshLots}>Actualizar</Button>
       </div>
 
-      {error && (
-        <p role="alert" style={{ color: "var(--color-error)", margin: 0 }}>
-          {error}
-        </p>
-      )}
+      {error && <p role="alert" className="form-error">{error}</p>}
 
-      {/* KPI Cards / Semáforo resumen */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "var(--esp-s)" }}>
-        <GlassCard padding="compact" style={{ textAlign: "center" }}>
-          <div style={{ fontSize: "var(--texto-xs)", color: "var(--color-tinta-apagada)", textTransform: "uppercase" }}>
-            Lotes Abiertos
-          </div>
-          <div style={{ fontSize: "1.75rem", fontWeight: 800 }}>{stats.totalOpen}</div>
-        </GlassCard>
-
-        <GlassCard
-          padding="compact"
-          style={{
-            textAlign: "center",
-            borderLeft: stats.expired > 0 ? "3px solid var(--color-error)" : undefined,
-          }}
-        >
-          <div style={{ fontSize: "var(--texto-xs)", color: "var(--color-error)", textTransform: "uppercase", fontWeight: 700 }}>
-            Vencidos
-          </div>
-          <div style={{ fontSize: "1.75rem", fontWeight: 800, color: stats.expired > 0 ? "var(--color-error)" : undefined }}>
-            {stats.expired}
-          </div>
-        </GlassCard>
-
-        <GlassCard
-          padding="compact"
-          style={{
-            textAlign: "center",
-            borderLeft: stats.critical > 0 ? "3px solid var(--color-aviso)" : undefined,
-          }}
-        >
-          <div style={{ fontSize: "var(--texto-xs)", color: "var(--color-aviso)", textTransform: "uppercase", fontWeight: 700 }}>
-            Vence en ≤ 7d
-          </div>
-          <div style={{ fontSize: "1.75rem", fontWeight: 800, color: stats.critical > 0 ? "var(--color-aviso)" : undefined }}>
-            {stats.critical}
-          </div>
-        </GlassCard>
-
-        <GlassCard padding="compact" style={{ textAlign: "center" }}>
-          <div style={{ fontSize: "var(--texto-xs)", color: "var(--color-tinta-suave)", textTransform: "uppercase" }}>
-            Vence en ≤ 30d
-          </div>
-          <div style={{ fontSize: "1.75rem", fontWeight: 800 }}>{stats.warning}</div>
-        </GlassCard>
-
-        <GlassCard padding="compact" style={{ textAlign: "center" }}>
-          <div style={{ fontSize: "var(--texto-xs)", color: "var(--color-exito)", textTransform: "uppercase", fontWeight: 700 }}>
-            En Regla
-          </div>
-          <div style={{ fontSize: "1.75rem", fontWeight: 800, color: "var(--color-exito)" }}>
-            {stats.good}
-          </div>
-        </GlassCard>
+      <div className="stock-kpis">
+        <div className="stock-kpi stock-kpi--total">
+          <span className="pos-micro">Lotes abiertos</span>
+          <strong className="pos-num">{stats.totalOpen}</strong>
+          <span className="stock-kpi__help">{stats.openBags} bolsa{stats.openBags === 1 ? "" : "s"} de granel abierta{stats.openBags === 1 ? "" : "s"}</span>
+        </div>
+        {tiles.map((tile) => (
+          <button key={tile.key} type="button" className="stock-kpi" data-tone={tile.tone}
+            aria-pressed={filters.expiryStatus === tile.key} onClick={() => toggleExpiry(tile.key)}
+            title={filters.expiryStatus === tile.key ? "Quitar filtro" : `Ver solo: ${tile.label.toLowerCase()}`}>
+            <span className="pos-micro">{tile.label}</span>
+            <strong className="pos-num">{tile.value}</strong>
+            <span className="stock-kpi__help">{tile.help}</span>
+          </button>
+        ))}
       </div>
 
-      {/* Toolbar de Filtros */}
-      <GlassCard padding="compact">
-        <div style={{ display: "flex", gap: "var(--esp-s)", flexWrap: "wrap", alignItems: "flex-end" }}>
-          <TextField
-            label="Buscar producto o proveedor"
-            placeholder="Ej. Nueces, Arcor..."
-            value={filters.search}
-            onChange={(e) => setFilters({ search: e.target.value })}
-            style={{ minWidth: 200 }}
-          />
-
-          <SelectField
-            label="Estado del lote"
-            value={filters.status}
-            onChange={(e) => setFilters({ status: e.target.value as "all" | "open" | "closed" })}
-          >
-            <option value="open">Solo Abiertos</option>
-            <option value="closed">Solo Cerrados</option>
-            <option value="all">Todos los lotes</option>
-          </SelectField>
-
-          <SelectField
-            label="Semáforo vencimiento"
-            value={filters.expiryStatus}
-            onChange={(e) =>
-              setFilters({
-                expiryStatus: e.target.value as "all" | "expired" | "critical" | "warning" | "good",
-              })
-            }
-          >
-            <option value="all">Cualquier vencimiento</option>
-            <option value="expired">🚨 Vencidos</option>
-            <option value="critical">⚠️ Críticos (≤ 7 días)</option>
-            <option value="warning">Por vencer (≤ 30 días)</option>
-            <option value="good">En regla</option>
-          </SelectField>
-
-          <SelectField
-            label="Ordenar por"
-            value={filters.sortBy}
-            onChange={(e) =>
-              setFilters({ sortBy: e.target.value as "effective_expiry" | "received_at" | "name" })
-            }
-          >
-            <option value="effective_expiry">Cercanía de vencimiento (FEFO)</option>
-            <option value="received_at">Más recientes (Ingreso)</option>
-            <option value="name">Nombre de producto</option>
+      <div className="stock-filters glass">
+        <TextField label="" aria-label="Buscar producto o proveedor" placeholder="Buscar producto o proveedor…"
+          value={filters.search} onChange={(e) => setFilters({ search: e.target.value })} className="stock-filters__search" />
+        <div className="stock-filters__row">
+          <div className="stock-chips" role="group" aria-label="Tipo">
+            <Tag active={filters.kind === "all"} onClick={() => setFilters({ kind: "all" })}>Todos</Tag>
+            <Tag active={filters.kind === "bulk"} onClick={() => setFilters({ kind: "bulk" })}>Granel</Tag>
+            <Tag active={filters.kind === "packed"} onClick={() => setFilters({ kind: "packed" })}>Envasados</Tag>
+          </div>
+          <div className="stock-chips" role="group" aria-label="Estado del lote">
+            <Tag active={filters.status === "open"} onClick={() => setFilters({ status: "open" })}>Abiertos</Tag>
+            <Tag active={filters.status === "closed"} onClick={() => setFilters({ status: "closed" })}>Cerrados</Tag>
+            <Tag active={filters.status === "all"} onClick={() => setFilters({ status: "all" })}>Todos los lotes</Tag>
+          </div>
+          <SelectField label="Ordenar por" value={filters.sortBy}
+            onChange={(e) => setFilters({ sortBy: e.target.value as StockLotFilters["sortBy"] })}>
+            <option value="effective_expiry">Vence antes (FEFO)</option>
+            <option value="received_at">Ingreso más reciente</option>
+            <option value="name">Nombre</option>
           </SelectField>
         </div>
-      </GlassCard>
+      </div>
 
-      {/* Tabla de lotes */}
       <StockLotsTable
         lots={lots}
         loading={loading}
@@ -163,12 +93,7 @@ export function StockDashboard({ enableFractioning = false }: StockDashboardProp
         onFraction={(lot) => setLotToFraction(lot)}
       />
 
-      <FractioningModal 
-        originLot={lotToFraction}
-        open={Boolean(lotToFraction)}
-        onClose={() => setLotToFraction(null)}
-        onSuccess={refreshLots}
-      />
+      <FractioningModal originLot={lotToFraction} open={Boolean(lotToFraction)} onClose={() => setLotToFraction(null)} onSuccess={refreshLots} />
     </div>
   );
 }

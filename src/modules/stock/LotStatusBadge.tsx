@@ -20,7 +20,7 @@ export function LotStatusBadge({ status, daysUntilExpiry, effectiveDate }: LotSt
   if (status === "critical") {
     return (
       <Badge tone="error">
-        ⚠️ Vence en {daysUntilExpiry}d ({effectiveDate})
+        Vence en {daysUntilExpiry}d ({effectiveDate})
       </Badge>
     );
   }

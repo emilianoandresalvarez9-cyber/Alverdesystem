@@ -1,0 +1,69 @@
+/*
+ * Lotes y vencimientos (RF-07 a RF-10, RNF-06). Solo tokens: los dos temas definen todo lo
+ * que esta hoja usa; ningún color suelto (tests/theme/pageStyles.test.ts).
+ */
+
+.stock-page { display: grid; gap: var(--esp-m); }
+.stock-head { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--esp-m); flex-wrap: wrap; }
+.stock-head h2 { margin: .15rem 0 .25rem; }
+.stock-head .field-help { margin: 0; max-width: 60ch; }
+
+/* ---- Tarjetas de vencimiento (filtran la tabla al tocarlas) ---- */
+.stock-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); gap: var(--esp-s); }
+.stock-kpi {
+  --kpi-tinta: var(--color-tinta);
+  display: grid;
+  gap: .2rem;
+  padding: var(--esp-m);
+  text-align: left;
+  font: inherit;
+  color: var(--color-tinta);
+  background: var(--carta-fondo);
+  border: 1px solid var(--carta-borde);
+  border-radius: var(--radio-carta);
+  box-shadow: var(--carta-sombra);
+  cursor: pointer;
+  transition: transform var(--mov-rapido) var(--mov-curva), box-shadow var(--mov-rapido) var(--mov-curva), border-color var(--mov-rapido) var(--mov-curva);
+}
+.stock-kpi--total { cursor: default; }
+.stock-kpi[data-tone="error"] { --kpi-tinta: var(--color-error); }
+.stock-kpi[data-tone="aviso"] { --kpi-tinta: var(--color-aviso); }
+.stock-kpi[data-tone="exito"] { --kpi-tinta: var(--color-exito); }
+.stock-kpi strong { font-size: clamp(1.8rem, 1.2rem + 1.5vw, 2.4rem); line-height: 1; color: var(--kpi-tinta); letter-spacing: -.03em; }
+.stock-kpi__help { font-size: var(--texto-xs); color: var(--color-tinta-apagada); }
+button.stock-kpi:hover { transform: translateY(-2px); box-shadow: var(--carta-hover-sombra); }
+.stock-kpi[aria-pressed="true"] { border-color: var(--kpi-tinta); box-shadow: 0 0 0 1px var(--kpi-tinta), var(--carta-sombra); }
+
+/* ---- Filtros ---- */
+.stock-filters { display: grid; gap: var(--esp-s); padding: var(--esp-m) var(--esp-l); border-radius: var(--radio-carta); }
+.stock-filters__search input { font-size: var(--texto-l); }
+.stock-filters__row { display: flex; gap: var(--esp-m); align-items: flex-end; flex-wrap: wrap; }
+.stock-chips { display: flex; gap: var(--esp-xs); flex-wrap: wrap; padding-bottom: .35rem; }
+.stock-chips .tag { padding: .35rem .75rem; }
+
+/* ---- Tabla ---- */
+.stock-skeletons { display: grid; gap: var(--esp-s); }
+.stock-table { border-radius: var(--radio-carta); }
+.stock-table__actions-head { text-align: right; }
+.stock-row--closed { opacity: .6; }
+.stock-row[data-expiry="expired"] td:first-child { box-shadow: inset 3px 0 0 var(--color-error); }
+.stock-row[data-expiry="critical"] td:first-child { box-shadow: inset 3px 0 0 var(--color-error-fuerte); }
+.stock-row[data-expiry="warning"] td:first-child { box-shadow: inset 3px 0 0 var(--color-aviso); }
+.stock-row__name { font-weight: 700; font-family: var(--fuente-titulos); }
+.stock-row__meta { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .5rem; font-size: var(--texto-xs); color: var(--color-tinta-suave); }
+.stock-row__meta .badge { font-size: var(--texto-xs); }
+.stock-row__date { font-size: var(--texto-xs); color: var(--color-tinta-suave); white-space: nowrap; }
+
+.stock-qty__now { font-weight: 800; }
+.stock-qty__of { font-size: var(--texto-xs); color: var(--color-tinta-apagada); }
+.stock-bar { width: 6.5rem; height: .3rem; margin-top: .3rem; border-radius: var(--radio-pastilla); background: var(--color-linea); overflow: hidden; }
+.stock-bar span { display: block; height: 100%; border-radius: inherit; background: var(--color-acento); }
+
+.stock-open { display: grid; justify-items: start; gap: .25rem; }
+.stock-open__warn { font-size: var(--texto-xs); color: var(--color-error); max-width: 9rem; line-height: 1.2; }
+.stock-actions { display: flex; gap: var(--esp-xs); justify-content: flex-end; flex-wrap: wrap; }
+
+@media (max-width: 700px) {
+  .stock-filters { padding: var(--esp-m); }
+  .stock-filters__row { flex-direction: column; align-items: stretch; }
+}

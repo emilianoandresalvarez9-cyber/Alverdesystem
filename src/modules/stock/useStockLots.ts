@@ -36,6 +36,7 @@ const DEFAULT_FILTERS: StockLotFilters = {
   search: "",
   status: "open",
   expiryStatus: "all",
+  kind: "all",
   sortBy: "effective_expiry",
 };
 
@@ -176,6 +177,11 @@ export function useStockLots() {
       result = result.filter((l) => l.status === filters.status);
     }
 
+    // Granel / envasado
+    if (filters.kind !== "all") {
+      result = result.filter((l) => (filters.kind === "bulk") === l.sold_by_weight);
+    }
+
     // Filtro por semáforo de vencimiento
     if (filters.expiryStatus !== "all") {
       result = result.filter((l) => l.expiry_status === filters.expiryStatus);
@@ -228,8 +234,11 @@ export function useStockLots() {
       else if (lot.expiry_status === "good") good++;
     }
 
+    const openBags = openLots.filter((l) => l.sold_by_weight && l.opened_at !== null && l.current_quantity > 0).length;
+
     return {
       totalOpen: openLots.length,
+      openBags,
       expired,
       critical,
       warning,

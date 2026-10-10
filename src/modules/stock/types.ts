@@ -71,5 +71,7 @@ export interface StockLotFilters {
   search: string;
   status: "all" | "open" | "closed";
   expiryStatus: "all" | "expired" | "critical" | "warning" | "good";
+  /** Granel (se vende pesando) o envasado. */
+  kind: "all" | "bulk" | "packed";
   sortBy: "effective_expiry" | "received_at" | "name";
 }
