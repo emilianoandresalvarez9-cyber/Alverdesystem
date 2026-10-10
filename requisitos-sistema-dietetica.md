@@ -1,7 +1,7 @@
 # Documento de Requisitos — Sistema de Gestión para Dietética
 Antes de que se queden sin tokens o capacidad de procesamiento indicar hasta que parte se quedaron para que otra IA continue y cualquier tipo de cambio deberan notificarlo en los commit en caso de que entre dentro de sus posibilidades
 **Estado:** Requisitos de alcance aprobados; implementación en desarrollo. Revisión documental al 30 de septiembre de 2026. Ver `docs/ESTADO_QA.md` para avance estimado y evidencia.
-**Última actualización:** 9 de octubre de 2026 (RF-65 a RF-70: varias sucursales con stock y precio propios)
+**Última actualización:** 10 de octubre de 2026 (RF-38: límite de faltante agregado por presentación y sucursal)
 
 > **Cómo usar este documento:** es la fuente de verdad del proyecto. Antes de pedirle a un agente de código (Claude Code, Codex, Antigravity, u otro) que construya algo, dale este archivo completo en vez de reexplicar el contexto. Cuando se tome una decisión nueva o cambie una regla, se actualiza acá primero.
 
@@ -117,7 +117,7 @@ Son dos roles nada más. Los costos y márgenes viven en una tabla separada con 
 - **RF-35.** Toda venta o modificación se guarda primero en el dispositivo local, con un identificador único y su hora, y se reintenta enviar a la nube automáticamente hasta lograrlo.
 - **RF-36.** La pantalla muestra en todo momento si hay operaciones pendientes de sincronizar y cuántas.
 - **RF-37.** Las ventas y movimientos de stock solo se agregan, nunca se sobrescriben, para que no choquen al sincronizar dos puestos a la vez.
-- **RF-38.** Si dos puestos venden el mismo último lote sin conexión y el stock queda negativo, la venta no se bloquea; el caso queda marcado para revisión del administrador.
+- **RF-38.** Si las ventas sin conexión dejan stock negativo, se permite un faltante agregado de hasta 10 unidades por presentación y sucursal. La venta que supere ese límite se rechaza; los faltantes permitidos quedan marcados para revisión del administrador.
 - **RF-39.** Si los precios cambian mientras una caja está sin conexión, esa caja sigue usando los precios anteriores hasta reconectar.
 - **RF-40.** Además de guardarse en el navegador, las operaciones pendientes se respaldan en un segundo archivo local (disco o pendrive), para no perderse si el equipo se apaga de golpe.
 
