@@ -1,12 +1,14 @@
 import type { CatalogProduct } from "../catalog/types";
 import type { PosEntry } from "./types";
+import { effectivePrice } from "../catalog/branchPricing";
 
 export type LookupResult =
   | { kind: "found"; entry: PosEntry }
   | { kind: "choose"; entries: PosEntry[] }
   | { kind: "not_found"; code: string };
 
-export function toPosEntries(products: CatalogProduct[]): PosEntry[] {
+/** RF-69: el precio de cada entrada es el de la sucursal de la caja (propio o base). */
+export function toPosEntries(products: CatalogProduct[], branchId: string | null = null): PosEntry[] {
   return products.flatMap((product) =>
     product.presentations
       .filter((presentation) => presentation.active)
@@ -17,7 +19,7 @@ export function toPosEntries(products: CatalogProduct[]): PosEntry[] {
         presentationName: presentation.name,
         baseUnit: product.base_unit,
         baseQuantity: Number(presentation.base_quantity),
-        salePrice: Number(presentation.sale_price),
+        salePrice: effectivePrice(presentation, branchId),
         soldByWeight: Boolean(presentation.sold_by_weight),
         internalBarcode: presentation.internal_barcode,
         manufacturerBarcode: product.manufacturer_barcode

@@ -9,11 +9,17 @@ sudo apt-get install -y postgresql-16 postgresql-16-pgtap libtap-parser-sourceha
 npm run test:db:nodocker
 ```
 
-Importante: los privilegios por defecto son los de Supabase, incluido que **todo objeto nuevo en
-`public` queda concedido a `anon`**. Por eso este arnés detecta fugas a usuarios no logueados.
+Importante: el arnés usa los privilegios **del proyecto de producción**: los objetos nuevos en
+`public` **no** quedan concedidos ni a `anon` ni a `authenticated`. Cada migración tiene que dar sus
+`GRANT` explícitos. Con los privilegios automáticos de Supabase las pruebas pasaban y producción
+fallaba con "permission denied" (stock_warnings, is_api_role, credit_movement_delta, octubre 2026).
+El CI corre este modo en el job `database-strict`.
 
-El CI sigue usando la CLI oficial (`supabase db start` + `supabase test db`); si el arnés y el CI
-discrepan, manda el CI y hay que corregir el arnés.
+Para probar con privilegios automáticos (como un proyecto Supabase nuevo con exposición
+automática): `PGQA_LENIENT=1 npm run test:db:nodocker`. Sirve para detectar fugas a `anon`.
+
+El CI corre las dos variantes: `database` (CLI oficial de Supabase, privilegios automáticos) y
+`database-strict` (este arnés, como producción). Tienen que pasar las dos.
 
 ## Tipos de la base para TypeScript
 

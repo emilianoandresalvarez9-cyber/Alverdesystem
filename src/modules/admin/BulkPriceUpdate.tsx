@@ -3,13 +3,14 @@ import { getSupabase } from "../../shared/supabase/client";
 import { exportToExcel } from "../../shared/export/excel";
 import { Badge, Button, EmptyState, GlassCard, SelectField, TextField } from "../../shared/ui";
 import { formatMoney } from "../pos/money";
+import { useBranch } from "../../shared/branch/BranchContext";
 import {
   RETAG_HEADERS, SCOPE_LABELS, formatDiff, formatPrice, parsePercent, retagMatrix, summarizePreview,
   type PriceChange, type PriceScope, type RetagRow
 } from "./bulkPrices";
 
 type Option = { id: string; name: string };
-type Batch = { id: string; created_at: string; percent: number; scope: string; changed_count: number };
+type Batch = { id: string; created_at: string; percent: number; scope: string; changed_count: number; branch_id: string | null };
 
 /**
  * RF-28: actualización masiva de precios con vista previa, por porcentaje y por marca,
@@ -27,6 +28,10 @@ export function BulkPriceUpdate() {
   const [scopeId, setScopeId] = useState("");
   const [percentage, setPercentage] = useState("10");
   const [roundTo100, setRoundTo100] = useState(true);
+  // RF-69: "" = precio base (rige en las sucursales sin precio propio); un id = precios propios de esa sucursal.
+  const { branches } = useBranch();
+  const [priceBranch, setPriceBranch] = useState("");
+  const priceBranchName = branches.find((b) => b.id === priceBranch)?.name;
 
   const [preview, setPreview] = useState<PriceChange[] | null>(null);
   const [busy, setBusy] = useState<"preview" | "apply" | null>(null);
@@ -60,7 +65,8 @@ export function BulkPriceUpdate() {
         p_scope: scope,
         ...(scope !== "all" ? { p_scope_id: scopeId } : {}),
         p_apply: apply,
-        ...(roundTo100 ? { p_round_to: 100 } : {})
+        ...(roundTo100 ? { p_round_to: 100 } : {}),
+        ...(priceBranch ? { p_branch_id: priceBranch } : {})
       });
       if (rpcError) throw new Error(rpcError.message);
       const rows = (data ?? []).map((row) => ({ ...row, old_price: Number(row.old_price), new_price: Number(row.new_price) }));
@@ -101,6 +107,12 @@ export function BulkPriceUpdate() {
               {scopeOptions.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
             </SelectField>
           )}
+          {branches.length > 1 && (
+            <SelectField label="Precios de" value={priceBranch} onChange={(e) => { setPriceBranch(e.target.value); setPreview(null); }}>
+              <option value="">Base (sucursales sin precio propio)</option>
+              {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </SelectField>
+          )}
           <TextField label="Porcentaje (%)" inputMode="decimal" value={percentage}
             onChange={(e) => { setPercentage(e.target.value); setPreview(null); }} help="Negativo para bajar" />
           <label style={{ display: "flex", gap: ".5rem", alignItems: "center", paddingBottom: ".6rem" }}>
@@ -123,7 +135,7 @@ export function BulkPriceUpdate() {
             </Badge>
           </div>
           <p className="field-help">
-            {SCOPE_LABELS[scope]}{scopeName ? ` · ${scopeName}` : ""} · {percentage.replace(".", ",")} %
+            {priceBranchName ? `Precios de ${priceBranchName}` : "Precio base"} · {SCOPE_LABELS[scope]}{scopeName ? ` · ${scopeName}` : ""} · {percentage.replace(".", ",")} %
             {roundTo100 ? " · redondeado a $100" : ""}
           </p>
           {summary.count === 0 ? (
@@ -178,7 +190,7 @@ function RetagList({ highlightBatchId }: { highlightBatchId: string | null }) {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    void sb.from("price_update_batches").select("id, created_at, percent, scope, changed_count")
+    void sb.from("price_update_batches").select("id, created_at, percent, scope, changed_count, branch_id")
       .order("created_at", { ascending: false }).limit(20)
       .then(({ data, error: err }) => {
         if (err) return setError(err.message);
@@ -196,8 +208,9 @@ function RetagList({ highlightBatchId }: { highlightBatchId: string | null }) {
     });
   }, [sb, selected]);
 
+  const { branches } = useBranch();
   const batchLabel = (b: Batch) =>
-    `${new Date(b.created_at).toLocaleString("es-AR")} · ${b.percent > 0 ? "+" : ""}${b.percent} % · ${SCOPE_LABELS[b.scope as PriceScope] ?? b.scope} · ${b.changed_count} cambio${b.changed_count === 1 ? "" : "s"}`;
+    `${new Date(b.created_at).toLocaleString("es-AR")} · ${b.branch_id ? branches.find((x) => x.id === b.branch_id)?.name ?? "Sucursal" : "Base"} · ${b.percent > 0 ? "+" : ""}${b.percent} % · ${SCOPE_LABELS[b.scope as PriceScope] ?? b.scope} · ${b.changed_count} cambio${b.changed_count === 1 ? "" : "s"}`;
 
   return (
     <GlassCard>

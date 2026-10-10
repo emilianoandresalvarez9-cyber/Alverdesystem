@@ -11,6 +11,18 @@ type Cached = { refreshedAt: string; accounts: CustomerAccount[] };
 export type AccountsResult = { accounts: CustomerAccount[]; refreshedAt: string | null; fromCache: boolean };
 
 /**
+ * Error a mostrar cuando no hay copia en el equipo. Con conexión, el problema no es la conexión:
+ * se muestra el motivo real (por ejemplo, un permiso faltante en la base) en vez de "Sin conexión".
+ */
+export function accountsLoadError(online: boolean, cause: unknown): Error {
+  if (!online) return new Error("Sin conexión y sin una copia de clientes en este equipo. Conectate una vez para descargarla.");
+  const detail = cause instanceof Error ? cause.message
+    : cause && typeof cause === "object" && "message" in cause ? String((cause as { message: unknown }).message)
+    : String(cause);
+  return new Error(`No se pudieron cargar los clientes: ${detail}`);
+}
+
+/**
  * Cuentas con saldo. Con conexión vienen de la nube y se guardan en el equipo; sin conexión se
  * usa la última copia. En ambos casos se suma lo que este equipo registró y todavía no envió.
  */
@@ -32,7 +44,7 @@ export async function loadAccounts(): Promise<AccountsResult> {
   } catch (error) {
     base = await readSetting<Cached>(CACHE_KEY);
     fromCache = true;
-    if (!base) throw new Error("Sin conexión y sin una copia de clientes en este equipo. Conectate una vez para descargarla.");
+    if (!base) throw accountsLoadError(typeof navigator === "undefined" ? false : navigator.onLine, error);
   }
   const pending = pendingDeltas(await allOperations());
   return { accounts: withPending(base.accounts, pending), refreshedAt: base.refreshedAt, fromCache };

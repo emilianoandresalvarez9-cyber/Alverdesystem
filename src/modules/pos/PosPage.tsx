@@ -147,7 +147,10 @@ function formatTime(iso: string): string {
 
 function Register({ shift, onClosed }: { shift: CurrentShift; onClosed: () => void }) {
   const { products, isLoading, isOffline } = useCatalog();
-  const entries = useMemo(() => toPosEntries(products), [products]);
+  // RF-69: precios de la sucursal de la caja (turnos viejos sin sucursal: la de trabajo).
+  const { workingBranchId } = useBranch();
+  const priceBranch = shift.branchId ?? workingBranchId;
+  const entries = useMemo(() => toPosEntries(products, priceBranch), [products, priceBranch]);
   const [lines, dispatch] = useReducer(cartReducer, []);
   const [query, setQuery] = useState("");
   const [choices, setChoices] = useState<PosEntry[] | null>(null);

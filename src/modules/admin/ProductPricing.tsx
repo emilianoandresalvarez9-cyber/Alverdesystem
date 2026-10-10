@@ -5,6 +5,7 @@ import { getEffectiveMultiplier, suggestPresentationPrice, type PriceCategory, t
 import type { Product, Presentation } from "../../shared/types";
 import { Button, GlassCard, SelectField, TextField } from "../../shared/ui";
 import { PriceHistoryPanel } from "./PriceHistoryPanel";
+import { BranchPricesPanel } from "./BranchPricesPanel";
 
 type Supplier = { id: string; name: string };
 type SupplierCost = {
@@ -185,6 +186,9 @@ export function ProductPricing({ product, presentations, onPricesSaved }: {
           </> : <span>Sin sugerencia: revisá el costo y la cantidad del envase.</span>}
         </div>;
       })}
+
+      <h4>Precio por sucursal (RF-69)</h4>
+      <BranchPricesPanel presentations={presentations} />
 
       <h4>Historial de precios (RF-27)</h4>
       <p className="field-help">Cada cambio de precio de venta, quién lo hizo y la variación; sirve para seguir la inflación del producto.</p>

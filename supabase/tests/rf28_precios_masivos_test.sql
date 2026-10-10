@@ -22,7 +22,7 @@ insert into public.supplier_products (product_id, supplier_id, cost, is_primary)
   values ('00000000-0000-0000-0000-00000000f2a2', '00000000-0000-0000-0000-00000000f2d1', 1500, true);
 
 -- ---------- anon ----------
-select is(has_function_privilege('anon', 'public.bulk_update_prices(numeric, text, uuid, boolean, numeric)', 'execute'), false,
+select is(has_function_privilege('anon', 'public.bulk_update_prices(numeric, text, uuid, boolean, numeric, uuid)', 'execute'), false,
   'anon no puede ejecutar la actualización masiva');
 select is(has_function_privilege('anon', 'public.price_batch_changes(uuid)', 'execute'), false,
   'anon no puede leer la lista de reetiquetado');

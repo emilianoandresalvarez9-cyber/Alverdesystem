@@ -47,6 +47,21 @@ jobs:
       - run: supabase db reset
       - run: supabase test db
 
+  # Igual que producción: sin privilegios automáticos para anon/authenticated. La CLI de Supabase
+  # (job database) sí los da, y por eso no detectó los "permission denied" de producción.
+  database-strict:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: PostgreSQL 16 y pgTAP
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-16 postgresql-16-pgtap libtap-parser-sourcehandler-pgtap-perl
+      - name: Migraciones y pgTAP sin privilegios automáticos
+        run: bash qa/pg-harness/run.sh .
+
   e2e:
     runs-on: ubuntu-latest
     steps:

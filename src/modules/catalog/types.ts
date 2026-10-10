@@ -24,7 +24,10 @@ export interface ProductPresentation {
   name: string;
   base_quantity: number;
   internal_barcode: string | null;
+  /** Precio BASE (RF-69). Para la sucursal de trabajo usar effectivePrice(). */
   sale_price: number;
+  /** Precio propio por sucursal, solo donde difiere del base (RF-69). */
+  branch_prices?: Record<string, number>;
   /** Se vende pesando: la caja pide el peso (RF-22, RF-33). Ver docs/decisiones/ADR-001. */
   sold_by_weight: boolean;
   active: boolean;

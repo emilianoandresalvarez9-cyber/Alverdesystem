@@ -53,6 +53,8 @@ export interface CurrentShift {
   id: string;
   registerId: string;
   registerName: string;
+  /** RF-65/69: sucursal de la caja; define stock y precios de la venta. Turnos viejos no la tienen. */
+  branchId?: string;
   openedAt: string;
   initialBalance: number;
   /** false mientras el turno se abrió sin conexión y todavía no existe en la nube. */
