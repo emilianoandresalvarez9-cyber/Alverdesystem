@@ -5,6 +5,7 @@ import type { Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 import { findSecretKeys, isSecretSupabaseKey } from "./src/shared/config/secretKeys";
+import { headersFile, inlineScriptHashes } from "./scripts/securityHeaders";
 
 /**
  * RNF-08: la transición entre páginas anima de marco a marco sólo si la página nueva ya
@@ -54,6 +55,33 @@ export function noSecretKeysInBundle(): Plugin {
   };
 }
 
+/**
+ * Cabeceras de seguridad (scripts/securityHeaders.ts): escribe `_headers` en la raíz de la build,
+ * que Cloudflare Pages aplica a todo el sitio. Corre después de que Vite arma los HTML, así toma
+ * el hash de cada script en línea que quedó en ellos (hoy, el del tema).
+ */
+export function securityHeaders(): Plugin {
+  let supabaseUrl: string | undefined;
+  return {
+    name: "alverde-security-headers",
+    apply: "build",
+    enforce: "post",
+    configResolved(config) {
+      const value = config.env.VITE_SUPABASE_URL;
+      supabaseUrl = typeof value === "string" ? value : undefined;
+    },
+    generateBundle(_options, bundle) {
+      const hashes: string[] = [];
+      for (const file of Object.values(bundle)) {
+        if (file.type === "asset" && file.fileName.endsWith(".html") && typeof file.source === "string") {
+          hashes.push(...inlineScriptHashes(file.source));
+        }
+      }
+      this.emitFile({ type: "asset", fileName: "_headers", source: headersFile({ scriptHashes: hashes, supabaseUrl }) });
+    }
+  };
+}
+
 export default defineConfig({
   test: {
     exclude: ['**/node_modules/**', '**/dist/**', '**/cypress/**', '**/.{idea,git,cache,output,temp}/**', '**/e2e/**']
@@ -62,6 +90,7 @@ export default defineConfig({
     react(),
     renderBlockingEntries(),
     noSecretKeysInBundle(),
+    securityHeaders(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'masked-icon.svg'],
