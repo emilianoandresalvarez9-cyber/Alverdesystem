@@ -16,7 +16,7 @@ test("Empleado puede ingresar, fraccionar y ajustar stock desde Stock", async ({
 
   const sourceGroup = page.getByRole("row", { name: /Lenteja E2E.*Granel E2E/ });
   await expect(sourceGroup).toBeVisible();
-  await sourceGroup.getByRole("button", { name: /Ver \\d+ lotes/ }).click();
+  await sourceGroup.getByRole("button", { name: /Ver \d+ lotes/ }).click();
   const sourceLot = page.getByRole("row", { name: /Más acciones para Lenteja E2E/ });
   await expect(sourceLot).toBeVisible();
   // Los detalles conservan las acciones particulares de cada lote.
