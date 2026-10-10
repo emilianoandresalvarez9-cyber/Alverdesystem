@@ -66,7 +66,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = public
-as $
+as $function$
 declare
   v_register_branch uuid;
   v_register_branch_name text;
@@ -92,7 +92,7 @@ begin
   end if;
   return new;
 end;
-$;
+$function$;
 revoke all on function public.guard_cash_shift_branch() from public, anon, authenticated;
 comment on function public.guard_cash_shift_branch() is
   'RF-66: valida la sucursal del turno y obtiene el nombre de cajas ajenas sin exponerlas mediante RLS.';
