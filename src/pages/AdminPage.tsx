@@ -1,15 +1,12 @@
-import { useState } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { AppShell } from "../shared/components/AppShell";
 import { BackupCenter } from "../modules/admin/BackupCenter";
-import { StockDashboard } from "../modules/stock";
 import { StockWarningsReview } from "../modules/stock/StockWarningsReview";
-import { TransfersHistory } from "../modules/stock/TransfersHistory";
 import { ClassifierManager } from "../modules/admin/ClassifierManager";
-import { QuickRestock } from "../modules/restock/QuickRestock";
 import { RepositionList } from "../modules/restock/RepositionList";
 import { BarcodeDashboard } from "../modules/barcodes";
 import { BulkDashboard } from "../modules/fractioning";
-import { Button, GlassCard } from "../shared/ui";
+import { Icon, SelectField, SubTabs } from "../shared/ui";
 import { ReportsDashboard } from "../modules/reports/ReportsDashboard";
 import { AuditHistoryPage } from "../modules/audit/AuditHistoryPage";
 import { BranchesManager } from "../modules/admin/BranchesManager";
@@ -19,209 +16,127 @@ import { BulkPriceUpdate } from "../modules/admin/BulkPriceUpdate";
 import { PriceMultiplierSettings } from "../modules/admin/PriceMultiplierSettings";
 import { SuppliersManager } from "../modules/admin/SuppliersManager";
 import { MarginDashboard } from "../modules/reports/MarginDashboard";
+import {
+  ADMIN_GROUPS, sectionFromHash, sectionLabel, type AdminSectionId
+} from "../modules/admin/adminSections";
 import "../styles/pos.css";
+import "../styles/admin.css";
 
-type AdminTab = "reports" | "margins" | "stock" | "fractioning" | "classifiers" | "products" | "prices" | "suppliers" | "restock" | "barcodes" | "scale" | "branches" | "audit" | "settings";
+type ViewTransitionDocument = Document & { startViewTransition?: (update: () => void) => unknown };
+
+/** Cambiar de sección con la misma transición que entre páginas (sólo título y contenido). */
+function withTransition(update: () => void) {
+  const doc = document as ViewTransitionDocument;
+  const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  if (doc.startViewTransition && !reduce) doc.startViewTransition(update);
+  else update();
+}
 
 export function AdminPage() {
-  const [activeTab, setActiveTab] = useState<AdminTab>("reports");
-  const [classifierType, setClassifierType] = useState<"brand" | "category" | "label">("brand");
+  const [section, setSection] = useState<AdminSectionId>(() => sectionFromHash(location.hash));
+
+  useEffect(() => {
+    const onHash = () => withTransition(() => setSection(sectionFromHash(location.hash)));
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
+  const go = (id: AdminSectionId) => {
+    if (id !== section) location.hash = id;
+  };
 
   return (
     <AppShell active="admin" title="Administración" requiredRole="administrator">
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--esp-m)" }}>
-        <header className="page-heading">
-          <h1 style={{ margin: 0 }}>Panel de Administración</h1>
-        </header>
+      <div className="admin">
+        <nav className="nav-sec" aria-label="Secciones de Administración">
+          {ADMIN_GROUPS.map((group) => (
+            <Fragment key={group.label}>
+              <p className="nav-sec__grupo">{group.label}</p>
+              {group.sections.map((item) => (
+                <a key={item.id} href={`#${item.id}`} aria-current={item.id === section ? "page" : undefined}>
+                  <Icon name={item.icon} />
+                  {item.label}
+                </a>
+              ))}
+            </Fragment>
+          ))}
+        </nav>
 
-        {/* Barra de pestañas */}
-        <div style={{ display: "flex", gap: "var(--esp-s)", flexWrap: "wrap", borderBottom: "1px solid var(--glass-borde)", paddingBottom: "var(--esp-s)" }}>
-          <Button
-            variant={activeTab === "reports" ? "primario" : "fantasma"}
-            onClick={() => setActiveTab("reports")}
-          >
-            📊 Reportes (Fase 4)
-          </Button>
-          <Button
-            variant={activeTab === "stock" ? "primario" : "fantasma"}
-            onClick={() => setActiveTab("stock")}
-          >
-            📦 Lotes (FEFO)
-          </Button>
-
-          <Button
-            variant={activeTab === "fractioning" ? "primario" : "fantasma"}
-            onClick={() => setActiveTab("fractioning")}
-          >
-            ⚖️ Fraccionamiento y Granel
-          </Button>
-
-          <Button
-            variant={activeTab === "restock" ? "primario" : "fantasma"}
-            onClick={() => setActiveTab("restock")}
-          >
-            ⚡ Faltantes e Ingresos
-          </Button>
-
-          <Button
-            variant={activeTab === "classifiers" ? "primario" : "fantasma"}
-            onClick={() => setActiveTab("classifiers")}
-          >
-            🏷️ Marcas / Rubros / Etiquetas
-          </Button>
-
-          <Button
-            variant={activeTab === "products" ? "primario" : "fantasma"}
-            onClick={() => setActiveTab("products")}
-          >
-            📦 Productos ABM
-          </Button>
-
-          <Button
-            variant={activeTab === "prices" ? "primario" : "fantasma"}
-            onClick={() => setActiveTab("prices")}
-          >
-            💲 Precios sugeridos
-          </Button>
-
-          <Button
-            variant={activeTab === "suppliers" ? "primario" : "fantasma"}
-            onClick={() => setActiveTab("suppliers")}
-          >
-            Proveedores
-          </Button>
-
-          <Button
-            variant={activeTab === "barcodes" ? "primario" : "fantasma"}
-            onClick={() => setActiveTab("barcodes")}
-          >
-            🖨️ Códigos y Planilla
-          </Button>
-
-          <Button
-            variant={activeTab === "scale" ? "primario" : "fantasma"}
-            onClick={() => setActiveTab("scale")}
-          >
-            ⚖️ Balanza
-          </Button>
-
-          <Button
-            variant={activeTab === "branches" ? "primario" : "fantasma"}
-            onClick={() => setActiveTab("branches")}
-          >
-            🏪 Sucursales y cajas
-          </Button>
-
-          <Button
-            variant={activeTab === "audit" ? "primario" : "fantasma"}
-            onClick={() => setActiveTab("audit")}
-          >
-            🕵️ Trazabilidad
-          </Button>
-
-          <Button
-            variant={activeTab === "settings" ? "primario" : "fantasma"}
-            onClick={() => setActiveTab("settings")}
-          >
-            ⚙️ Configuración y Respaldos
-          </Button>
+        <div className="pila pila--l admin__contenido">
+          <SelectField inline label="Sección" className="admin__seccion-movil" value={section}
+            onChange={(e) => go(e.target.value as AdminSectionId)}>
+            {ADMIN_GROUPS.map((group) => (
+              <optgroup key={group.label} label={group.label}>
+                {group.sections.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+              </optgroup>
+            ))}
+          </SelectField>
+          <h2 className="titulo-modal">{sectionLabel(section)}</h2>
+          <AdminSectionView section={section} />
         </div>
-
-        {/* Tab 0: Reportes */}
-        {activeTab === "margins" && <MarginDashboard />}
-          {activeTab === "suppliers" && <SuppliersManager />}
-          {activeTab === "reports" && <ReportsDashboard />}
-
-        {/* Tab 1: Lotes y Vencimientos (Agente E) */}
-        {activeTab === "stock" && (
-          <>
-            <StockWarningsReview />
-            <StockDashboard />
-            <TransfersHistory />
-          </>
-        )}
-
-        {/* Tab 1.5: Fraccionamiento (Agente F) */}
-        {activeTab === "fractioning" && <BulkDashboard />}
-
-        {/* Tab 1.8: Códigos de Barra (Agente G) */}
-        {activeTab === "barcodes" && <BarcodeDashboard />}
-
-        {/* Tab 2: Faltantes e Ingreso Rápido (Agente C) */}
-        {activeTab === "restock" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--esp-l)" }}>
-            <QuickRestock />
-            <div>
-              <h2 style={{ marginBottom: "var(--esp-m)" }}>Lista de Reposición (por Proveedor)</h2>
-              <RepositionList />
-            </div>
-          </div>
-        )}
-
-        {/* Tab 3: Clasificadores (Agente B) */}
-        {activeTab === "classifiers" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--esp-m)" }}>
-            <div style={{ display: "flex", gap: "var(--esp-xs)" }}>
-              <Button
-                variant={classifierType === "brand" ? "secundario" : "fantasma"}
-                onClick={() => setClassifierType("brand")}
-              >
-                Marcas
-              </Button>
-              <Button
-                variant={classifierType === "category" ? "secundario" : "fantasma"}
-                onClick={() => setClassifierType("category")}
-              >
-                Rubros
-              </Button>
-              <Button
-                variant={classifierType === "label" ? "secundario" : "fantasma"}
-                onClick={() => setClassifierType("label")}
-              >
-                Etiquetas
-              </Button>
-            </div>
-            <ClassifierManager type={classifierType} />
-          </div>
-        )}
-
-        {/* Productos y Presentaciones ABM */}
-        {activeTab === "prices" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--esp-m)" }}>
-            <PriceMultiplierSettings />
-            <BulkPriceUpdate />
-          </div>
-        )}
-          {activeTab === "products" && <ProductsManager />}
-
-        {/* Venta con balanza (ADR-001) */}
-        {activeTab === "scale" && <ScalePresentations />}
-
-        {/* Sucursales y cajas (RF-53, RF-55): la caja de /pos.html elige de esta lista */}
-        {activeTab === "branches" && <BranchesManager />}
-
-        {/* Tab 4: Trazabilidad y Auditoría (Agente O) */}
-        {activeTab === "audit" && <AuditHistoryPage />}
-
-        {/* Tab 5: Configuración y Respaldos */}
-        {activeTab === "settings" && (
-          <div className="dashboard-grid">
-            <section className="glass feature-card">
-              <h2>Acceso protegido</h2>
-              <p>
-                La base de datos separa los costos y márgenes del catálogo operativo. Un empleado no puede obtenerlos ni cambiando una URL.
-              </p>
-            </section>
-            <section className="glass feature-card">
-              <h2>Fundación técnica</h2>
-              <p>
-                Esquema relacional, auditoría reactiva de cambios y cola offline idempotente instalados.
-              </p>
-            </section>
-            <BackupCenter />
-          </div>
-        )}
       </div>
     </AppShell>
+  );
+}
+
+function AdminSectionView({ section }: { section: AdminSectionId }): ReactNode {
+  switch (section) {
+    case "reportes": return <ReportsDashboard />;
+    case "margenes": return <MarginDashboard />;
+    case "lotes": return (
+      <>
+        <StockWarningsReview />
+        <GoTo href="/stock.html" icon="package_2" text="La tabla de lotes, el ingreso rápido y los traspasos están en Stock y reposición.">
+          Ir a Stock y reposición
+        </GoTo>
+      </>
+    );
+    case "fraccionamiento": return <BulkDashboard />;
+    case "faltantes": return (
+      <>
+        <GoTo href="/stock.html" icon="add" text="La mercadería que llega se ingresa desde Stock y reposición.">Ingreso rápido</GoTo>
+        <RepositionList />
+      </>
+    );
+    case "proveedores": return <SuppliersManager />;
+    case "productos": return <ProductsManager />;
+    case "precios": return (
+      <>
+        <PriceMultiplierSettings />
+        <BulkPriceUpdate />
+      </>
+    );
+    case "clasificadores": return <Classifiers />;
+    case "balanza": return <ScalePresentations />;
+    case "sucursales": return <BranchesManager />;
+    case "trazabilidad": return <AuditHistoryPage />;
+    case "codigos": return <BarcodeDashboard />;
+    case "configuracion": return (
+      <>
+        <BackupCenter />
+        <p className="meta fila"><Icon name="lock" size="s" />Sólo administración entra a esta sección. Los costos y márgenes no llegan a los equipos de empleados.</p>
+      </>
+    );
+  }
+}
+
+/** Una sola copia de cada herramienta: desde Administración, un acceso a donde vive. */
+function GoTo({ href, icon, text, children }: { href: string; icon: "package_2" | "add"; text: string; children: ReactNode }) {
+  return (
+    <div className="fila fila--entre carta admin__acceso">
+      <p className="cuerpo-s suave">{text}</p>
+      <a className="boton boton--secundario" href={href}><Icon name={icon} />{children}</a>
+    </div>
+  );
+}
+
+function Classifiers() {
+  const [type, setType] = useState<"brand" | "category" | "label">("brand");
+  return (
+    <>
+      <SubTabs label="Clasificadores" value={type} onChange={setType}
+        tabs={[{ value: "brand", label: "Marcas" }, { value: "category", label: "Rubros" }, { value: "label", label: "Etiquetas" }]} />
+      <ClassifierManager type={type} />
+    </>
   );
 }

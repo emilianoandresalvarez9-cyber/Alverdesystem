@@ -34,12 +34,20 @@ export interface SalesReportLine {
 }
 
 export interface SalesReport {
-  salesByDay: { date: string; total: number }[];
+  /** Día local del equipo (AAAA-MM-DD): una venta de las 22 h no pasa al día siguiente. */
+  salesByDay: { day: string; total: number }[];
   productRanking: { name: string; quantity: number; revenue: number }[];
   categoryDemand: { categoryId: string; name: string; value: number }[];
   /** RF-63: qué proporción de lo vendido lleva cada etiqueta (un producto puede tener varias). */
   labelDemand: { labelId: string; name: string; value: number; share: number }[];
   totalRevenue: number;
+}
+
+/** «2026-09-27» en la hora local del equipo (no en UTC, que en Argentina adelanta 3 horas). */
+export function localDayKey(iso: string): string {
+  const date = new Date(iso);
+  const two = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())}`;
 }
 
 function one<T>(value: T | T[] | null): T | null {
@@ -81,7 +89,7 @@ export function buildSalesReport(lines: SalesReportLine[]): SalesReport {
   let totalRevenue = 0;
 
   for (const line of lines) {
-    const day = line.saleDate.slice(0, 10);
+    const day = localDayKey(line.saleDate);
     const revenue = line.quantity * line.unitPrice;
     totalRevenue += revenue;
     daily.set(day, (daily.get(day) ?? 0) + revenue);
@@ -107,10 +115,7 @@ export function buildSalesReport(lines: SalesReportLine[]): SalesReport {
   return {
     salesByDay: Array.from(daily.entries())
       .sort(([left], [right]) => left.localeCompare(right))
-      .map(([day, total]) => ({
-        date: new Date(`${day}T12:00:00`).toLocaleDateString("es-AR", { weekday: "short", day: "2-digit", month: "2-digit" }),
-        total
-      })),
+      .map(([day, total]) => ({ day, total })),
     productRanking: Array.from(products.values())
       .sort((left, right) => right.revenue - left.revenue)
       .slice(0, 10),

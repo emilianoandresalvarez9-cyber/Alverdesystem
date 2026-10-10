@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { getSupabase } from "../../shared/supabase/client";
-import { Button, GlassCard, Badge, EmptyState } from "../../shared/ui";
+import { Button, Badge, EmptyState, Message } from "../../shared/ui";
+import { formatDayTime } from "../../shared/format/date";
 import { preferredSupplier } from "./preferredSupplier";
 import type { MissingItem } from "./types";
 import { useBranch } from "../../shared/branch/BranchContext";
@@ -95,7 +96,7 @@ export function RepositionList({ refreshTrigger, onResolve }: RepositionListProp
   };
 
   const grouped = items.reduce<Record<string, { supplierName: string; supplierContact: string | null; items: MissingItem[] }>>((acc, item) => {
-    const sName = item.supplier?.name ?? "Sin Proveedor Asignado";
+    const sName = item.supplier?.name ?? "Sin proveedor asignado";
     const sContact = item.supplier?.contact ?? null;
     if (!acc[sName]) {
       acc[sName] = { supplierName: sName, supplierContact: sContact, items: [] };
@@ -107,67 +108,41 @@ export function RepositionList({ refreshTrigger, onResolve }: RepositionListProp
   const supplierGroups = Object.values(grouped);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--esp-m)" }}>
-      {error && <p role="alert" style={{ color: "var(--color-error)" }}>{error}</p>}
+    <>
+      {error && <Message tone="error">{error}</Message>}
 
       {loading ? (
-        <GlassCard className="skeleton" style={{ minHeight: 120 }} />
+        <div className="carta pila pila--s" aria-busy="true"><span className="esqueleto" /><span className="esqueleto" /></div>
       ) : supplierGroups.length === 0 ? (
-        <EmptyState title="Sin faltantes pendientes">
-          No hay productos marcados como faltantes en este momento.
-        </EmptyState>
+        <EmptyState title="Sin faltantes pendientes" icon="check_circle">No hay productos marcados como faltantes en este momento.</EmptyState>
       ) : (
         supplierGroups.map((group) => (
-          <GlassCard key={group.supplierName}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--glass-borde)", paddingBottom: "var(--esp-s)", marginBottom: "var(--esp-s)" }}>
-              <div>
-                <h3 style={{ margin: 0 }}>{group.supplierName}</h3>
-                {group.supplierContact && (
-                  <span style={{ fontSize: "var(--texto-xs)", color: "var(--color-tinta-suave)" }}>
-                    Contacto: {group.supplierContact}
-                  </span>
-                )}
+          <section key={group.supplierName} className="carta carta--sin-relleno" aria-label={`Faltantes de ${group.supplierName}`}>
+            <div className="carta__cabecera">
+              <div className="pila reposicion__proveedor">
+                <h3 className="titulo-seccion">{group.supplierName}</h3>
+                {group.supplierContact && <span className="meta">Contacto: {group.supplierContact}</span>}
               </div>
-              <Badge tone="aviso">{group.items.length} faltante(s)</Badge>
+              <Badge tone="aviso">{group.items.length === 1 ? "1 faltante" : `${group.items.length} faltantes`}</Badge>
             </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--esp-s)" }}>
+            <ul className="lista lista--plana">
               {group.items.map((item) => (
-                <div
-                  key={item.id}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    padding: "var(--esp-s)",
-                    borderRadius: "var(--radio-control)",
-                    background: "var(--glass-fondo-lite)"
-                  }}
-                >
-                  <div>
-                    <div style={{ fontWeight: 700 }}>
+                <li key={item.id}>
+                  <div className="lista__principal">
+                    <span className="lista__titulo">
                       {item.product?.name ?? "Producto desconocido"}
-                      {showBranch && item.branch_name && <> <Badge tone="neutro">{item.branch_name}</Badge></>}
-                    </div>
-                    {item.note && (
-                      <span style={{ fontSize: "var(--texto-xs)", color: "var(--color-tinta-apagada)" }}>
-                        Nota: {item.note}
-                      </span>
-                    )}
-                    <div style={{ fontSize: "var(--texto-xs)", color: "var(--color-tinta-apagada)" }}>
-                      Reportado: {new Date(item.created_at).toLocaleDateString("es-AR", { hour: "2-digit", minute: "2-digit" })}
-                    </div>
+                      {showBranch && item.branch_name ? <span className="suave"> · {item.branch_name}</span> : null}
+                    </span>
+                    {item.note && <span className="lista__meta">Nota: {item.note}</span>}
+                    <span className="lista__meta">Reportado <span className="cifra">{formatDayTime(item.created_at)}</span></span>
                   </div>
-
-                  <Button variant="secundario" onClick={() => handleResolve(item.id)}>
-                    Marcar Resuelto
-                  </Button>
-                </div>
+                  <Button variant="secundario" size="compacto" icon="check" onClick={() => handleResolve(item.id)}>Marcar resuelto</Button>
+                </li>
               ))}
-            </div>
-          </GlassCard>
+            </ul>
+          </section>
         ))
       )}
-    </div>
+    </>
   );
 }

@@ -674,6 +674,9 @@ dialog.modal.modal--ancho { width: min(720px, 100%); }
 .app-header__panel .rol { display: inline-flex; } /* la cabecera esconde .rol en celular; acá es el único lugar donde se ve */
 @container (min-width: 721px) { .app-header__panel { display: none; } }
 
+/* Mensajes o notas dentro de una carta sin relleno (con tabla). */
+.carta--sin-relleno > .relleno { padding: var(--esp-m) var(--esp-l); }
+
 /* Una fila de acciones de un formulario o diálogo que no usa .modal__pie. */
 .acciones-fila { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: var(--esp-s); }
 
