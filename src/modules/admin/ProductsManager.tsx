@@ -1,7 +1,10 @@
 import { useEffect, useState, useCallback } from "react";
 import { getSupabase } from "../../shared/supabase/client";
 import type { Enums } from "../../shared/supabase/database.types";
-import { Button, TextField, SelectField, GlassCard, Badge, EmptyState, Modal } from "../../shared/ui";
+import { Button, TextField, SelectField, Message, Modal } from "../../shared/ui";
+import { formatMoney } from "../pos/money";
+import { pricePerKiloFromGram } from "../catalog/scalePricing";
+import { formatQuantity } from "../stock/format";
 import { normalizeManufacturerBarcode } from "./manufacturerBarcode";
 import { ProductPricing } from "./ProductPricing";
 
@@ -149,108 +152,108 @@ export function ProductsManager() {
     }
   };
 
+  const startNew = () => {
+    setSelectedProduct(null);
+    setProductName("");
+    setProductBarcode("");
+    setProductBrandId("");
+    setProductCategoryId("");
+    setProductBaseUnit("unit");
+    setProductMultiplier("");
+    setErrorMsg("");
+    setSuccessMsg("");
+  };
+  const priceText = (pr: Presentation) =>
+    pr.sold_by_weight ? `${formatMoney(pricePerKiloFromGram(Number(pr.sale_price)))}/kg` : formatMoney(Number(pr.sale_price));
+
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--esp-m)" }}>
-      {/* List */}
-      <GlassCard>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--esp-m)" }}>
-          <h2 style={{ margin: 0 }}>Productos</h2>
-          <Button onClick={() => {
-            setSelectedProduct(null);
-            setProductName("");
-            setProductBarcode("");
-            setProductBrandId("");
-            setProductCategoryId("");
-            setProductBaseUnit("unit");
-            setProductMultiplier("");
-            setErrorMsg("");
-            setSuccessMsg("");
-          }}>
-            + Nuevo Producto
-          </Button>
-        </div>
-        {loading ? <p>Cargando...</p> : (
-          <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "var(--esp-xs)" }}>
-            {products.map(p => (
-              <li key={p.id} onClick={() => handleSelectProduct(p)} style={{ padding: "var(--esp-xs)", border: "1px solid var(--glass-borde)", borderRadius: "var(--borde-radius-s)", cursor: "pointer", background: selectedProduct?.id === p.id ? "var(--accent-primary-alpha)" : "transparent" }}>
-                <strong>{p.name}</strong> {!p.active && <Badge tone="aviso">Archivado</Badge>}
-              </li>
-            ))}
-          </ul>
-        )}
-      </GlassCard>
+    <>
+      <div className="fila fila--m productos-barra">
+        <SelectField inline label="Producto" className="crece" value={selectedProduct?.id ?? ""} disabled={loading}
+          onChange={(e) => void handleSelectProduct(products.find((p) => p.id === e.target.value) ?? null)}>
+          <option value="">{loading ? "Cargando…" : "Elegí un producto…"}</option>
+          {products.map((p) => <option key={p.id} value={p.id}>{p.name}{p.active ? "" : " (archivado)"}</option>)}
+        </SelectField>
+        <Button variant="secundario" icon="add" onClick={startNew}>Nuevo producto</Button>
+      </div>
 
-      {/* Detail */}
-      <GlassCard>
-        <h2 style={{ margin: 0, marginBottom: "var(--esp-m)" }}>
-          {selectedProduct ? "Editar Producto" : "Nuevo Producto"}
-        </h2>
+      {errorMsg && <Message tone="error">{errorMsg}</Message>}
+      {successMsg && <Message tone="exito">{successMsg}</Message>}
 
-        {errorMsg && <p role="alert" style={{ color: "var(--color-error)" }}>{errorMsg}</p>}
-        {successMsg && <p role="status" style={{ color: "var(--color-exito)" }}>{successMsg}</p>}
-        
-        <div style={{ display: "flex", flexDirection: "column", gap: "var(--esp-s)" }}>
+      <section className="carta pila" aria-labelledby="ficha-producto">
+        <h3 className="titulo-seccion" id="ficha-producto">{selectedProduct ? "Ficha del producto" : "Nuevo producto"}</h3>
+        <div className="form-fila form-fila--tres">
           <TextField label="Nombre" value={productName} onChange={e => setProductName(e.target.value)} />
           <TextField
             label="Código de barras del fabricante"
+            icon="barcode"
             value={productBarcode}
             onChange={e => setProductBarcode(e.target.value)}
             inputMode="numeric"
             autoComplete="off"
             placeholder="Escaneá o escribí el código"
-            help="Se usa para encontrar este producto al escanearlo en Caja. Conserva los ceros iniciales."
+            help="Para encontrarlo al escanearlo en Caja. Conserva los ceros iniciales."
           />
-          
           <SelectField label="Marca" value={productBrandId} onChange={e => setProductBrandId(e.target.value)}>
-            <option value="">Sin Marca</option>
+            <option value="">Sin marca</option>
             {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
           </SelectField>
-
           <SelectField label="Rubro" value={productCategoryId} onChange={e => setProductCategoryId(e.target.value)}>
-            <option value="">Sin Rubro</option>
+            <option value="">Sin rubro</option>
             {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </SelectField>
-
-          <SelectField label="Unidad Base" value={productBaseUnit} onChange={e => setProductBaseUnit(e.target.value as Enums<"base_unit">)}>
+          <SelectField label="Unidad base" value={productBaseUnit} onChange={e => setProductBaseUnit(e.target.value as Enums<"base_unit">)}>
             <option value="unit">Unidad</option>
             <option value="gram">Gramos</option>
             <option value="millilitre">Mililitros</option>
           </SelectField>
-          <TextField label="Multiplicador propio (opcional)" type="number" min="0.001" step="0.001"
+          <TextField label="Multiplicador propio (opcional)" type="number" numeric min="0.001" step="0.001"
             value={productMultiplier} onChange={e => setProductMultiplier(e.target.value)}
-            help="Vacío: usa el multiplicador del rubro y luego el general." />
-
-          <div style={{ display: "flex", gap: "var(--esp-s)" }}>
-            <Button onClick={handleSaveProduct}>Guardar Producto</Button>
-            {selectedProduct && selectedProduct.active && (
-              <Button variant="peligro" onClick={handleArchiveProduct}>Archivar</Button>
-            )}
-          </div>
+            placeholder="Usa el del rubro" help="Vacío: usa el multiplicador del rubro y luego el general." />
         </div>
+        <div className="fila">
+          <Button onClick={handleSaveProduct}>Guardar producto</Button>
+          {selectedProduct && selectedProduct.active && (
+            <Button variant="peligro" icon="archive" onClick={handleArchiveProduct}>Archivar</Button>
+          )}
+        </div>
+      </section>
 
-        {selectedProduct && (
-          <div style={{ marginTop: "var(--esp-l)", borderTop: "1px solid var(--glass-borde)", paddingTop: "var(--esp-m)" }}>
-            <ProductPricing key={selectedProduct.id} product={selectedProduct} presentations={presentations}
-              onPricesSaved={() => { void handleSelectProduct(selectedProduct); }} />
-            <h3>Presentaciones</h3>
-            <ul style={{ listStyle: "none", padding: 0, margin: 0, marginBottom: "var(--esp-s)" }}>
-              {presentations.map(pr => (
-                <li key={pr.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--glass-borde)", paddingBottom: "var(--esp-xs)", marginBottom: "var(--esp-xs)" }}>
-                  <span>{pr.name} (Cant: {pr.base_quantity}) - ${pr.sale_price}</span>
-                  <Button variant="fantasma" onClick={() => handleUpdatePrice(pr.id, pr.sale_price)}>Cambiar precio base</Button>
-                </li>
-              ))}
-            </ul>
-
-            <div style={{ display: "flex", gap: "var(--esp-xs)", alignItems: "flex-end" }}>
-              <TextField label="Nombre Pres." value={presName} onChange={e => setPresName(e.target.value)} />
-              <TextField label="Cant. Base" type="number" value={presBaseQty} onChange={e => setPresBaseQty(e.target.value)} />
-              <TextField label="Precio ($)" type="number" value={presSalePrice} onChange={e => setPresSalePrice(e.target.value)} />
-              <Button onClick={handleSavePresentation}>Añadir</Button>
+      {selectedProduct && (
+        <>
+          <section className="carta pila" aria-labelledby="presentaciones">
+            <h3 className="titulo-seccion" id="presentaciones">Presentaciones</h3>
+            {presentations.length > 0 && (
+              <div className="tabla-marco">
+                <table className="tabla tabla--compacta">
+                  <thead><tr><th>Nombre</th><th className="num">Cantidad base</th><th className="num">Precio</th><th className="acciones"><span className="sr">Acciones</span></th></tr></thead>
+                  <tbody>
+                    {presentations.map(pr => (
+                      <tr key={pr.id}>
+                        <td>{pr.name}</td>
+                        <td className="num">{formatQuantity(Number(pr.base_quantity), selectedProduct.base_unit)}</td>
+                        <td className="num">{priceText(pr)}</td>
+                        <td className="acciones">
+                          <Button variant="fantasma" size="compacto" icon="sell" onClick={() => handleUpdatePrice(pr.id, pr.sale_price)}>Cambiar precio base</Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <div className="form-fila">
+              <TextField label="Nombre" placeholder="Bolsa 1 kg" value={presName} onChange={e => setPresName(e.target.value)} />
+              <TextField label="Cantidad base" type="number" numeric value={presBaseQty} onChange={e => setPresBaseQty(e.target.value)} />
+              <TextField label="Precio" type="number" numeric value={presSalePrice} onChange={e => setPresSalePrice(e.target.value)} />
+              <Button variant="secundario" icon="add" onClick={handleSavePresentation}>Añadir</Button>
             </div>
-          </div>
-        )}
-      </GlassCard>
+          </section>
+
+          <ProductPricing key={selectedProduct.id} product={selectedProduct} presentations={presentations}
+            onPricesSaved={() => { void handleSelectProduct(selectedProduct); }} />
+        </>
+      )}
 
       <Modal
         open={pricePrompt !== null}
@@ -266,8 +269,9 @@ export function ProductsManager() {
         )}
       >
         <TextField
-          label="Precio nuevo ($)"
+          label="Precio nuevo"
           type="number"
+          numeric
           min="0"
           step="0.01"
           value={newPriceInput}
@@ -275,6 +279,6 @@ export function ProductsManager() {
           autoFocus
         />
       </Modal>
-    </div>
+    </>
   );
 }

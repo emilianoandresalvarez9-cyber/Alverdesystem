@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { getSupabase } from "../../shared/supabase/client";
-import { Badge, EmptyState } from "../../shared/ui";
+import { Badge, EmptyState, Message } from "../../shared/ui";
+import { formatDayTime } from "../../shared/format/date";
 import { formatMoney } from "../pos/money";
 import type { Presentation } from "../../shared/types";
 import { accumulatedChange, formatPercent, groupByBranch, toPriceHistory, type PriceHistoryEntry, type PriceHistoryRow } from "./priceHistory";
 import { useBranch } from "../../shared/branch/BranchContext";
 
-const DATE = new Intl.DateTimeFormat("es-AR", { dateStyle: "short", timeStyle: "short" });
 
 /**
  * RF-27: historial de precios del producto, por presentación, con la variación de cada
@@ -33,9 +33,9 @@ export function PriceHistoryPanel({ presentations }: { presentations: Presentati
       });
   }, [ids]);
 
-  if (error) return <p className="form-error" role="alert">{error}</p>;
-  if (!entries) return <p className="field-help">Cargando historial de precios…</p>;
-  if (entries.length === 0) return <EmptyState title="Sin cambios de precio registrados" />;
+  if (error) return <Message tone="error">{error}</Message>;
+  if (!entries) return <span className="esqueleto" aria-label="Cargando historial de precios…" />;
+  if (entries.length === 0) return <EmptyState title="Sin cambios de precio registrados" icon="history" />;
 
   const branchName = (id: string | null) => (id === null ? "Precio base" : branches.find((b) => b.id === id)?.name ?? "Sucursal");
   // Balanza (ADR-001): el precio se guarda por gramo; se muestra por kilo.
@@ -43,34 +43,34 @@ export function PriceHistoryPanel({ presentations }: { presentations: Presentati
     soldByWeight ? `${formatMoney(Math.round(value * 100000) / 100)}/kg` : formatMoney(value);
 
   return (
-    <div style={{ display: "grid", gap: "var(--esp-m)" }}>
+    <div className="pila">
       {presentations.map((presentation) => {
         const ownRows = entries.filter((e) => e.presentationId === presentation.id);
         if (ownRows.length === 0) return null;
         return (
-          <div key={presentation.id} style={{ display: "grid", gap: "var(--esp-s)" }}>
-            <strong>{presentation.name}</strong>
+          <div key={presentation.id} className="pila pila--s">
+            <strong className="fuerte">{presentation.name}</strong>
             {groupByBranch(ownRows).map((group) => {
               const total = accumulatedChange(group.entries);
               return (
                 <div key={group.branchId ?? "base"}>
-                  <div style={{ display: "flex", gap: "var(--esp-s)", alignItems: "center", flexWrap: "wrap", marginBottom: "var(--esp-xs)" }}>
-                    <span className="field-help">{branchName(group.branchId)}</span>
+                  <div className="fila">
+                    <span className="meta">{branchName(group.branchId)}</span>
                     {total !== null && (
                       <Badge tone={total > 0 ? "aviso" : "exito"}>acumulado {formatPercent(total)} en {group.entries.length} cambio{group.entries.length === 1 ? "" : "s"}</Badge>
                     )}
                   </div>
-                  <div className="table-wrap">
-                    <table>
-                      <thead><tr><th>Cuándo</th><th>Quién</th><th>Anterior</th><th>Nuevo</th><th>Variación</th></tr></thead>
+                  <div className="tabla-marco">
+                    <table className="tabla tabla--compacta">
+                      <thead><tr><th>Cuándo</th><th>Quién</th><th className="num">Anterior</th><th className="num">Nuevo</th><th className="num">Variación</th></tr></thead>
                       <tbody>
                         {group.entries.map((e) => (
                           <tr key={e.id}>
-                            <td style={{ whiteSpace: "nowrap" }}>{DATE.format(new Date(e.changedAt))}</td>
-                            <td>{e.changedBy}{e.fromBulkUpdate ? <span className="field-help"> · masiva</span> : null}</td>
-                            <td style={{ color: "var(--color-tinta-apagada)" }}>{e.previousPrice === null ? "—" : money(e.previousPrice, presentation.sold_by_weight)}</td>
-                            <td><strong>{money(e.price, presentation.sold_by_weight)}</strong></td>
-                            <td>{formatPercent(e.change)}</td>
+                            <td className="cifra">{formatDayTime(e.changedAt)}</td>
+                            <td>{e.changedBy}{e.fromBulkUpdate ? <span className="meta"> · masiva</span> : null}</td>
+                            <td className="num apagada">{e.previousPrice === null ? "—" : money(e.previousPrice, presentation.sold_by_weight)}</td>
+                            <td className="num fuerte">{money(e.price, presentation.sold_by_weight)}</td>
+                            <td className="num">{formatPercent(e.change)}</td>
                           </tr>
                         ))}
                       </tbody>

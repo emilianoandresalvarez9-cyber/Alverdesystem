@@ -10,7 +10,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { getSupabase } from "../../shared/supabase/client";
-import { Button, TextField, SelectField, GlassCard, Badge, EmptyState } from "../../shared/ui";
+import { ActionsMenu, Badge, Button, EmptyState, Message, Modal, SelectField, TextField } from "../../shared/ui";
 import { BulkAssignPanel } from "./BulkAssignPanel";
 
 type ClassifierType = "brand" | "category" | "label";
@@ -56,6 +56,8 @@ export function ClassifierManager({ type }: ClassifierManagerProps) {
   const [mergingId, setMergingId] = useState<string | null>(null);
   const [mergeTarget, setMergeTarget] = useState("");
   const [mergeBusy, setMergeBusy] = useState(false);
+  /** Unir con…: primero se elige el destino, después se confirma con los dos nombres (no se deshace). */
+  const [mergeStep, setMergeStep] = useState<"choose" | "confirm">("choose");
   const [assigningId, setAssigningId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -125,7 +127,6 @@ export function ClassifierManager({ type }: ClassifierManagerProps) {
     if (!mergeTarget || mergeTarget === fromId) return;
     const from = items.find(i => i.id === fromId)?.name ?? "";
     const into = items.find(i => i.id === mergeTarget)?.name ?? "";
-    if (!window.confirm(`¿Unir "${from}" con "${into}"? Los productos pasan a "${into}" y "${from}" queda archivada.`)) return;
     setMergeBusy(true);
     setError(null);
     try {
@@ -143,121 +144,129 @@ export function ClassifierManager({ type }: ClassifierManagerProps) {
   };
 
   const topLevelItems = items.filter(i => !i.parent_id);
+  const merging = items.find(i => i.id === mergingId) ?? null;
+  const mergeInto = items.find(i => i.id === mergeTarget) ?? null;
+  const closeMerge = () => { setMergingId(null); setMergeTarget(""); setMergeStep("choose"); };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--esp-m)" }}>
-      <h2 style={{ margin: 0 }}>Gestionar {title}</h2>
+    <>
+      {error && <Message tone="error">{error}</Message>}
+      {notice && <Message tone="exito">{notice}</Message>}
 
-      {error && <p role="alert" style={{ color: "var(--color-error)", margin: 0 }}>{error}</p>}
-      {notice && <p role="status" className="notice" style={{ margin: 0 }}>{notice}</p>}
-
-      <GlassCard>
-        <div style={{ display: "flex", flexDirection: "column", gap: "var(--esp-s)" }}>
-          <h3 style={{ margin: 0 }}>Agregar nuevo</h3>
-          <div style={{ display: "flex", gap: "var(--esp-s)", flexWrap: "wrap", alignItems: "flex-end" }}>
-            <TextField
-              label="Nombre"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleCreate(); }}
-              placeholder={type === "brand" ? "Ej. Arcor" : type === "category" ? "Ej. Lácteos" : "Ej. Vegano"}
-            />
-            {type === "category" && (
-              <SelectField
-                label="Rubro padre (opcional)"
-                value={newParentId}
-                onChange={(e) => setNewParentId(e.target.value)}
-              >
-                <option value="">Ninguno (rubro principal)</option>
-                {topLevelItems.map(i => (
-                  <option key={i.id} value={i.id}>{i.name}</option>
-                ))}
-              </SelectField>
-            )}
-            <Button variant="primario" onClick={handleCreate} disabled={!newName.trim()}>
-              Crear
-            </Button>
-          </div>
+      <section className="carta pila" aria-labelledby="clasificador-nuevo">
+        <h3 className="titulo-seccion" id="clasificador-nuevo">Agregar nuevo</h3>
+        <div className="form-fila">
+          <TextField
+            label="Nombre"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleCreate(); }}
+            placeholder={type === "brand" ? "Ej. Arcor" : type === "category" ? "Ej. Lácteos" : "Ej. Vegano"}
+          />
+          {type === "category" && (
+            <SelectField label="Rubro padre (opcional)" value={newParentId} onChange={(e) => setNewParentId(e.target.value)}>
+              <option value="">Ninguno (rubro principal)</option>
+              {topLevelItems.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+            </SelectField>
+          )}
+          <Button icon="add" onClick={handleCreate} disabled={!newName.trim()}>Crear</Button>
         </div>
-      </GlassCard>
+      </section>
 
       {loading ? (
-        <GlassCard className="skeleton" style={{ minHeight: 80 }} />
+        <div className="carta pila pila--s" aria-busy="true"><span className="esqueleto" /><span className="esqueleto" /></div>
       ) : items.length === 0 ? (
-        <EmptyState title={`Sin ${title.toLowerCase()} activos`}>
-          Usá el formulario de arriba para crear el primero.
-        </EmptyState>
+        <EmptyState title={`Sin ${title.toLowerCase()} activos`} icon="label">Usá el formulario de arriba para crear el primero.</EmptyState>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "var(--esp-xs)" }}>
-          {items.map(item => (
-            <GlassCard
-              key={item.id} padding="compact"
-              style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--esp-s)", flexWrap: "wrap" }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: "var(--esp-s)", flex: 1 }}>
-                {editingId === item.id ? (
-                  <TextField
-                    label=""
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") saveEdit(item.id);
-                      if (e.key === "Escape") setEditingId(null);
-                    }}
-                    autoFocus
-                  />
-                ) : (
-                  <span style={{ fontWeight: 700 }}>{item.name}</span>
-                )}
-                {type === "category" && item.parent_id && (
-                  <Badge tone="neutro">
-                    {items.find(i => i.id === item.parent_id)?.name ?? "sub-rubro"}
-                  </Badge>
-                )}
-              </div>
-              <div style={{ display: "flex", gap: "var(--esp-xs)", flexShrink: 0 }}>
-                {editingId === item.id ? (
-                  <>
-                    <Button variant="primario" onClick={() => saveEdit(item.id)}>Guardar</Button>
-                    <Button variant="fantasma" onClick={() => setEditingId(null)}>Cancelar</Button>
-                  </>
-                ) : (
-                  <>
-                    <Button variant="secundario" onClick={() => { setEditingId(item.id); setEditName(item.name); }}>Renombrar</Button>
-                    <Button variant="secundario" onClick={() => { setAssigningId(assigningId === item.id ? null : item.id); setMergingId(null); }}>
-                      Asignar a productos
-                    </Button>
-                    <Button variant="secundario" onClick={() => { setMergingId(mergingId === item.id ? null : item.id); setMergeTarget(""); setAssigningId(null); }}
-                      disabled={items.length < 2}>
-                      Unir con…
-                    </Button>
-                    <Button variant="peligro" onClick={() => handleArchive(item.id)}>Archivar</Button>
-                  </>
-                )}
-              </div>
-              {mergingId === item.id && (
-                <div style={{ flexBasis: "100%", display: "flex", gap: "var(--esp-s)", alignItems: "flex-end", flexWrap: "wrap", paddingTop: "var(--esp-s)", borderTop: "1px solid var(--color-linea)" }}>
-                  <SelectField label={`Unir "${item.name}" con`} value={mergeTarget} onChange={(e) => setMergeTarget(e.target.value)}>
-                    <option value="">Elegí el destino…</option>
-                    {items.filter(i => i.id !== item.id).map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
-                  </SelectField>
-                  <Button variant="primario" onClick={() => void confirmMerge(item.id)} disabled={!mergeTarget} loading={mergeBusy}>Unir</Button>
-                  <Button variant="fantasma" onClick={() => setMergingId(null)}>Cancelar</Button>
-                  <p className="field-help" style={{ flexBasis: "100%", margin: 0 }}>
-                    Los productos de "{item.name}" pasan al destino y "{item.name}" queda archivada (no se borra: RF-56).
-                  </p>
+        <section className="carta carta--sin-relleno" aria-label={`${title} activos`}>
+          <ul className="lista lista--plana clasificadores">
+            {items.map(item => (
+              <li key={item.id}>
+                <div className="lista__principal">
+                  {editingId === item.id ? (
+                    <div className="fila">
+                      <TextField
+                        className="crece"
+                        label={`Nuevo nombre para ${item.name}`}
+                        hideLabel
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") saveEdit(item.id);
+                          if (e.key === "Escape") setEditingId(null);
+                        }}
+                        autoFocus
+                      />
+                      <Button size="compacto" onClick={() => saveEdit(item.id)}>Guardar</Button>
+                      <Button variant="fantasma" size="compacto" onClick={() => setEditingId(null)}>Cancelar</Button>
+                    </div>
+                  ) : (
+                    <span className="lista__titulo">
+                      {item.name}
+                      {type === "category" && item.parent_id && (
+                        <> <Badge tone="neutro">{items.find(i => i.id === item.parent_id)?.name ?? "sub-rubro"}</Badge></>
+                      )}
+                    </span>
+                  )}
+                  {assigningId === item.id && (
+                    <div className="clasificadores__asignar">
+                      <BulkAssignPanel kind={type} id={item.id} name={item.name}
+                        onDone={(message) => { setNotice(message); setAssigningId(null); }} />
+                    </div>
+                  )}
                 </div>
-              )}
-              {assigningId === item.id && (
-                <div style={{ flexBasis: "100%", paddingTop: "var(--esp-s)", borderTop: "1px solid var(--color-linea)" }}>
-                  <BulkAssignPanel kind={type} id={item.id} name={item.name}
-                    onDone={(message) => { setNotice(message); setAssigningId(null); }} />
-                </div>
-              )}
-            </GlassCard>
-          ))}
-        </div>
+                {editingId !== item.id && (
+                  <div className="fila clasificadores__acciones">
+                    <Button variant="secundario" size="compacto" icon="label"
+                      onClick={() => { setAssigningId(assigningId === item.id ? null : item.id); setMergingId(null); }}>
+                      {assigningId === item.id ? "Cerrar" : "Asignar a productos"}
+                    </Button>
+                    <ActionsMenu label={`Más acciones para ${item.name}`} actions={[
+                      { label: "Renombrar", icon: "edit", onSelect: () => { setEditingId(item.id); setEditName(item.name); } },
+                      { label: "Unir con…", icon: "merge", onSelect: () => { setMergingId(item.id); setMergeTarget(""); setMergeStep("choose"); setAssigningId(null); },
+                        disabled: items.length < 2, reason: items.length < 2 ? "Hace falta otro elemento para unir." : undefined },
+                      { label: "Archivar", icon: "archive", onSelect: () => void handleArchive(item.id) }
+                    ]} />
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
-    </div>
+
+      {merging && mergeStep === "choose" && (
+        <Modal open title={`Unir «${merging.name}» con…`} onClose={closeMerge}
+          footer={<>
+            <Button variant="fantasma" onClick={closeMerge}>Cancelar</Button>
+            <Button icon="merge" disabled={!mergeTarget} onClick={() => setMergeStep("confirm")}>Unir</Button>
+          </>}>
+          <SelectField label={`Unir "${merging.name}" con`} value={mergeTarget} onChange={(e) => setMergeTarget(e.target.value)}>
+            <option value="">Elegí el destino…</option>
+            {items.filter(i => i.id !== merging.id).map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+          </SelectField>
+          <p className="meta">Los productos de «{merging.name}» pasan al destino y «{merging.name}» queda archivada (no se borra).</p>
+        </Modal>
+      )}
+      {merging && mergeInto && mergeStep === "confirm" && (
+        <MergeConfirm from={merging.name} into={mergeInto.name} busy={mergeBusy}
+          onCancel={closeMerge} onConfirm={() => void confirmMerge(merging.id).then(() => setMergeStep("choose"))} />
+      )}
+    </>
+  );
+}
+
+/** Confirmación de Unir con…: los dos nombres en el título y la consecuencia escrita (RF-03, RF-56). */
+export function MergeConfirm({ from, into, busy, onCancel, onConfirm }: {
+  from: string; into: string; busy: boolean; onCancel: () => void; onConfirm: () => void;
+}) {
+  return (
+    <Modal open title={`¿Unir «${from}» con «${into}»?`} onClose={onCancel}
+      footer={<>
+        <Button variant="fantasma" onClick={onCancel}>Cancelar</Button>
+        <Button variant="peligro" confirmar loading={busy} onClick={onConfirm}>Unir</Button>
+      </>}>
+      <Message tone="error">No se puede deshacer: los productos pasan a «{into}» y «{from}» queda archivada.</Message>
+    </Modal>
   );
 }
