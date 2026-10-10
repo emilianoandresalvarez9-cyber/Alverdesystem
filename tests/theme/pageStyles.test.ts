@@ -42,14 +42,19 @@ describe.each(PAGE_SHEETS)("%s con los dos temas", (sheet) => {
   });
 });
 
-describe("Caja: el total por tema", () => {
+describe("Caja: el TOTAL no compite con Cobrar", () => {
+  // Decisión del sistema de diseño: el total va en la tinta principal y en 48 px (se lee a 1 m);
+  // el acento queda sólo para Cobrar, la acción principal.
+  const design = stripComments(read("src/styles/design-system.css"));
   const pos = stripComments(read("src/styles/pos.css"));
 
-  it("el panel del total cambia de aspecto por tema a través de variables, no de colores", () => {
-    // El bloque del total es lo único de la caja que se ve distinto entre temas:
-    // verde lleno en botanical, negro con lima en midnight. Tiene que resolverse
-    // con un selector por data-theme y variables locales, sin tocar los temas.
-    expect(pos).toMatch(/\[data-theme="midnight-bio"\]\s+\.pos-total-box\s*\{[^}]*--pos-total-fondo:/);
-    expect(pos).toMatch(/\.pos-total-box\s*\{[^}]*--pos-total-fondo:\s*var\(--color-acento\)/);
+  it("el total usa la cifra de 48 px y la tinta principal, no el acento", () => {
+    expect(design).toMatch(/\.total__cifra\s*\{[^}]*var\(--texto-cifra\)[^}]*color:\s*var\(--color-tinta\)/);
+    expect(read("src/styles/tokens.css")).toMatch(/--texto-cifra:\s*48px/);
+  });
+
+  it("la hoja de la caja no le pone acento ni fondo al total", () => {
+    expect(pos).not.toMatch(/\.total[^{]*\{[^}]*--color-acento/);
+    expect(pos).not.toMatch(/pos-total-box/);
   });
 });

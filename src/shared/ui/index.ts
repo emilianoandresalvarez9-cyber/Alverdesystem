@@ -25,3 +25,4 @@ export { Options } from "./Options";
 export type { OptionItem, OptionsProps } from "./Options";
 export { Message } from "./Message";
 export type { MessageTone } from "./Message";
+export { useCompact, COMPACT_QUERY } from "./useCompact";
