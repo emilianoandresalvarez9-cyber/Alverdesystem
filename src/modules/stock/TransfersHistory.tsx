@@ -3,10 +3,9 @@ import { getSupabase } from "../../shared/supabase/client";
 import { useBranch } from "../../shared/branch/BranchContext";
 import type { Database } from "../../shared/supabase/database.types";
 import { EmptyState, Message, useCompact } from "../../shared/ui";
-import { formatQuantity } from "./format";
+import { formatDayTime, formatQuantity } from "./format";
 
 type Row = Database["public"]["Functions"]["stock_transfers_list"]["Returns"][number];
-const DATE = new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
 
 /** RF-68: quién traspasó qué, cuánto, de dónde y a dónde. Solo administradora. */
 export function TransfersHistory({ refreshKey = 0 }: { refreshKey?: number }) {
@@ -25,7 +24,7 @@ export function TransfersHistory({ refreshKey = 0 }: { refreshKey?: number }) {
   }, [filterId, isAdmin, refreshKey]);
 
   if (!isAdmin || branches.length < 2) return null;
-  const when = (iso: string) => DATE.format(new Date(iso)).replace(",", "");
+  const when = formatDayTime;
   return (
     <section className="carta carta--sin-relleno" aria-labelledby="traspasos-titulo">
       <div className="carta__cabecera"><h2 className="titulo-seccion" id="traspasos-titulo">Traspasos entre sucursales</h2></div>

@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useState } from "react";
-import { Button, Modal, TextField } from "../../shared/ui";
+import { Button, Message, Modal, Options, TextField } from "../../shared/ui";
 import { formatMoney } from "../pos/money";
+import { formatDayTime } from "../../shared/format/date";
 import { loadMovements, registerMovement, setCreditLimit } from "./api";
 import type { CreditMovementKind, CreditMovementRow, CustomerAccount } from "./types";
 
@@ -67,63 +68,69 @@ export function CustomerCreditModal({ account, isAdmin, onClose, onChanged }: Pr
 
   const kinds: CreditMovementKind[] = isAdmin ? ["payment", "charge", "adjustment"] : ["payment", "charge"];
 
+  const when = formatDayTime;
+  const kindText = (row: CreditMovementRow) =>
+    row.kind === "adjustment" ? `Ajuste · ${row.delta < 0 ? "baja" : "sube"} la deuda` : KIND_LABEL[row.kind];
+
   return (
-    <Modal open title={account.name} onClose={onClose}>
-      <p className="pos-total-label">Saldo</p>
-      <p className="pos-total">{formatMoney(account.balance)}</p>
-      <p className="field-help">
-        {account.credit_limit === null ? "Sin tope de fiado." : `Tope de fiado: ${formatMoney(account.credit_limit)}.`}
-        {account.phone ? ` Teléfono: ${account.phone}.` : ""}
-      </p>
+    <Modal open wide title={`Cuenta de ${account.name}`} onClose={onClose}>
+      <div className="kpis" aria-label="Resumen de la cuenta">
+        <div className="kpi"><p className="kpi__etiqueta">Saldo</p><p className="kpi__valor">{formatMoney(account.balance)}</p></div>
+        <div className="kpi"><p className="kpi__etiqueta">Tope</p><p className="kpi__valor">{account.credit_limit === null ? "Sin tope" : formatMoney(account.credit_limit)}</p></div>
+        <div className="kpi"><p className="kpi__etiqueta">Teléfono</p><p className="kpi__valor kpi__valor--texto">{account.phone ?? "Sin teléfono"}</p></div>
+      </div>
 
-      <form onSubmit={submit} className="pos-setup">
-        <fieldset className="pos-methods">
-          <legend>Movimiento</legend>
-          {kinds.map((k) => (
-            <label key={k} className="pos-method">
-              <input type="radio" name="tipo" checked={kind === k} onChange={() => setKind(k)} />
-              <span>{KIND_LABEL[k]}</span>
-            </label>
-          ))}
-        </fieldset>
-        {kind === "adjustment" && (
-          <fieldset className="pos-methods">
-            <legend>El ajuste…</legend>
-            <label className="pos-method"><input type="radio" name="signo" checked={sign === -1} onChange={() => setSign(-1)} /><span>Baja la deuda</span></label>
-            <label className="pos-method"><input type="radio" name="signo" checked={sign === 1} onChange={() => setSign(1)} /><span>Sube la deuda</span></label>
-          </fieldset>
+      <div className={isAdmin ? "reja-2" : "pila"}>
+        <form onSubmit={submit} className="pila">
+          <Options name="tipo" legend="Movimiento" showLegend variant="segmento" value={kind} onChange={setKind}
+            options={kinds.map((k) => ({ value: k, label: KIND_LABEL[k] }))} />
+          {kind === "adjustment" && (
+            <Options name="signo" legend="El ajuste…" variant="segmento" value={sign === -1 ? "baja" : "sube"}
+              onChange={(value) => setSign(value === "baja" ? -1 : 1)}
+              options={[{ value: "baja", label: "Baja la deuda", icon: "remove" }, { value: "sube", label: "Sube la deuda", icon: "add" }]} />
+          )}
+          <TextField label="Monto" inputMode="decimal" numeric required value={amount} onChange={(e) => setAmount(e.target.value)} />
+          <TextField label="Nota (opcional)" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej.: pagó parte en efectivo" />
+          <Button type="submit" block loading={busy}>Guardar {KIND_LABEL[kind].toLowerCase()}</Button>
+        </form>
+
+        {/* RF-47: sólo administración define el tope de fiado. */}
+        {isAdmin && (
+          <div className="pila">
+            <div className="fila cuenta-cliente__tope">
+              <TextField label="Tope de fiado" inputMode="decimal" numeric value={limit} onChange={(e) => setLimit(e.target.value)} />
+              <Button variant="secundario" onClick={() => void saveLimit()}>Guardar tope</Button>
+            </div>
+            <p className="meta">Vacío = sin tope.</p>
+          </div>
         )}
-        <TextField label="Monto" inputMode="decimal" required value={amount} onChange={(e) => setAmount(e.target.value)} />
-        <TextField label="Nota (opcional)" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej.: pagó parte en efectivo" />
-        <Button type="submit" loading={busy}>Guardar {KIND_LABEL[kind].toLowerCase()}</Button>
-      </form>
+      </div>
 
-      {isAdmin && (
-        <div className="pos-scan" style={{ marginTop: "var(--esp-m)" }}>
-          <TextField label="Tope de fiado" inputMode="decimal" value={limit} onChange={(e) => setLimit(e.target.value)} help="Vacío = sin tope." />
-          <Button variant="secundario" onClick={() => void saveLimit()}>Guardar tope</Button>
-        </div>
-      )}
-      <p className="pos-feedback" data-tone={message?.tone} role="status">{message?.text}</p>
+      {message && <Message tone={message.tone === "ok" ? "exito" : "error"}>{message.text}</Message>}
 
-      <h3>Últimos movimientos</h3>
-      {historyError && <p className="field-help">{historyError}</p>}
-      {history && history.length === 0 && <p className="field-help">Todavía no hay movimientos.</p>}
-      {history && history.length > 0 && (
-        <table className="pos-summary">
-          <thead><tr><th>Fecha</th><th>Tipo</th><th>Nota</th><th>Importe</th></tr></thead>
-          <tbody>
-            {history.map((row) => (
-              <tr key={row.id}>
-                <td>{new Date(row.occurred_at).toLocaleDateString("es-AR")}</td>
-                <td>{KIND_LABEL[row.kind]}{row.user_name ? ` · ${row.user_name}` : ""}</td>
-                <td>{row.note ?? (row.sale_id ? "Venta" : "")}</td>
-                <td>{row.delta > 0 ? "+" : "−"}{formatMoney(Math.abs(row.delta))}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <div className="pila pila--s">
+        <h3 className="titulo-seccion">Últimos movimientos</h3>
+        {historyError && <p className="meta">{historyError}</p>}
+        {history && history.length === 0 && <p className="meta">Todavía no hay movimientos.</p>}
+        {history && history.length > 0 && (
+          <div className="tabla-marco">
+            <table className="tabla tabla--compacta">
+              <thead><tr><th>Fecha</th><th>Tipo</th><th>Quién</th><th>Nota</th><th className="num">Importe</th></tr></thead>
+              <tbody>
+                {history.map((row) => (
+                  <tr key={row.id}>
+                    <td className="cifra">{when(row.occurred_at)}</td>
+                    <td>{kindText(row)}</td>
+                    <td>{row.user_name ?? "—"}</td>
+                    <td className="suave">{row.note ?? (row.sale_id ? "Venta" : "—")}</td>
+                    <td className={row.delta > 0 ? "num fuerte" : "num"}>{row.delta > 0 ? "+" : "−"}{formatMoney(Math.abs(row.delta))}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </Modal>
   );
 }

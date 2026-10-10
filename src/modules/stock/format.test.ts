@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDay, formatQuantity, remaining, unitLabel } from "./format";
+import { formatDay, formatDayTime, formatQuantity, remaining, unitLabel } from "./format";
 
 describe("Stock: cantidades y fechas en formato argentino", () => {
   it("cantidades con punto de miles, coma decimal y unidad corta", () => {
@@ -14,6 +14,13 @@ describe("Stock: cantidades y fechas en formato argentino", () => {
     expect(formatDay("2026-10-14")).toBe("14/10/2026");
     expect(formatDay(null)).toBe("—");
     expect(formatDay("no es fecha")).toBe("—");
+  });
+
+  it("fecha y hora cortas siempre con dos dígitos", () => {
+    const local = new Date(2026, 9, 9, 8, 5); // 9 de octubre, 08:05, hora del equipo
+    expect(formatDayTime(local.toISOString())).toBe("09/10 08:05");
+    expect(formatDay(local.toISOString())).toBe("09/10/2026");
+    expect(formatDayTime(null)).toBe("—");
   });
 
   it("el medidor avisa cuando queda poco", () => {
