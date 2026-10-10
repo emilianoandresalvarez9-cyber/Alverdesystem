@@ -17,8 +17,8 @@ insert into public.products (id, name, base_unit) values ('00000000-0000-0000-00
 insert into public.product_presentations (id, product_id, name, base_quantity, sale_price)
   values ('00000000-0000-0000-0000-00000000f3e1', '00000000-0000-0000-0000-00000000f3a1', 'Bolsita 150 g', 1, 900);
 -- Un solo lote con 2 unidades: la caja vende 5 sin conexión.
-insert into public.stock_lots (id, presentation_id, initial_quantity, current_quantity, purchase_cost, status)
-  values ('00000000-0000-0000-0000-00000000f3d1', '00000000-0000-0000-0000-00000000f3e1', 2, 2, 100, 'open');
+insert into public.stock_lots (id, presentation_id, initial_quantity, current_quantity, purchase_cost, status, branch_id)
+  values ('00000000-0000-0000-0000-00000000f3d1', '00000000-0000-0000-0000-00000000f3e1', 2, 2, 100, 'open', '00000000-0000-0000-0000-00000000f3b1');
 
 -- La cajera vende más de lo que hay.
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000f382';
@@ -43,7 +43,7 @@ select is((select count(*)::int from public.stock_warnings_for_review(true)), 0,
   'Otro empleado tampoco ve la lista, ni con los resueltos');
 reset role;
 
-select is(has_function_privilege('anon', 'public.stock_warnings_for_review(boolean)', 'execute'), false,
+select is(has_function_privilege('anon', 'public.stock_warnings_for_review(boolean, uuid)', 'execute'), false,
   'anon no puede ejecutar la lista de revisión');
 select is(has_function_privilege('anon', 'public.resolve_stock_warning(uuid, text)', 'execute'), false,
   'anon no puede resolver casos');

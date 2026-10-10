@@ -77,7 +77,7 @@ SELECT is((SELECT supplier_id FROM public.stock_lots WHERE id = (SELECT id FROM 
 
 RESET role;
 SELECT is(has_function_privilege('anon',
-  'public.quick_restock(uuid,uuid,numeric,date,numeric)', 'EXECUTE'), false,
+  'public.quick_restock(uuid,uuid,numeric,date,numeric,uuid)', 'EXECUTE'), false,
   'Anon no puede ejecutar ingreso rápido');
 
 SET request.jwt.claim.sub = '00000000-0000-0000-0000-00000000f262';

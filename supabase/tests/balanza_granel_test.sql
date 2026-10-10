@@ -53,8 +53,8 @@ select is((select sold_by_weight from public.employee_catalog where presentation
   'La caja ve la marca Balanza en el catálogo');
 
 -- T-02: una bolsa de 25 kg es un lote de 25.000 g; vender 350 g descuenta 350.
-insert into public.stock_lots (id, presentation_id, initial_quantity, current_quantity, purchase_cost, status, opened_at)
-  values ('00000000-0000-0000-0000-00000000a001', '00000000-0000-0000-0000-0000000000c3', 25000, 25000, 40000, 'open', now());
+insert into public.stock_lots (id, presentation_id, initial_quantity, current_quantity, purchase_cost, status, opened_at, branch_id)
+  values ('00000000-0000-0000-0000-00000000a001', '00000000-0000-0000-0000-0000000000c3', 25000, 25000, 40000, 'open', now(), '00000000-0000-0000-0000-000000000b01');
 set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000e1';
 set role authenticated;
 select public.process_offline_sale(jsonb_build_object('localId', gen_random_uuid(), 'deviceId', gen_random_uuid(), 'kind', 'sale',

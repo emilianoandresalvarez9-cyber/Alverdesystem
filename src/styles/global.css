@@ -422,6 +422,17 @@ dialog.modal::backdrop { background: var(--backdrop); }
 .app-nav svg { flex: none; opacity: .85; }
 
 .app-sidebar-foot { margin-top: auto; display: grid; gap: var(--esp-s); }
+.branch-current, .branch-select { display: grid; gap: .25rem; margin: 0; padding: 0 .65rem; }
+.branch-label {
+  color: var(--color-tinta-apagada);
+  font-family: var(--fuente-datos);
+  font-size: var(--texto-xs);
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.branch-current strong { font-size: var(--texto-m); }
+.branch-select select { padding: .5rem .6rem; font-size: var(--texto-s); font-weight: 700; }
 .app-sidebar-foot .button { width: 100%; justify-content: center; }
 .theme-toggle { display: inline-flex; align-items: center; gap: .5rem; }
 .theme-toggle-dot {
@@ -502,6 +513,7 @@ dialog.modal::backdrop { background: var(--backdrop); }
   .app-nav-label { display: none; }
   .app-nav a { flex: none; padding: .45rem .65rem; }
   .app-sidebar-foot { margin-top: 0; margin-left: auto; grid-auto-flow: column; }
+  .branch-current, .branch-select { order: 2; padding: 0; }
   .app-sidebar-foot .button { width: auto; }
 }
 

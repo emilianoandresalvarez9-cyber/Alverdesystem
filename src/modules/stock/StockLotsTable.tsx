@@ -3,13 +3,14 @@ import { GlassCard, Button, Badge, EmptyState } from "../../shared/ui";
 import { LotStatusBadge } from "./LotStatusBadge";
 import { StockAdjustmentModal } from "./StockAdjustmentModal";
 import type { StockLot } from "./types";
+import { useBranch } from "../../shared/branch/BranchContext";
 
 interface StockLotsTableProps {
   lots: StockLot[];
   loading: boolean;
   onRefresh: () => void;
   onOpenLot: (lotId: string) => void;
-  hasActiveOpenBag?: (productId: string) => boolean;
+  hasActiveOpenBag?: (productId: string, branchId?: string | null) => boolean;
   enableFractioning?: boolean;
   onFraction?: (lot: StockLot) => void;
 }
@@ -24,6 +25,9 @@ export function StockLotsTable({
   onFraction
 }: StockLotsTableProps) {
   const [selectedLotForAdjustment, setSelectedLotForAdjustment] = useState<StockLot | null>(null);
+  // Con "Todas las sucursales" cada lote dice de qué sucursal es (RF-65/66).
+  const { isAdmin, filterId, branches } = useBranch();
+  const showBranch = isAdmin && filterId === null && branches.length > 1;
 
   if (loading) {
     return (
@@ -62,7 +66,7 @@ export function StockLotsTable({
               const isClosed = lot.status === "closed";
               const isPending = lot.id.startsWith("pending:");
               const canOpen = !isPending && !isClosed && !lot.opened_at;
-              const hasActiveBag = hasActiveOpenBag ? hasActiveOpenBag(lot.product_id) : false;
+              const hasActiveBag = hasActiveOpenBag ? hasActiveOpenBag(lot.product_id, lot.branch_id) : false;
               
               return (
                 <tr key={lot.id} style={{ opacity: isClosed ? 0.6 : 1 }}>
@@ -71,6 +75,7 @@ export function StockLotsTable({
                     <div style={{ fontSize: "var(--texto-xs)", color: "var(--color-tinta-suave)" }}>
                       {lot.presentation_name}
                       {lot.supplier_name && ` • Prov: ${lot.supplier_name}`}
+                      {showBranch && lot.branch_name && <> • <Badge tone="neutro">{lot.branch_name}</Badge></>}
                       {isPending && <div><Badge tone="aviso">Pendiente de sincronización</Badge></div>}
                     </div>
                   </td>

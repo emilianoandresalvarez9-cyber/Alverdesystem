@@ -19,12 +19,15 @@ export async function assignRegister(register: RegisterOption): Promise<void> {
   await writeSetting(REGISTER_KEY, register);
 }
 
-export async function listRegisters(): Promise<RegisterOption[]> {
-  const { data, error } = await getSupabase()
+/** Cajas activas; con sucursal, solo las de esa sucursal (RF-66: el empleado ve las de la suya). */
+export async function listRegisters(branchId: string | null = null): Promise<RegisterOption[]> {
+  let query = getSupabase()
     .from("registers")
-    .select("id, name, archived_at, branch:branches(name)")
+    .select("id, name, archived_at, branch_id, branch:branches(name)")
     .is("archived_at", null)
     .order("name");
+  if (branchId) query = query.eq("branch_id", branchId);
+  const { data, error } = await query;
   if (error) throw new Error(`No se pudieron cargar las cajas: ${error.message}`);
   return (data ?? []).map((row) => {
     const branch = row.branch as unknown as { name: string } | { name: string }[] | null;

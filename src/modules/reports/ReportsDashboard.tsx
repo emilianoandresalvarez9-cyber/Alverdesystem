@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { GlassCard, SelectField, EmptyState } from "../../shared/ui";
 import { getSupabase } from "../../shared/supabase/client";
 import { SalesHistory } from "./SalesHistory";
+import { useBranch } from "../../shared/branch/BranchContext";
 import { toSalesReportLines, buildSalesReport, type SalesReportRow } from "./salesReport";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
@@ -15,6 +16,7 @@ export function ReportsDashboard() {
   const [dateRange, setDateRange] = useState("30");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { filterId: branchFilter, label: branchLabel } = useBranch();
 
   useEffect(() => {
     let cancelled = false;
@@ -38,7 +40,9 @@ export function ReportsDashboard() {
             )
           `)
           .gte('sales.occurred_at', startDate.toISOString())
-          .eq('sales.status', 'closed');
+          .eq('sales.status', 'closed')
+          // RF-70: reportes de la sucursal elegida; sin filtro = todas.
+          .match(branchFilter ? { 'sales.branch_id': branchFilter } : {});
 
         if (queryError) throw queryError;
 
@@ -53,12 +57,15 @@ export function ReportsDashboard() {
 
     void loadReports();
     return () => { cancelled = true; };
-  }, [dateRange]);
+  }, [dateRange, branchFilter]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--esp-l)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h2 style={{ margin: 0 }}>Reportes y Análisis</h2>
+        <div>
+          <h2 style={{ margin: 0 }}>Reportes y Análisis</h2>
+          <p className="field-help" style={{ margin: 0 }}>{branchLabel}</p>
+        </div>
         <SelectField
           label="Rango de tiempo"
           value={dateRange}

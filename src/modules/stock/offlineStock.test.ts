@@ -23,6 +23,8 @@ const lot: StockLot = {
   sold_by_weight: true,
   open_shelf_life_days: 30,
   supplier_name: null,
+  branch_id: "centro",
+  branch_name: "Centro",
   effective_expiry_date: null,
   expiry_status: "indeterminate",
   days_until_expiry: null,
@@ -78,6 +80,18 @@ describe("operaciones de stock pendientes", () => {
       presentation_name: "Granel",
     });
     expect(JSON.stringify(result)).not.toContain("purchase_cost");
+  });
+
+  it("RF-65: el ingreso pendiente queda en la sucursal elegida, para que el filtro por sucursal lo muestre donde corresponde", () => {
+    const result = withPendingStockOperations([lot], [operation("receipt-norte", {
+      action: "quick_restock",
+      targetPresentationId: "presentation-bulk",
+      productId: "product-1",
+      quantity: 100,
+      branchId: "norte",
+      branchName: "Norte",
+    })]);
+    expect(result.find((row) => row.id === "pending:receipt-norte")).toMatchObject({ branch_id: "norte", branch_name: "Norte" });
   });
 
   it("conserva el remanente y agrega la presentación creada al fraccionar offline", () => {

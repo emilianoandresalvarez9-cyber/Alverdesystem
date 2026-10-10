@@ -1,9 +1,11 @@
 -- Deterministic fixtures for local Playwright flows. Keep this as one SQL
 -- statement because `supabase db query --file` sends a prepared statement.
+-- RF-65/66: "Central" es la sucursal principal (la más antigua), así el empleado E2E,
+-- que no tiene sucursal asignada, trabaja ahí; los lotes se cargan explícitamente en ella.
 WITH branch AS (
-  INSERT INTO public.branches (id, name)
-  VALUES ('10000000-0000-0000-0000-000000000001', 'Central')
-  ON CONFLICT (id) DO UPDATE SET name = excluded.name
+  INSERT INTO public.branches (id, name, created_at)
+  VALUES ('10000000-0000-0000-0000-000000000001', 'Central', '2000-01-01T00:00:00Z')
+  ON CONFLICT (id) DO UPDATE SET name = excluded.name, created_at = excluded.created_at
   RETURNING id
 ), register AS (
   INSERT INTO public.registers (id, branch_id, name)
@@ -32,7 +34,7 @@ WITH branch AS (
   RETURNING id
 ), sale_lot AS (
   INSERT INTO public.stock_lots (
-    id, presentation_id, initial_quantity, current_quantity, purchase_cost, status, received_at
+    id, presentation_id, initial_quantity, current_quantity, purchase_cost, status, received_at, branch_id
   )
   SELECT
     '10000000-0000-0000-0000-000000000005',
@@ -41,8 +43,9 @@ WITH branch AS (
     10,
     50,
     'open',
-    now()
-  FROM sale_presentation
+    now(),
+    branch.id
+  FROM sale_presentation CROSS JOIN branch
   ON CONFLICT (id) DO NOTHING
   RETURNING id
 ), bulk_product AS (
@@ -77,7 +80,7 @@ WITH branch AS (
   RETURNING id, name
 ), bulk_lot AS (
   INSERT INTO public.stock_lots (
-    id, presentation_id, initial_quantity, current_quantity, purchase_cost, status, received_at
+    id, presentation_id, initial_quantity, current_quantity, purchase_cost, status, received_at, branch_id
   )
   SELECT
     '10000000-0000-0000-0000-000000000009',
@@ -86,8 +89,9 @@ WITH branch AS (
     1000,
     10,
     'open',
-    now()
-  FROM bulk_presentations
+    now(),
+    branch.id
+  FROM bulk_presentations CROSS JOIN branch
   WHERE bulk_presentations.name = 'Granel E2E'
   ON CONFLICT (id) DO NOTHING
   RETURNING id

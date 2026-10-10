@@ -4,20 +4,25 @@ import type { Sale } from "../../shared/types";
 
 type SaleRow = Pick<Sale, "id" | "local_id" | "occurred_at" | "total_amount" | "status" | "payment_method">;
 import { GlassCard, Button, Badge } from "../../shared/ui";
+import { useBranch } from "../../shared/branch/BranchContext";
 
 export function SalesHistory() {
   const [sales, setSales] = useState<SaleRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  // RF-70: ventas de la sucursal elegida, o de todas.
+  const { filterId } = useBranch();
 
   const loadSales = async () => {
     setLoading(true);
-    const { data, error } = await getSupabase()
+    let query = getSupabase()
       .from('sales')
       .select('id, local_id, occurred_at, total_amount, status, payment_method')
       .order('occurred_at', { ascending: false })
       .limit(50);
-      
+    if (filterId) query = query.eq('branch_id', filterId);
+    const { data, error } = await query;
+
     if (error) setError(error.message);
     else setSales(data || []);
     setLoading(false);
@@ -25,7 +30,8 @@ export function SalesHistory() {
 
   useEffect(() => {
     loadSales();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterId]);
 
   const handleVoidSale = async (id: string) => {
     

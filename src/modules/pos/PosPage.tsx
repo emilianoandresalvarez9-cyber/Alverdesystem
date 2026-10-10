@@ -13,6 +13,7 @@ import {
 import type { ShiftSummary } from "./shiftSummary";
 import { PAYMENT_LABELS, type CurrentShift, type PaymentMethod, type PosEntry } from "./types";
 import { useScanner } from "./useScanner";
+import { useBranch } from "../../shared/branch/BranchContext";
 import { loadAccounts } from "../customers/api";
 import { exceedsLimit, filterAccounts } from "../customers/balance";
 import type { CustomerAccount } from "../customers/types";
@@ -53,15 +54,16 @@ function RegisterSetup({ onAssigned }: { onAssigned: (register: RegisterOption) 
   const [registers, setRegisters] = useState<RegisterOption[] | null>(null);
   const [selected, setSelected] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const { workingBranchId, label: branchLabel } = useBranch();
 
   useEffect(() => {
-    listRegisters()
+    listRegisters(workingBranchId)
       .then((list) => {
         setRegisters(list);
         setSelected(list[0]?.id ?? "");
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : "No se pudieron cargar las cajas."));
-  }, []);
+  }, [workingBranchId]);
 
   async function confirm() {
     const register = registers?.find((r) => r.id === selected);
@@ -74,7 +76,10 @@ function RegisterSetup({ onAssigned }: { onAssigned: (register: RegisterOption) 
     <GlassCard className="pos-panel pos-setup">
       <p className="pos-micro">Antes de vender</p>
       <h2>¿Qué caja es este equipo?</h2>
-      <p className="field-help">Se elige una sola vez por equipo. Hace falta conexión para ver la lista.</p>
+      <p className="field-help">
+        Se elige una sola vez por equipo. Hace falta conexión para ver la lista.
+        {workingBranchId ? ` Se muestran las cajas de ${branchLabel}: las ventas descuentan stock de esa sucursal.` : ""}
+      </p>
       {error && <p className="form-error" role="alert">{error}</p>}
       {registers && registers.length === 0 && (
         <EmptyState title="No hay cajas cargadas">La administradora las crea en Administración → Sucursales.</EmptyState>

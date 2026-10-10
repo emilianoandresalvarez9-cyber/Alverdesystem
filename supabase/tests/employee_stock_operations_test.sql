@@ -23,7 +23,7 @@ VALUES
 SELECT is(has_table_privilege('anon', 'public.employee_stock_lots', 'SELECT'), false,
   'Anon no puede consultar la vista de lotes operativos');
 SELECT is(has_function_privilege('anon',
-  'public.quick_restock(uuid,uuid,numeric,date,numeric)', 'EXECUTE'), false,
+  'public.quick_restock(uuid,uuid,numeric,date,numeric,uuid)', 'EXECUTE'), false,
   'Anon no puede registrar ingresos');
 SELECT is(has_function_privilege('anon', 'public.open_stock_lot(uuid)', 'EXECUTE'), false,
   'Anon no puede abrir lotes');

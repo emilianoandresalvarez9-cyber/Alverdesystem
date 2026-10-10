@@ -3,6 +3,7 @@ import { getSupabase } from "../../shared/supabase/client";
 import { Badge, Button, EmptyState, GlassCard, TextField } from "../../shared/ui";
 import { formatMoney } from "../pos/money";
 import type { Database } from "../../shared/supabase/database.types";
+import { useBranch } from "../../shared/branch/BranchContext";
 
 type WarningRow = Database["public"]["Functions"]["stock_warnings_for_review"]["Returns"][number];
 
@@ -21,12 +22,18 @@ export function StockWarningsReview() {
   const [error, setError] = useState("");
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
+  // RF-70: casos de la sucursal elegida, o de todas.
+  const { filterId, branches } = useBranch();
+  const showBranch = filterId === null && branches.length > 1;
 
   const load = useCallback(async () => {
-    const { data, error: err } = await sb.rpc("stock_warnings_for_review", { p_include_resolved: includeResolved });
+    const { data, error: err } = await sb.rpc("stock_warnings_for_review", {
+      p_include_resolved: includeResolved,
+      ...(filterId ? { p_branch_id: filterId } : {})
+    });
     if (err) return setError(err.message);
     setRows(data ?? []);
-  }, [sb, includeResolved]);
+  }, [sb, includeResolved, filterId]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -73,7 +80,10 @@ export function StockWarningsReview() {
           {rows.map((r) => (
             <li key={r.id} className="glass-lite" style={{ padding: "var(--esp-m)", borderRadius: "var(--radio-control)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: "var(--esp-m)", flexWrap: "wrap", alignItems: "baseline" }}>
-                <strong>{r.product_name ?? "Producto sin lote"}{r.presentation_name ? ` · ${r.presentation_name}` : ""}</strong>
+                <strong>
+                  {r.product_name ?? "Producto sin lote"}{r.presentation_name ? ` · ${r.presentation_name}` : ""}
+                  {showBranch && r.branch_name ? <> <Badge tone="neutro">{r.branch_name}</Badge></> : null}
+                </strong>
                 <span className="field-help">{when(r.created_at)}</span>
               </div>
               <p style={{ margin: ".3rem 0" }}>{r.message}</p>

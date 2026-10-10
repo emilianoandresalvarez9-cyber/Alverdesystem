@@ -74,6 +74,8 @@ type StockPayload = {
   newOriginQuantity?: number;
   originLotStatus?: "open" | "closed";
   openedAt?: string | null;
+  branchId?: string | null;
+  branchName?: string | null;
 };
 
 function pendingLot(payload: StockPayload, operation: QueuedOperation, presentationId: string, quantity: number): StockLot {
@@ -98,6 +100,8 @@ function pendingLot(payload: StockPayload, operation: QueuedOperation, presentat
     sold_by_weight: Boolean(payload.soldByWeight),
     open_shelf_life_days: payload.openShelfLifeDays ?? null,
     supplier_name: null,
+    branch_id: typeof payload.branchId === "string" ? payload.branchId : null,
+    branch_name: typeof payload.branchName === "string" ? payload.branchName : null,
     effective_expiry_date: expiry,
     expiry_status: "indeterminate",
     days_until_expiry: null,

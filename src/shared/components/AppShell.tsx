@@ -4,6 +4,8 @@ import { signOut } from "../auth/session";
 import type { AppRole } from "../auth/roles";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import { OfflineIndicator } from "./OfflineIndicator";
+import { BranchProvider } from "../branch/BranchContext";
+import { BranchSelector } from "../branch/BranchSelector";
 
 export type ShellSection = "catalog" | "pos" | "customers" | "stock" | "admin";
 
@@ -45,6 +47,7 @@ export function ShellLayout({ active, title, children }: PropsWithChildren<{ act
   const items = NAV.filter((item) => !item.adminOnly || isAdmin);
 
   return (
+    <BranchProvider isAdmin={isAdmin}>
     <div className="app-shell">
       <aside className="app-sidebar glass" style={{ viewTransitionName: "app-sidebar" }}>
         <a className="brand" href="/catalog.html" aria-label="Alverde, catálogo">
@@ -61,6 +64,7 @@ export function ShellLayout({ active, title, children }: PropsWithChildren<{ act
             </a>
           ))}
         </nav>
+        <BranchSelector />
         <div className="app-sidebar-foot">
           <ThemeToggle />
           <button className="button button-ghost" onClick={() => void signOut().then(() => location.assign("/"))}>
@@ -84,6 +88,7 @@ export function ShellLayout({ active, title, children }: PropsWithChildren<{ act
         {children}
       </main>
     </div>
+    </BranchProvider>
   );
 }
 

@@ -1,9 +1,10 @@
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { getSupabase } from "../../shared/supabase/client";
-import { Badge, Button, EmptyState, GlassCard, TextField } from "../../shared/ui";
+import { Badge, Button, EmptyState, GlassCard, SelectField, TextField } from "../../shared/ui";
 
 type Branch = { id: string; name: string; address: string | null; archived_at: string | null };
 type Register = { id: string; branch_id: string; name: string; archived_at: string | null };
+type Person = { id: string; display_name: string; role: "administrator" | "employee"; active: boolean; branch_id: string | null };
 
 /**
  * Sucursales y cajas (RF-53, RF-55, RF-56). Sumar una caja nueva no requiere cambios de código:
@@ -83,7 +84,73 @@ export function BranchesManager() {
           );
         })}
       </div>
+
+      <StaffBranches branches={branches.filter((b) => !b.archived_at)} />
     </div>
+  );
+}
+
+/**
+ * RF-67: la sucursal de cada usuario. El empleado trabaja fijo en la suya (RF-66);
+ * sin asignar, trabaja en la sucursal principal (la más antigua).
+ */
+function StaffBranches({ branches }: { branches: Branch[] }) {
+  const [people, setPeople] = useState<Person[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    const { data, error: err } = await getSupabase()
+      .from("profiles").select("id, display_name, role, active, branch_id").order("display_name");
+    if (err) return setError(err.message);
+    setPeople((data ?? []) as Person[]);
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  async function assign(person: Person, branchId: string) {
+    setError(null);
+    setSaved(null);
+    const { error: err } = await getSupabase().from("profiles").update({ branch_id: branchId || null }).eq("id", person.id);
+    if (err) return setError(err.message);
+    const name = branches.find((b) => b.id === branchId)?.name ?? "la sucursal principal";
+    setSaved(`${person.display_name} trabaja ahora en ${name}. Lo ve la próxima vez que abra una pantalla.`);
+    await load();
+  }
+
+  const mainName = branches[0]?.name ?? "la principal";
+  return (
+    <GlassCard className="pos-panel">
+      <h3 style={{ marginTop: 0 }}>Personal por sucursal (RF-67)</h3>
+      <p className="field-help">
+        Cada empleado trabaja solo en su sucursal: vende, ingresa y ajusta stock ahí. Sin asignar, trabaja en {mainName}.
+        La administración puede elegir sucursal desde la barra lateral.
+      </p>
+      {error && <p className="form-error" role="alert">{error}</p>}
+      {saved && <p className="notice" role="status">{saved}</p>}
+      {people && (
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Persona</th><th>Rol</th><th>Sucursal</th></tr></thead>
+            <tbody>
+              {people.map((person) => (
+                <tr key={person.id} style={{ opacity: person.active ? 1 : 0.6 }}>
+                  <td>{person.display_name}{person.active ? "" : " (inactivo)"}</td>
+                  <td>{person.role === "administrator" ? "Administrador" : "Empleado"}</td>
+                  <td>
+                    <SelectField label="" aria-label={`Sucursal de ${person.display_name}`} value={person.branch_id ?? ""}
+                      onChange={(e) => void assign(person, e.target.value)}>
+                      <option value="">Sin asignar ({mainName})</option>
+                      {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    </SelectField>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </GlassCard>
   );
 }
 
