@@ -12,9 +12,8 @@ type WarningRow = Database["public"]["Functions"]["stock_warnings_for_review"]["
 const when = (iso: string | null) => formatDayTime(iso);
 
 /**
- * RF-38: ventas que dejaron stock negativo o se hicieron sin lotes cargados. La venta
- * no se bloqueó; acá la administradora ve cada caso y lo cierra con una nota de qué hizo
- * (ajustar el lote desde Stock, contar, etc.).
+ * RF-38: muestra faltantes aceptados (hasta 10 unidades agregadas por presentación y
+ * sucursal) y ventas registradas sin lotes cargados para que administración los revise.
  */
 export function StockWarningsReview() {
   const sb = getSupabase();
@@ -65,13 +64,12 @@ export function StockWarningsReview() {
         </div>
       </div>
       <p className="cuerpo-s suave relleno">
-        Ventas que no se bloquearon aunque no alcanzaba el stock (por ejemplo, dos cajas vendieron el mismo último lote sin
-        conexión). Ajustá el lote desde Stock si hace falta y marcá el caso como revisado.
+        Faltantes aceptados de hasta 10 unidades agregadas por presentación y sucursal, y ventas registradas sin lotes cargados. Ajustá el lote desde Stock si hace falta y marcá el caso como revisado.
       </p>
       {error && <div className="relleno"><Message tone="error">{error}</Message></div>}
 
       {rows && rows.length === 0 && (
-        <EmptyState title="No hay casos para revisar" icon="check_circle">Cuando una venta deje stock negativo va a aparecer acá.</EmptyState>
+        <EmptyState title="No hay casos para revisar" icon="check_circle">Cuando una venta deje un faltante permitido o se registre sin lotes cargados, va a aparecer acá.</EmptyState>
       )}
 
       {rows && rows.length > 0 && (
