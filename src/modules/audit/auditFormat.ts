@@ -14,7 +14,8 @@ export const ENTITY_LABELS: Record<string, string> = {
   labels: "Etiqueta",
   customers: "Cliente",
   sales: "Venta",
-  cash_shifts: "Turno de caja"
+  cash_shifts: "Turno de caja",
+  profiles: "Usuario"
 };
 
 export const FIELD_LABELS: Record<string, string> = {
@@ -42,11 +43,14 @@ export const FIELD_LABELS: Record<string, string> = {
   opened_at: "Apertura",
   closed_at: "Cierre",
   register_id: "Caja",
-  user_id: "Cajera o cajero"
+  user_id: "Cajera o cajero",
+  role: "Rol",
+  branch_id: "Sucursal"
 };
 
 const MONEY_FIELDS = new Set(["sale_price", "credit_limit", "total_amount", "initial_balance", "final_balance"]);
 const DATE_FIELDS = new Set(["archived_at", "opened_at", "closed_at"]);
+const ROLE_LABELS: Record<string, string> = { administrator: "Administración", employee: "Empleado" };
 
 export function entityLabel(entity: string): string {
   return ENTITY_LABELS[entity] ?? entity;
@@ -57,9 +61,17 @@ export function fieldLabel(field: string): string {
 }
 
 /** Valor legible: dinero con formato, booleanos en castellano, vacío como "—". */
-export function formatValue(field: string, value: Json | null | undefined): string {
+/**
+ * `names`: nombres conocidos por id (por ejemplo, las sucursales), para los campos que guardan un id.
+ * Si el id no está, se muestra tal cual.
+ */
+export function formatValue(field: string, value: Json | null | undefined, names: Readonly<Record<string, string>> = {}): string {
   if (value === null || value === undefined) return "—";
+  if (field === "branch_id" && typeof value === "string") return names[value] ?? value;
   if (typeof value === "boolean") return value ? "Sí" : "No";
+  // El trigger guarda cada valor como texto: un sí/no llega como "true"/"false".
+  if (value === "true" || value === "false") return value === "true" ? "Sí" : "No";
+  if (field === "role" && typeof value === "string") return ROLE_LABELS[value] ?? value;
   if (MONEY_FIELDS.has(field)) {
     const n = Number(value);
     if (Number.isFinite(n)) return formatMoney(n);

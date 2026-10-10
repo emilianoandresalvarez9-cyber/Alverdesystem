@@ -44,6 +44,9 @@
 /* Sucursales */
 .sucursal__nueva-caja { border-top: 1px solid var(--color-linea); }
 .personal__sucursal .campo { min-width: 12rem; }
+.personal__acceso { white-space: nowrap; }
+.personal__acceso .meta { white-space: normal; display: block; max-width: 18rem; }
+.personal .lista__principal > .boton { align-self: flex-start; }
 
 /* Trazabilidad */
 .auditoria__que { gap: 0; }

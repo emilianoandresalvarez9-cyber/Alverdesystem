@@ -21,6 +21,16 @@ describe("RF-60: historial legible", () => {
     expect(formatValue("closed_at", new Date(2026, 9, 10, 12, 5).toISOString())).toBe("10/10 12:05");
   });
 
+  it("una baja de personal se lee en castellano, con el rol y la sucursal por nombre (RF-59)", () => {
+    expect(entityLabel("profiles")).toBe("Usuario");
+    expect(formatValue("active", "true")).toBe("Sí");
+    expect(formatValue("active", "false")).toBe("No");
+    expect(formatValue("role", "administrator")).toBe("Administración");
+    expect(fieldLabel("branch_id")).toBe("Sucursal");
+    expect(formatValue("branch_id", "b-norte", { "b-norte": "Norte" })).toBe("Norte");
+    expect(formatValue("branch_id", "b-borrada", { "b-norte": "Norte" })).toBe("b-borrada");
+  });
+
   it("booleanos y vacíos", () => {
     expect(formatValue("active", true)).toBe("Sí");
     expect(formatValue("active", false)).toBe("No");
