@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { env, hasSupabaseConfig } from "../config/env";
+import { isSecretSupabaseKey } from "../config/secretKeys";
 import type { Database } from "./database.types";
 
 /**
@@ -11,6 +12,9 @@ export type AppSupabaseClient = SupabaseClient<Database>;
 let client: AppSupabaseClient | undefined;
 
 export function getSupabase(): AppSupabaseClient {
+  if (isSecretSupabaseKey(env.supabaseAnonKey)) {
+    throw new Error("VITE_SUPABASE_ANON_KEY tiene la clave secreta de Supabase: no se usa en el navegador. Configurá la clave pública anon/publishable.");
+  }
   if (!hasSupabaseConfig) {
     throw new Error("Falta configurar VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY.");
   }

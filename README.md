@@ -33,6 +33,8 @@ Docker y la CLI de Supabase **no hacen falta para abrir la interfaz**. El comand
 
 Para obtener los valores, abre Supabase → proyecto → **Project Settings → API**. Usa solo la clave pública anon/publishable; nunca una clave `service_role` o secret key. También puedes crear `.env.local` manualmente copiando `.env.example`.
 
+Todo lo que empieza con `VITE_` queda escrito dentro del sitio publicado y lo puede leer cualquiera: por eso solo va la clave pública, y lo que protege los datos es RLS. Si una variable `VITE_` trae una clave secreta, `npm run build` (también en Cloudflare Pages) se corta con un error que nombra la variable, y la app se niega a usarla. Si alguna vez se publicó una clave secreta, hay que rotarla en Supabase → Project Settings → API: borrarla del código no alcanza.
+
 **Importante:** si configuras Alverdesys, las acciones hechas desde la web local se guardan en ese proyecto remoto. Usa datos de prueba para ensayar y evita probar operaciones destructivas sobre datos reales. Para una base aislada, usa el modo local con Supabase CLI descrito más abajo.
 
 Para probar la interfaz desde otro dispositivo conectado a la misma red privada, ejecuta `npm run local -- --network`; el firewall de Windows puede pedir permiso. Esta opción sigue usando el mismo proyecto Supabase configurado. El modo offline requiere abrir la app desde `localhost` o desde un sitio HTTPS.
