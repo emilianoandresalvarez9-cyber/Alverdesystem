@@ -1,77 +1,69 @@
 import type { ReactNode } from "react";
-import { GlassCard, Badge, Tag } from "../../shared/ui";
+import { Badge, Icon } from "../../shared/ui";
 import type { CatalogProduct } from "./types";
-import { presentationPriceLabel } from "./scalePricing";
 import { effectivePrice } from "./branchPricing";
+import { pricePerKiloFromGram } from "./scalePricing";
 import { useBranch } from "../../shared/branch/BranchContext";
-
-const ars = (value: number) => `$${value.toLocaleString("es-AR")}`;
+import { formatMoney } from "../pos/money";
 
 interface ProductCardProps {
   product: CatalogProduct;
-  /** Al tocar la tarjeta se expande y muestra `actions` (un botón no puede ir dentro de otro). */
+  /** Al tocar la tarjeta se abre o se cierra (una abierta a la vez, la maneja la página). */
   onToggle?: () => void;
   expanded?: boolean;
+  /** Acciones al pie de la tarjeta abierta (Avisar que falta). */
   actions?: ReactNode;
 }
 
-const BASE_UNIT_LABEL: Record<string, string> = {
-  gram: "gramos",
-  millilitre: "ml",
-  unit: "unidad",
-};
-
+/**
+ * Tarjeta de producto que se expande (`details.carta.producto`). Cerrada: nombre, «desde $X»,
+ * marca · rubro y etiquetas. Abierta: las presentaciones con el precio de la sucursal
+ * (RF-69; con «Todas», el base) y las acciones. Nunca costos ni márgenes (RNF-04).
+ */
 export function ProductCard({ product, onToggle, expanded = false, actions }: ProductCardProps) {
-  // RF-69: precios de la sucursal de trabajo; con "Todas", el base.
   const { workingBranchId } = useBranch();
-  const lowestPrice = product.presentations
-    .filter(p => p.active && !p.sold_by_weight)
-    .map(p => effectivePrice(p, workingBranchId))
-    .filter(p => p > 0)
+  const active = product.presentations.filter((p) => p.active);
+  const lowestPrice = active
+    .filter((p) => !p.sold_by_weight)
+    .map((p) => effectivePrice(p, workingBranchId))
+    .filter((p) => p > 0)
     .sort((a, b) => a - b)[0];
+  const meta = [product.brand?.name, product.category?.name].filter(Boolean).join(" · ");
 
   return (
-    <GlassCard as="article" className="product-card">
-      <button type="button" className="product-card__toggle" onClick={onToggle} aria-expanded={onToggle ? expanded : undefined} disabled={!onToggle}>
-      <span className="product-card__header">
-        <span className="product-card__name">{product.name}</span>
+    <details className="carta carta--interactiva producto" open={expanded}>
+      <summary onClick={(event) => { event.preventDefault(); onToggle?.(); }}>
+        <span className="producto__cabeza">
+          <span className="titulo-seccion">{product.name}</span>
+          <Icon name="keyboard_arrow_down" />
+        </span>
         {lowestPrice != null && (
-          <span className="product-card__price">
-            desde <strong className="pos-num">${lowestPrice.toLocaleString("es-AR")}</strong>
+          <span className="producto__desde">desde <span className="precio">{formatMoney(lowestPrice)}</span></span>
+        )}
+        {meta && <span className="cuerpo-s suave">{meta}</span>}
+        {product.labels.length > 0 && (
+          <span className="producto__etiquetas">
+            {product.labels.map((l) => <Badge key={l.id} tone="etiqueta">{l.name}</Badge>)}
           </span>
         )}
-      </span>
-
-      <span className="product-card__meta">
-        {product.brand && (
-          <Badge tone="neutro">{product.brand.name}</Badge>
-        )}
-        {product.category && (
-          <Badge tone="neutro" style={{ opacity: 0.75 }}>{product.category.name}</Badge>
-        )}
-        <Badge tone="neutro" style={{ opacity: 0.55 }}>{BASE_UNIT_LABEL[product.base_unit] ?? product.base_unit}</Badge>
-      </span>
-
-      {product.labels.length > 0 && (
-        <span className="product-card__labels">
-          {product.labels.map(l => (
-            <Tag key={l.id}>{l.name}</Tag>
-          ))}
-        </span>
+      </summary>
+      {active.length > 0 && (
+        <ul className="presentaciones" aria-label="Presentaciones y precios de la sucursal">
+          {active.map((pr) => {
+            const price = effectivePrice(pr, workingBranchId);
+            return (
+              <li key={pr.id}>
+                <span>{pr.name}</span>
+                {pr.sold_by_weight
+                  // Balanza (ADR-001): el precio se guarda por gramo y se muestra por kilo.
+                  ? <span className="precio">{formatMoney(pricePerKiloFromGram(price))} <small>/kg</small></span>
+                  : <span className="precio">{formatMoney(price)}</span>}
+              </li>
+            );
+          })}
+        </ul>
       )}
-
-      {product.presentations.filter(p => p.active).length > 0 && (
-        <span className="product-card__presentations">
-          {product.presentations.filter(p => p.active).map(pr => (
-            <span key={pr.id} className="product-card__presentation">
-              <span>{pr.name}{pr.sold_by_weight ? <Badge tone="neutro" className="product-card__scale">Balanza</Badge> : null}</span>
-              <span className="pos-num">{presentationPriceLabel({ ...pr, sale_price: effectivePrice(pr, workingBranchId) }, ars)}</span>
-            </span>
-          ))}
-        </span>
-      )}
-      </button>
-      {expanded && actions ? <div className="product-card__actions">{actions}</div> : null}
-    </GlassCard>
+      {expanded && actions ? <div className="producto__pie">{actions}</div> : null}
+    </details>
   );
 }

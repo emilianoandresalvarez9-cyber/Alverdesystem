@@ -140,6 +140,7 @@ export function filterProducts(products: CatalogProduct[], filters: CatalogFilte
   const search = filters.search.toLowerCase().trim();
   return products.filter(p => {
     if (search && !p.name.toLowerCase().includes(search) &&
+        !p.brand?.name.toLowerCase().includes(search) &&
         !p.manufacturer_barcode?.includes(search) &&
         !p.presentations.some(pr => pr.internal_barcode?.includes(search))) return false;
     if (filters.brandId && p.brand?.id !== filters.brandId) return false;

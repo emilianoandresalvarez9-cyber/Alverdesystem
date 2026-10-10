@@ -56,6 +56,12 @@ describe("Campos", () => {
     expect(html).toMatch(/<div class="selector"><select id="caja">/);
     expect(html).toContain("ic-keyboard_arrow_down");
   });
+
+  it("SelectField inline: la etiqueta va adentro como prefijo, sin .campo", () => {
+    const html = render(<SelectField inline id="marca" label="Marca"><option>Todas</option></SelectField>);
+    expect(html).toMatch(/^<div class="selector"><label class="selector__prefijo" for="marca">Marca<\/label><select id="marca">/);
+    expect(html).not.toContain("campo");
+  });
 });
 
 describe("Estados", () => {

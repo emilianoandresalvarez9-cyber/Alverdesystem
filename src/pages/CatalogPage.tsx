@@ -3,7 +3,7 @@ import { useCatalog, filterProducts } from "../modules/catalog/useCatalog";
 import { ProductCard } from "../modules/catalog/ProductCard";
 import { CatalogFiltersBar } from "../modules/catalog/CatalogFiltersBar";
 import { exportCatalogToExcel } from "../modules/catalog/exportCatalog";
-import { EmptyState, GlassCard } from "../shared/ui";
+import { EmptyState, Message } from "../shared/ui";
 import { AppShell } from "../shared/components/AppShell";
 import { MissingReportButton } from "../modules/catalog/MissingReportButton";
 
@@ -13,63 +13,52 @@ export function CatalogPage() {
 
   const visible = filterProducts(products, filters);
 
+  const countText = `${visible.length} ${visible.length === 1 ? "producto" : "productos"}${visible.length < products.length ? ` de ${products.length}` : ""}`;
+
   return (
     <AppShell active="catalog" title="Catálogo">
-      <div className="catalog-page">
-        {isOffline && (
-          <p className="notice catalog-offline" role="status">Sin conexión: se muestra el catálogo guardado en este equipo.</p>
-        )}
+      {isOffline && <Message tone="aviso">Sin conexión: se muestra el catálogo guardado en este equipo.</Message>}
 
-        <CatalogFiltersBar
-          filters={filters}
-          setFilters={setFilters}
-          brands={brands}
-          categories={categories}
-          labels={labels}
-          onExport={(branchId) => exportCatalogToExcel(visible, "catalogo-alverde", branchId)}
-        />
+      <CatalogFiltersBar
+        filters={filters}
+        setFilters={setFilters}
+        brands={brands}
+        categories={categories}
+        labels={labels}
+        countText={isLoading ? "" : countText}
+        onExport={(branchId) => exportCatalogToExcel(visible, "catalogo-alverde", branchId)}
+      />
 
-        {isLoading && (
-          <div className="catalog-grid">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <GlassCard key={i} className="product-card skeleton" style={{ minHeight: 120 }} />
-            ))}
-          </div>
-        )}
-
-        {!isLoading && error && (
-          <GlassCard className="catalog-error">
-            <p style={{ color: "var(--color-error)" }}>{error}</p>
-          </GlassCard>
-        )}
-
-        {!isLoading && !error && visible.length === 0 && (
-          <EmptyState title="Sin resultados">
-            Probá cambiando los filtros o la búsqueda.
-          </EmptyState>
-        )}
-
-        {!isLoading && visible.length > 0 && (
-          <>
-            <p className="catalog-count">
-              <span className="pos-micro">Catálogo</span>
-              <strong>{visible.length}</strong> {visible.length === 1 ? "producto" : "productos"}
-              {visible.length < products.length && ` de ${products.length}`}
-            </p>
-            <div className="catalog-grid">
-              {visible.map(p => (
-                <ProductCard
-                  key={p.id}
-                  product={p}
-                  expanded={p.id === selected}
-                  onToggle={() => setSelected(p.id === selected ? null : p.id)}
-                  actions={<MissingReportButton productId={p.id} productName={p.name} />}
-                />
-              ))}
+      {isLoading && (
+        <div className="productos" aria-busy="true">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="carta pila pila--s">
+              <span className="esqueleto" style={{ width: "70%" }} />
+              <span className="esqueleto" style={{ width: "40%" }} />
             </div>
-          </>
-        )}
-      </div>
+          ))}
+        </div>
+      )}
+
+      {!isLoading && error && <Message tone="error">{error}</Message>}
+
+      {!isLoading && !error && visible.length === 0 && (
+        <EmptyState title="Sin resultados" icon="search">Probá cambiando los filtros o la búsqueda.</EmptyState>
+      )}
+
+      {!isLoading && visible.length > 0 && (
+        <div className="productos">
+          {visible.map((p) => (
+            <ProductCard
+              key={p.id}
+              product={p}
+              expanded={p.id === selected}
+              onToggle={() => setSelected(p.id === selected ? null : p.id)}
+              actions={<MissingReportButton productId={p.id} productName={p.name} />}
+            />
+          ))}
+        </div>
+      )}
     </AppShell>
   );
 }
