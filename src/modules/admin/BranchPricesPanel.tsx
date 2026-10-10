@@ -35,7 +35,7 @@ export function BranchPricesPanel({ presentations }: { presentations: Presentati
   useEffect(() => { void load(); }, [load]);
 
   if (branches.length < 2) {
-    return <p className="field-help">Con una sola sucursal rige el precio base. Al crear otra sucursal vas a poder darle precios propios acá.</p>;
+    return <p className="meta">Con una sola sucursal rige el precio base. Al crear otra sucursal vas a poder darle precios propios acá.</p>;
   }
 
   const shown = (p: Presentation, value: number) => (p.sold_by_weight ? pricePerKiloFromGram(value) : value);
