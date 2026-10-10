@@ -4,6 +4,7 @@
  */
 import type { Json } from "../../shared/supabase/database.types";
 import { formatMoney } from "../pos/money";
+import { formatDayTime } from "../../shared/format/date";
 
 export const ENTITY_LABELS: Record<string, string> = {
   products: "Producto",
@@ -12,7 +13,8 @@ export const ENTITY_LABELS: Record<string, string> = {
   categories: "Rubro",
   labels: "Etiqueta",
   customers: "Cliente",
-  sales: "Venta"
+  sales: "Venta",
+  cash_shifts: "Turno de caja"
 };
 
 export const FIELD_LABELS: Record<string, string> = {
@@ -34,10 +36,17 @@ export const FIELD_LABELS: Record<string, string> = {
   credit_limit: "Tope de fiado",
   status: "Estado",
   total_amount: "Total",
-  payment_method: "Medio de pago"
+  payment_method: "Medio de pago",
+  initial_balance: "Monto inicial",
+  final_balance: "Efectivo esperado",
+  opened_at: "Apertura",
+  closed_at: "Cierre",
+  register_id: "Caja",
+  user_id: "Cajera o cajero"
 };
 
-const MONEY_FIELDS = new Set(["sale_price", "credit_limit", "total_amount"]);
+const MONEY_FIELDS = new Set(["sale_price", "credit_limit", "total_amount", "initial_balance", "final_balance"]);
+const DATE_FIELDS = new Set(["archived_at", "opened_at", "closed_at"]);
 
 export function entityLabel(entity: string): string {
   return ENTITY_LABELS[entity] ?? entity;
@@ -55,7 +64,7 @@ export function formatValue(field: string, value: Json | null | undefined): stri
     const n = Number(value);
     if (Number.isFinite(n)) return formatMoney(n);
   }
-  if (field === "archived_at" && typeof value === "string") return new Date(value).toLocaleString("es-AR");
+  if (DATE_FIELDS.has(field) && typeof value === "string") return formatDayTime(value);
   if (typeof value === "string" || typeof value === "number") return String(value);
   return JSON.stringify(value);
 }

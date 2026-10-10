@@ -149,12 +149,19 @@ export async function closeShift(): Promise<CloseResult> {
     };
   }
 
-  const expectedCash = shift.initialBalance + summary.byMethod.cash.total;
-  const { error } = await getSupabase()
+  // La base pone la hora de cierre y calcula el efectivo esperado con las ventas del turno
+  // (guard_cash_shift); el número que se muestra es el que quedó guardado. El cálculo local
+  // sólo se usa si la base todavía no tiene ese control.
+  const localExpected = shift.initialBalance + summary.byMethod.cash.total;
+  const { data: closedRow, error } = await getSupabase()
     .from("cash_shifts")
-    .update({ status: "closed", closed_at: new Date().toISOString(), final_balance: expectedCash })
-    .eq("id", shift.id);
+    .update({ status: "closed", closed_at: new Date().toISOString(), final_balance: localExpected })
+    .eq("id", shift.id)
+    .select("final_balance")
+    .maybeSingle();
   if (error) return { closed: false, summary, reason: `No se pudo cerrar el turno: ${error.message}` };
+  // Sin fila (por ejemplo, administración ya lo cerró) se libera la caja igual, como antes.
+  const expectedCash = closedRow?.final_balance == null ? localExpected : Number(closedRow.final_balance);
 
   let backupError: string | undefined;
   try {
