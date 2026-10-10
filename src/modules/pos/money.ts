@@ -24,8 +24,16 @@ export function sumMoney(values: number[]): number {
   return values.reduce((acc, value) => acc + Math.round(value * 100), 0) / 100;
 }
 
-const formatter = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 2 });
+const wholePesos = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 });
+const withCents = new Intl.NumberFormat("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+/**
+ * Formato argentino del sistema de diseño: `$14.800`, y con centavos sólo si los hay
+ * (`$4.928,40`), así nunca se esconde un importe que se cobra.
+ */
 export function formatMoney(value: number): string {
-  return formatter.format(value);
+  const rounded = roundMoney(value);
+  const abs = Math.abs(rounded);
+  const body = Number.isInteger(abs) ? wholePesos.format(abs) : withCents.format(abs);
+  return `${rounded < 0 ? "−" : ""}$${body}`;
 }

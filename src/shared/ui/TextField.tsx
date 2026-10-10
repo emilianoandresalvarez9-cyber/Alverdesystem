@@ -15,6 +15,8 @@ export type TextFieldProps = InputHTMLAttributes<HTMLInputElement> & {
   suffix?: string;
   /** Importes, pesos, porcentajes: alineado a la derecha. */
   numeric?: boolean;
+  /** La etiqueta queda sólo para lectores de pantalla (el campo del lector en la caja). */
+  hideLabel?: boolean;
 };
 
 /**
@@ -22,7 +24,7 @@ export type TextFieldProps = InputHTMLAttributes<HTMLInputElement> & {
  * `className` va al contenedor `.campo`.
  */
 export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function TextField(
-  { label, help, error, icon, suffix, numeric, id, className, ...rest },
+  { label, help, error, icon, suffix, numeric, hideLabel, id, className, ...rest },
   ref: ForwardedRef<HTMLInputElement>
 ) {
   const autoId = useId();
@@ -31,7 +33,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
   const described = Boolean(help) || Boolean(error);
   return (
     <div className={["campo", error ? "campo--error" : "", className].filter(Boolean).join(" ")}>
-      <label className="campo__etiqueta" htmlFor={inputId}>{label}</label>
+      <label className={hideLabel ? "sr" : "campo__etiqueta"} htmlFor={inputId}>{label}</label>
       <div className={numeric ? "entrada entrada--cifra" : "entrada"}>
         {icon ? <Icon name={icon} /> : null}
         <input

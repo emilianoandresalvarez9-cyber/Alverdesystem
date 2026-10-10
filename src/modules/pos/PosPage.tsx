@@ -1,5 +1,5 @@
-import { type FormEvent, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { Badge, Button, EmptyState, GlassCard, Modal, SelectField, TextField } from "../../shared/ui";
+import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { Badge, Button, EmptyState, Icon, Message, Modal, Options, SelectField, TextField, useCompact, type IconName, type OptionItem } from "../../shared/ui";
 import { enqueueOperation } from "../../shared/offline/queue";
 import { synchronizePendingOperations } from "../../shared/offline/sync";
 import { useCatalog } from "../catalog/useCatalog";
@@ -11,7 +11,7 @@ import {
   type CloseResult, type RegisterOption
 } from "./shift";
 import type { ShiftSummary } from "./shiftSummary";
-import { PAYMENT_LABELS, type CurrentShift, type PaymentMethod, type PosEntry } from "./types";
+import { PAYMENT_LABELS, type CartLine, type CurrentShift, type PaymentMethod, type PosEntry } from "./types";
 import { useScanner } from "./useScanner";
 import { useBranch } from "../../shared/branch/BranchContext";
 import { loadAccounts } from "../customers/api";
@@ -34,7 +34,12 @@ export function PosPage() {
 
   switch (stage.kind) {
     case "loading":
-      return <p className="glass loading-card">Preparando la caja…</p>;
+      return (
+        <div className="pila" aria-busy="true">
+          <span className="esqueleto" style={{ width: "40%" }} />
+          <p className="meta">Preparando la caja…</p>
+        </div>
+      );
     case "register":
       return <RegisterSetup onAssigned={(register) => setStage({ kind: "open", register })} />;
     case "open":
@@ -73,16 +78,14 @@ function RegisterSetup({ onAssigned }: { onAssigned: (register: RegisterOption) 
   }
 
   return (
-    <GlassCard className="pos-panel pos-setup">
-      <p className="pos-micro">Antes de vender</p>
-      <h2>¿Qué caja es este equipo?</h2>
-      <p className="field-help">
+    <SetupCard title="¿Qué caja es este equipo?">
+      <p className="cuerpo-s suave">
         Se elige una sola vez por equipo. Hace falta conexión para ver la lista.
         {workingBranchId ? ` Se muestran las cajas de ${branchLabel}: las ventas descuentan stock de esa sucursal.` : ""}
       </p>
-      {error && <p className="form-error" role="alert">{error}</p>}
+      {error && <Message tone="error">{error}</Message>}
       {registers && registers.length === 0 && (
-        <EmptyState title="No hay cajas cargadas">La administradora las crea en Administración → Sucursales.</EmptyState>
+        <EmptyState title="No hay cajas cargadas">La administradora las crea en Administración → Sucursales y cajas.</EmptyState>
       )}
       {registers && registers.length > 0 && (
         <>
@@ -91,10 +94,25 @@ function RegisterSetup({ onAssigned }: { onAssigned: (register: RegisterOption) 
               <option key={r.id} value={r.id}>{r.name}{r.branchName ? ` (${r.branchName})` : ""}</option>
             ))}
           </SelectField>
-          <Button onClick={() => void confirm()} disabled={!selected}>Usar esta caja</Button>
+          <Button block onClick={() => void confirm()} disabled={!selected}>Usar esta caja</Button>
         </>
       )}
-    </GlassCard>
+    </SetupCard>
+  );
+}
+
+/** Antes de vender: una sola carta centrada; el marco sigue en su lugar para que la transición sea sólo el contenido. */
+function SetupCard({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
+  return (
+    <div className="login">
+      <section className="carta login__carta">
+        <div className="pila pila--s">
+          <h2 className="titulo-modal">{title}</h2>
+          {subtitle ? <p className="meta">{subtitle}</p> : null}
+        </div>
+        {children}
+      </section>
+    </div>
   );
 }
 
@@ -121,21 +139,21 @@ function OpenShiftForm({ register, onOpened, onChangeRegister }: {
   }
 
   return (
-    <GlassCard className="pos-panel pos-setup">
-      <p className="pos-micro">{register.branchName ? `${register.branchName} · ` : ""}{register.name}</p>
-      <h2>Abrir turno en {register.name}</h2>
-      <form onSubmit={submit} className="pos-setup-form">
-        <TextField label="Efectivo en la caja al empezar" inputMode="decimal" value={initial}
+    <SetupCard title={`Abrir turno en ${register.name}`} subtitle={register.branchName ?? undefined}>
+      <form onSubmit={submit} className="pila">
+        <TextField label="Efectivo en la caja al empezar" inputMode="decimal" numeric value={initial}
           onChange={(e) => setInitial(e.target.value)} help="Sin conexión el turno se abre igual y se registra al volver internet." />
-        {error && <p className="form-error" role="alert">{error}</p>}
-        <Button type="submit" loading={busy}>Abrir turno</Button>
-        <Button variant="fantasma" onClick={onChangeRegister}>Este equipo es otra caja</Button>
+        {error && <Message tone="error">{error}</Message>}
+        <Button type="submit" block loading={busy}>Abrir turno</Button>
+        <Button variant="fantasma" block onClick={onChangeRegister}>Este equipo es otra caja</Button>
       </form>
-    </GlassCard>
+    </SetupCard>
   );
 }
 
-const SELLING_METHODS: PaymentMethod[] = ["cash", "transfer", "qr", "credit"];
+const METHOD_ICONS: Record<PaymentMethod, IconName> = { cash: "payments", transfer: "account_balance", qr: "qr_code_2", credit: "menu_book" };
+const SELLING_METHODS: OptionItem<PaymentMethod>[] = (["cash", "transfer", "qr", "credit"] as const)
+  .map((value) => ({ value, label: PAYMENT_LABELS[value], icon: METHOD_ICONS[value] }));
 
 const TIME_FORMAT = new Intl.DateTimeFormat("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false });
 
@@ -161,6 +179,7 @@ function Register({ shift, onClosed }: { shift: CurrentShift; onClosed: () => vo
   const [closing, setClosing] = useState(false);
   const [customer, setCustomer] = useState<CustomerAccount | null>(null);
   const scanRef = useRef<HTMLInputElement>(null);
+  const compact = useCompact();
 
   const total = cartTotal(lines);
   const results = /^\d+$/.test(query.trim()) ? [] : searchEntries(entries, query);
@@ -229,144 +248,92 @@ function Register({ shift, onClosed }: { shift: CurrentShift; onClosed: () => vo
   }
 
   const itemCount = lines.reduce((sum, line) => sum + (line.weight === undefined ? line.quantity : 1), 0);
-  const catalogState = isLoading && entries.length === 0
-    ? { tone: "neutro" as const, text: "Cargando catálogo…" }
-    : isOffline
-      ? { tone: "aviso" as const, text: `Catálogo guardado en este equipo · ${entries.length}` }
-      : { tone: "exito" as const, text: `Catálogo listo · ${entries.length}` };
+  const itemText = itemCount === 1 ? "1 artículo" : `${itemCount} artículos`;
+  const canCharge = lines.length > 0 && !(method === "credit" && !customer);
+  const feedbackMessage = feedback
+    ? <Message tone={feedback.tone === "ok" ? "exito" : "error"}>{feedback.text}</Message>
+    : null;
 
   return (
-    <div className="pos-layout">
-      <header className="pos-status glass-lite">
-        <div className="pos-status-shift">
-          <p className="pos-micro">Turno abierto</p>
-          <p className="pos-status-register">
-            <strong>{shift.registerName}</strong>
-            <span>desde las {formatTime(shift.openedAt)} · efectivo inicial {formatMoney(shift.initialBalance)}</span>
-          </p>
-          {!shift.persisted && <Badge tone="aviso">Turno abierto sin conexión · se registra al sincronizar</Badge>}
+    <div className="caja">
+      <div className="pila">
+        <div className="turno">
+          <Badge tone="exito">Turno abierto</Badge>
+          {!shift.persisted && <Badge tone="aviso" icon="sync">Abierto sin conexión · se registra al sincronizar</Badge>}
+          <span><strong>{shift.registerName}</strong> · desde las <span className="cifra">{formatTime(shift.openedAt)}</span></span>
+          <span>Efectivo inicial <span className="cifra">{formatMoney(shift.initialBalance)}</span></span>
+          <Button variant="secundario" size="compacto" icon="lock" className="turno__cerrar" onClick={() => setClosing(true)}>Cerrar turno</Button>
         </div>
-        <div className="pos-status-actions">
-          <Button variant="secundario" onClick={() => setClosing(true)}>Cerrar turno</Button>
-        </div>
-      </header>
 
-      <section className="pos-main" aria-label="Carga de productos">
-        <GlassCard className="pos-panel pos-scanner">
-          <div className="pos-panel-head">
-            <p className="pos-micro">Escáner y búsqueda</p>
-            <Badge tone={catalogState.tone}>{catalogState.text}</Badge>
-          </div>
-          <form className="pos-scan" onSubmit={submitQuery}>
-            <TextField ref={scanRef} label="Código o nombre del producto" autoFocus autoComplete="off" value={query}
-              onChange={(e) => setQuery(e.target.value)} placeholder="Escaneá o escribí" />
-            <Button type="submit" variant="secundario">Agregar</Button>
+        <section className="pila pila--s" aria-label="Carga de productos">
+          <form className="caja-busqueda" onSubmit={submitQuery}>
+            <TextField ref={scanRef} className="crece" label="Código o nombre del producto" hideLabel icon="barcode_scanner"
+              autoFocus autoComplete="off" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Código o nombre" />
+            <Button type="submit" variant="secundario" icon="add">Agregar</Button>
           </form>
+          <CatalogState loading={isLoading && entries.length === 0} offline={isOffline} count={entries.length} />
 
           {results.length > 0 && (
-            <ul className="pos-results" aria-label="Resultados">
+            <ul className="resultados" aria-label="Resultados">
               {results.map((entry) => (
                 <li key={entry.presentationId}>
-                  <Button variant="fantasma" onClick={() => addEntry(entry)}>
-                    <span>{entry.productName} · {entry.presentationName}</span>
-                    <span className="pos-num">{entry.soldByWeight ? `${formatMoney(pricePerKilo(entry))}/kg` : formatMoney(entry.salePrice)}</span>
-                  </Button>
+                  <button type="button" onClick={() => addEntry(entry)}>
+                    <span><strong>{entry.productName}</strong> · {entry.presentationName}</span>
+                    <EntryPrice entry={entry} />
+                  </button>
                 </li>
               ))}
             </ul>
           )}
 
-          {choices && (
-            <div role="group" aria-label="Elegí la presentación">
-              <p className="field-help">Ese código es de un producto con varias presentaciones. ¿Cuál es?</p>
-              <ul className="pos-results">
-                {choices.map((entry) => (
-                  <li key={entry.presentationId}>
-                    <Button variant="secundario" onClick={() => addEntry(entry)}>
-                      <span>{entry.presentationName}</span><span className="pos-num">{formatMoney(entry.salePrice)}</span>
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            </div>
+          {choices && choices.length > 0 && (
+            <ul className="resultados" aria-label="Elegí la presentación">
+              <li className="resultados__titulo">Elegí la presentación · {choices[0]!.productName}</li>
+              {choices.map((entry) => (
+                <li key={entry.presentationId}>
+                  <button type="button" onClick={() => addEntry(entry)}>
+                    <span>{entry.presentationName}</span>
+                    <EntryPrice entry={entry} />
+                  </button>
+                </li>
+              ))}
+            </ul>
           )}
-        </GlassCard>
+          {compact && feedbackMessage}
+        </section>
 
-        <GlassCard className="pos-panel pos-ticket">
-          <div className="pos-panel-head">
-            <p className="pos-micro">Ticket</p>
-            <div className="pos-panel-head-actions">
-              <Badge>{itemCount === 1 ? "1 artículo" : `${itemCount} artículos`}</Badge>
-              <Button variant="fantasma" onClick={() => dispatch({ type: "clear" })} disabled={lines.length === 0}>Vaciar</Button>
-            </div>
+        <Ticket lines={lines} compact={compact} itemText={itemText}
+          onClear={() => dispatch({ type: "clear" })}
+          onQuantity={(lineId, quantity) => dispatch({ type: "setQuantity", lineId, quantity })}
+          onRemove={(lineId) => dispatch({ type: "remove", lineId })} />
+      </div>
+
+      <aside className="carta cobro" aria-label="Cobro">
+        {!compact && (
+          <div className="total">
+            <p className="total__etiqueta"><span>Total</span><span className="meta">{itemText}</span></p>
+            <p className="total__cifra" aria-live="polite">{formatMoney(total)}</p>
           </div>
-
-          {lines.length === 0 ? (
-            <EmptyState title="Todavía no hay productos">Pasá un producto por el lector o buscalo por nombre.</EmptyState>
-          ) : (
-            <>
-              <div className="pos-line pos-lines-head" aria-hidden="true">
-                <span>Producto</span><span>Cantidad</span><span>Unitario</span><span>Subtotal</span><span />
-              </div>
-              <ul className="pos-lines">
-                {lines.map((line) => (
-                  <li key={line.lineId} className="pos-line">
-                    <div>
-                      <p className="pos-line-name">{line.entry.productName}</p>
-                      <p className="pos-line-detail">{line.entry.presentationName}</p>
-                    </div>
-                    {line.weight === undefined ? (
-                      <div className="pos-qty">
-                        <Button variant="secundario" aria-label="Quitar uno"
-                          onClick={() => dispatch({ type: "setQuantity", lineId: line.lineId, quantity: line.quantity - 1 })}>−</Button>
-                        <output aria-label="Cantidad" className="pos-num">{line.quantity}</output>
-                        <Button variant="secundario" aria-label="Agregar uno"
-                          onClick={() => dispatch({ type: "setQuantity", lineId: line.lineId, quantity: line.quantity + 1 })}>+</Button>
-                      </div>
-                    ) : (
-                      <span className="pos-num pos-weight">{line.weight} {line.entry.baseUnit === "millilitre" ? "ml" : "g"}</span>
-                    )}
-                    <span className="pos-num pos-unit">
-                      {line.weight !== undefined ? `${formatMoney(pricePerKilo(line.entry))}/kg` : formatMoney(line.entry.salePrice)}
-                    </span>
-                    <span className="pos-amount">{formatMoney(lineTotal(line))}</span>
-                    <Button variant="fantasma" className="pos-remove" aria-label={`Quitar ${line.entry.productName}`}
-                      onClick={() => dispatch({ type: "remove", lineId: line.lineId })}>×</Button>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </GlassCard>
-      </section>
-
-      <aside className="pos-side" aria-label="Cobro">
-        <GlassCard className="pos-panel pos-checkout">
-          <div className="pos-total-box">
-            <p className="pos-total-label">Total a cobrar</p>
-            <p className="pos-total" aria-live="polite">{formatMoney(total)}</p>
-            <p className="pos-total-sub">{itemCount === 1 ? "1 artículo" : `${itemCount} artículos`}</p>
-          </div>
-
-          <fieldset className="pos-methods">
-            <legend className="pos-micro">Medio de pago</legend>
-            {SELLING_METHODS.map((m) => (
-              <label key={m} className="pos-method">
-                <input type="radio" name="metodo" value={m} checked={method === m} onChange={() => setMethod(m)} />
-                <span>{PAYMENT_LABELS[m]}</span>
-              </label>
-            ))}
-          </fieldset>
-
-          {method === "credit" && <CustomerPicker selected={customer} onSelect={setCustomer} saleTotal={total} />}
-
-          <Button className="pos-charge" onClick={() => void charge()}
-            disabled={lines.length === 0 || (method === "credit" && !customer)} loading={charging}>
-            Cobrar {lines.length > 0 ? formatMoney(total) : ""}
+        )}
+        <Options name="metodo" legend="Medio de pago" showLegend value={method} onChange={setMethod} options={SELLING_METHODS} />
+        {method === "credit" && <CustomerPicker selected={customer} onSelect={setCustomer} saleTotal={total} />}
+        {!compact && (
+          <Button size="grande" block onClick={() => void charge()} disabled={!canCharge} loading={charging}>
+            Cobrar{lines.length > 0 ? <span className="boton__cifra">{formatMoney(total)}</span> : null}
           </Button>
-          <p className="pos-feedback" data-tone={feedback?.tone} role="status">{feedback?.text}</p>
-        </GlassCard>
+        )}
+        {!compact && feedbackMessage}
       </aside>
+
+      {compact && (
+        <div className="barra-cobro">
+          <div className="total">
+            <p className="total__etiqueta">Total</p>
+            <p className="total__cifra" aria-live="polite">{formatMoney(total)}</p>
+          </div>
+          <Button size="grande" onClick={() => void charge()} disabled={!canCharge} loading={charging}>Cobrar</Button>
+        </div>
+      )}
 
       {weighing && (
         <WeightDialog entry={weighing} onCancel={() => { setWeighing(null); focusScan(); }}
@@ -378,6 +345,125 @@ function Register({ shift, onClosed }: { shift: CurrentShift; onClosed: () => vo
       )}
       {closing && <CloseShiftDialog shift={shift} onCancel={() => setClosing(false)} onClosed={onClosed} />}
     </div>
+  );
+}
+
+/** Estado del catálogo de la caja: sin conexión se vende con la copia guardada, y se avisa. */
+function CatalogState({ loading, offline, count }: { loading: boolean; offline: boolean; count: number }) {
+  const products = count === 1 ? "1 producto" : `${count} productos`;
+  if (loading) return <p className="meta">Cargando catálogo…</p>;
+  if (offline) return <Badge tone="aviso" icon="cloud_off" className="caja-catalogo">Catálogo guardado en este equipo · {products}</Badge>;
+  return <p className="meta caja-catalogo"><Icon name="check_circle" size="s" />Catálogo listo · {products}</p>;
+}
+
+function EntryPrice({ entry }: { entry: PosEntry }) {
+  return entry.soldByWeight
+    ? <span className="precio">{formatMoney(pricePerKilo(entry))} <small>/kg</small></span>
+    : <span className="precio">{formatMoney(entry.salePrice)}</span>;
+}
+
+const unitOf = (line: CartLine) => (line.entry.baseUnit === "millilitre" ? "ml" : "g");
+
+/** «Granel · $14.800/kg» o «Paquete 500 g · $1.950»: el precio unitario va en la meta de la línea. */
+function LineMeta({ line }: { line: CartLine }) {
+  return (
+    <>
+      {line.entry.presentationName} · <span className="cifra">
+        {line.weight !== undefined ? `${formatMoney(pricePerKilo(line.entry))}/${unitOf(line) === "ml" ? "l" : "kg"}` : formatMoney(line.entry.salePrice)}
+      </span>
+    </>
+  );
+}
+
+/** − / cantidad / +. Lo pesado no se suma de a uno: muestra el peso leído. */
+function LineQuantity({ line, onQuantity }: { line: CartLine; onQuantity: (lineId: string, quantity: number) => void }) {
+  const name = line.entry.productName;
+  if (line.weight !== undefined) {
+    return (
+      <div className="cantidad cantidad--fija" role="group" aria-label={`Cantidad de ${name}`}>
+        <output>{line.weight} {unitOf(line)}</output>
+      </div>
+    );
+  }
+  return (
+    <div className="cantidad" role="group" aria-label={`Cantidad de ${name}`}>
+      <button type="button" aria-label="Restar" onClick={() => onQuantity(line.lineId, line.quantity - 1)}><Icon name="remove" /></button>
+      <output>{line.quantity} u</output>
+      <button type="button" aria-label="Sumar" onClick={() => onQuantity(line.lineId, line.quantity + 1)}><Icon name="add" /></button>
+    </div>
+  );
+}
+
+function Ticket({ lines, compact, itemText, onClear, onQuantity, onRemove }: {
+  lines: CartLine[]; compact: boolean; itemText: string; onClear: () => void;
+  onQuantity: (lineId: string, quantity: number) => void; onRemove: (lineId: string) => void;
+}) {
+  const head = (
+    <>
+      <h2 className="titulo-seccion">Ticket <span className="meta">· {itemText}</span></h2>
+      <Button variant="fantasma" size="compacto" icon="delete_sweep" onClick={onClear} disabled={lines.length === 0}>Vaciar</Button>
+    </>
+  );
+  const empty = <EmptyState title="Todavía no hay productos">Pasá un producto por el lector o buscalo por nombre.</EmptyState>;
+  const remove = (line: CartLine) => (
+    <Button variant="fantasma" size="icono" aria-label={`Quitar ${line.entry.productName} del ticket`} onClick={() => onRemove(line.lineId)}>
+      <Icon name="close" />
+    </Button>
+  );
+
+  if (compact) {
+    return (
+      <section className="pila pila--s pos-ticket" aria-label="Ticket">
+        <div className="fila fila--entre">{head}</div>
+        {lines.length === 0 ? empty : (
+          <ul className="lista">
+            {lines.map((line) => (
+              <li key={line.lineId} className="ticket-linea">
+                <div className="lista__principal">
+                  <span className="lista__titulo">{line.entry.productName}</span>
+                  <span className="lista__meta"><LineMeta line={line} /></span>
+                </div>
+                <span className="lista__valor">{formatMoney(lineTotal(line))}</span>
+                <div className="fila fila--entre ticket-linea__acciones">
+                  <LineQuantity line={line} onQuantity={onQuantity} />
+                  {remove(line)}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    );
+  }
+
+  return (
+    <section className="carta carta--sin-relleno pos-ticket" aria-label="Ticket">
+      <div className="carta__cabecera">{head}</div>
+      {lines.length === 0 ? empty : (
+        <div className="tabla-marco">
+          <table className="tabla">
+            <thead>
+              <tr><th>Producto</th><th>Cantidad</th><th className="num">Subtotal</th><th className="acciones"><span className="sr">Quitar</span></th></tr>
+            </thead>
+            <tbody>
+              {lines.map((line) => (
+                <tr key={line.lineId}>
+                  <td>
+                    <div className="celda">
+                      <span className="celda__titulo">{line.entry.productName}</span>
+                      <span className="suave"><LineMeta line={line} /></span>
+                    </div>
+                  </td>
+                  <td><LineQuantity line={line} onQuantity={onQuantity} /></td>
+                  <td className="num fuerte">{formatMoney(lineTotal(line))}</td>
+                  <td className="acciones">{remove(line)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -397,30 +483,37 @@ function CustomerPicker({ selected, onSelect, saleTotal }: {
   if (selected) {
     const over = exceedsLimit(selected, saleTotal);
     return (
-      <div className="notice" role="status">
-        <p><strong>{selected.name}</strong> · saldo {formatMoney(selected.balance)}
-          {selected.credit_limit !== null ? ` · tope ${formatMoney(selected.credit_limit)}` : ""}</p>
-        {over && <p className="form-error">Con esta venta supera su tope de fiado. Confirmá con la dueña antes de cobrar.</p>}
-        <Button variant="fantasma" onClick={() => onSelect(null)}>Cambiar cliente</Button>
+      <div className="fiado" role="status">
+        <p className="campo__etiqueta">Cliente del fiado</p>
+        <div className="fila fila--entre fiado__cliente">
+          <span className="fila"><Icon name="person" className="apagada" /><strong className="fuerte">{selected.name}</strong></span>
+          <Button variant="fantasma" size="compacto" onClick={() => onSelect(null)}>Cambiar cliente</Button>
+        </div>
+        <p className="par"><span>Saldo</span><span className="cifra">{formatMoney(selected.balance)}</span></p>
+        {selected.credit_limit !== null && <p className="par"><span>Tope</span><span className="cifra">{formatMoney(selected.credit_limit)}</span></p>}
+        {over && <Message tone="aviso">Con esta venta supera su tope de fiado. Confirmá con la dueña antes de cobrar.</Message>}
       </div>
     );
   }
 
   const matches = accounts ? filterAccounts(accounts, text).slice(0, 6) : [];
   return (
-    <div>
-      <TextField label="Cliente del fiado" placeholder="Nombre o teléfono" value={text} onChange={(e) => setText(e.target.value)} />
-      {error && <p className="form-error" role="alert">{error}</p>}
-      {text && accounts && matches.length === 0 && <p className="field-help">No aparece. Se da de alta en Clientes.</p>}
-      <ul className="pos-results">
-        {text && matches.map((account) => (
-          <li key={account.id}>
-            <Button variant="fantasma" onClick={() => onSelect(account)}>
-              <span>{account.name}</span><span>{formatMoney(account.balance)}</span>
-            </Button>
-          </li>
-        ))}
-      </ul>
+    <div className="fiado">
+      <TextField label="Cliente del fiado" icon="search" placeholder="Nombre o teléfono" value={text} onChange={(e) => setText(e.target.value)} />
+      {error && <Message tone="error">{error}</Message>}
+      {text && accounts && matches.length === 0 && <p className="meta">No aparece. Se da de alta en Clientes.</p>}
+      {text && matches.length > 0 && (
+        <ul className="resultados" aria-label="Clientes">
+          {matches.map((account) => (
+            <li key={account.id}>
+              <button type="button" onClick={() => onSelect(account)}>
+                <strong>{account.name}</strong>
+                <span className={account.phone ? "cifra suave fiado__telefono" : "suave fiado__telefono"}>{account.phone ?? "Sin teléfono"}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -434,13 +527,16 @@ function WeightDialog({ entry, onConfirm, onCancel }: { entry: PosEntry; onConfi
 
   return (
     <Modal open title={`Peso de ${entry.productName}`} onClose={onCancel}
+      subtitle={<>{entry.presentationName} · <span className="cifra">{formatMoney(pricePerKilo(entry))}/{unit === "ml" ? "l" : "kg"}</span></>}
       footer={<>
         <Button variant="fantasma" onClick={onCancel}>Cancelar</Button>
-        <Button onClick={() => onConfirm(weight)} disabled={!valid}>Agregar {valid ? formatMoney(amount) : ""}</Button>
+        <Button icon="add" onClick={() => onConfirm(weight)} disabled={!valid}>
+          Agregar{valid ? <span className="boton__cifra">{formatMoney(amount)}</span> : null}
+        </Button>
       </>}>
       <form onSubmit={(e) => { e.preventDefault(); if (valid) onConfirm(weight); }}>
-        <TextField label={`Peso leído en la balanza (${unit})`} inputMode="decimal" autoFocus value={value}
-          onChange={(e) => setValue(e.target.value)} help={`${formatMoney(pricePerKilo(entry))} por ${unit === "ml" ? "litro" : "kilo"}`} />
+        <TextField label="Peso leído en la balanza" icon="scale" suffix={unit} numeric inputMode="decimal" autoFocus value={value}
+          onChange={(e) => setValue(e.target.value)} />
       </form>
     </Modal>
   );
@@ -468,31 +564,39 @@ function CloseShiftDialog({ shift, onCancel, onClosed }: { shift: CurrentShift; 
 
   const shown = summary;
   return (
-    <Modal open title={`Cierre de ${shift.registerName}`} onClose={result?.closed ? onClosed : onCancel}
+    <Modal open title="Cierre de caja" onClose={result?.closed ? onClosed : onCancel}
+      subtitle={<>{shift.registerName} · turno abierto a las <span className="cifra">{formatTime(shift.openedAt)}</span></>}
       footer={result?.closed
         ? <Button onClick={onClosed}>Listo</Button>
         : <>
             <Button variant="fantasma" onClick={onCancel}>Seguir vendiendo</Button>
-            <Button onClick={() => void confirm()} loading={busy} disabled={!shown}>Cerrar turno</Button>
+            <Button icon="lock" onClick={() => void confirm()} loading={busy} disabled={!shown}>Cerrar turno</Button>
           </>}>
-      {!shown ? <p>Calculando…</p> : (
-        <table className="pos-summary">
-          <thead><tr><th>Medio de pago</th><th>Ventas</th><th>Total</th></tr></thead>
-          <tbody>
-            {(Object.keys(PAYMENT_LABELS) as PaymentMethod[]).map((m) => (
-              <tr key={m}><td>{PAYMENT_LABELS[m]}</td><td>{shown.byMethod[m].count}</td><td>{formatMoney(shown.byMethod[m].total)}</td></tr>
-            ))}
-          </tbody>
-          <tfoot><tr><td>Total</td><td>{shown.salesCount}</td><td>{formatMoney(shown.total)}</td></tr></tfoot>
-        </table>
-      )}
-      {shown && <p className="field-help">Efectivo esperado en la caja: {formatMoney(shift.initialBalance + shown.byMethod.cash.total)} (incluye {formatMoney(shift.initialBalance)} inicial).</p>}
-      {result && !result.closed && <p className="form-error" role="alert">{result.reason}</p>}
       {result?.closed && (
-        <p className="notice" role="status">
+        <Message tone="exito">
           Turno cerrado.{result.backupError ? ` El respaldo no se pudo descargar: ${result.backupError}` : " Se descargó el respaldo del cierre."}
+        </Message>
+      )}
+      {!shown ? <span className="esqueleto" aria-label="Calculando…" /> : (
+        <div className="tabla-marco">
+          <table className="tabla tabla--compacta">
+            <thead><tr><th>Medio de pago</th><th className="num">Ventas</th><th className="num">Total</th></tr></thead>
+            <tbody>
+              {(Object.keys(PAYMENT_LABELS) as PaymentMethod[]).map((m) => (
+                <tr key={m}><td>{PAYMENT_LABELS[m]}</td><td className="num">{shown.byMethod[m].count}</td><td className="num">{formatMoney(shown.byMethod[m].total)}</td></tr>
+              ))}
+              <tr className="fuerte"><td>Total</td><td className="num">{shown.salesCount}</td><td className="num">{formatMoney(shown.total)}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+      {shown && (
+        <p className="par">
+          <span>Efectivo esperado en la caja <span className="meta">(incluye {formatMoney(shift.initialBalance)} inicial)</span></span>
+          <span className="cifra">{formatMoney(shift.initialBalance + shown.byMethod.cash.total)}</span>
         </p>
       )}
+      {result && !result.closed && <Message tone="error">{result.reason}</Message>}
     </Modal>
   );
 }

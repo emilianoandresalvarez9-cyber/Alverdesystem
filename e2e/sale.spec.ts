@@ -50,8 +50,8 @@ test.describe('Flujo de Venta E2E', () => {
     await page.getByRole('button', { name: 'Agregar' }).click();
     
     // Validar que el código encontró el producto y lo agregó al carrito.
-    await expect(page.locator('.pos-lines')).toContainText(new RegExp(testProduct, "i"));
-    await expect(page.locator('.pos-total')).toBeVisible();
+    await expect(page.locator('.pos-ticket')).toContainText(new RegExp(testProduct, "i"));
+    await expect(page.locator('.total__cifra')).toBeVisible();
     
     // 6. Cobrar
     const btnCobrar = page.locator('button', { hasText: /Cobrar/i });
@@ -59,7 +59,7 @@ test.describe('Flujo de Venta E2E', () => {
     await btnCobrar.click();
     
     // El POS guarda la venta directamente y muestra el resultado en el panel.
-    await expect(page.locator('.pos-feedback')).toContainText(/Venta guardada:/i, { timeout: 5000 });
+    await expect(page.getByRole('status').filter({ hasText: /Venta guardada:/i })).toBeVisible({ timeout: 5000 });
 
     // 7. Verificacion E2E Real: Validar que la venta esta en IndexedDB (Offline)
     const offlineSales = await page.evaluate(async () => {
