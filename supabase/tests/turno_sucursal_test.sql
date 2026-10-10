@@ -69,7 +69,7 @@ select lives_ok($$insert into public.cash_shifts (register_id, user_id, initial_
   'Administradora: abre turno en cualquier caja (RF-66)');
 -- Reasigna al empleado de Norte a Central (RF-67), como indica el aviso.
 update public.profiles set branch_id = '00000000-0000-0000-0000-000000000b01' where id = '00000000-0000-0000-0000-0000000000e1';
-select lives_ok($update public.cash_shifts set status = 'closed' where id = '00000000-0000-0000-0000-000000000501'$,
+select lives_ok($pg$update public.cash_shifts set status = 'closed' where id = '00000000-0000-0000-0000-000000000501'$pg$,
   'Administración cierra el turno anterior de la sucursal Norte');
 reset role;
 
