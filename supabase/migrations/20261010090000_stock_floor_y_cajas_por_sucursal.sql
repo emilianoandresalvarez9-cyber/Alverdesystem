@@ -81,31 +81,48 @@ comment on function public.guard_stock_lot_negative_floor() is
   'RF-38: limita el stock neto por presentación y sucursal a -10; serializa las mutaciones para evitar sobreventa concurrente.';
 
 
--- La nueva política de lectura de cajas oculta sucursales ajenas. El trigger necesita leer el
--- nombre de esa caja para devolver un error útil; lo hace como definer, validando el JWT activo.
+-- La nueva política de lectura de cajas oculta sucursales ajenas. El trigger conserva
+-- SECURITY INVOKER para detectar el rol de API; una función privada lee solo los nombres
+-- necesarios para el mensaje de error, sin hacerlos visibles desde las tablas mediante RLS.
+create schema if not exists private;
+revoke all on schema private from public, anon;
+grant usage on schema private to authenticated;
+create or replace function private.register_branch_details(p_register_id uuid)
+returns table(branch_id uuid, branch_name text, register_name text)
+language sql
+stable
+security definer
+set search_path = public
+as $details$
+  select r.branch_id, b.name, r.name
+  from public.registers r
+  join public.branches b on b.id = r.branch_id
+  where r.id = p_register_id;
+$details$;
+revoke all on function private.register_branch_details(uuid) from public, anon;
+grant execute on function private.register_branch_details(uuid) to authenticated;
+
 create or replace function public.guard_cash_shift_branch()
 returns trigger
 language plpgsql
-security definer
+security invoker
 set search_path = public
-as $function$
+as $guard$
 declare
   v_register_branch uuid;
   v_register_branch_name text;
   v_register_name text;
 begin
-  if auth.uid() is null or not public.is_active_staff() or public.is_administrator() then
+  if not public.is_api_role() or public.is_administrator() then
     return new;
   end if;
   if tg_op = 'UPDATE' and new.register_id is not distinct from old.register_id then
     return new;
   end if;
 
-  select r.branch_id, b.name, r.name
+  select d.branch_id, d.branch_name, d.register_name
     into v_register_branch, v_register_branch_name, v_register_name
-  from public.registers r
-  join public.branches b on b.id = r.branch_id
-  where r.id = new.register_id;
+  from private.register_branch_details(new.register_id) d;
 
   if v_register_branch is distinct from public.current_branch_id() then
     raise exception '% es de la sucursal %, y tu usuario trabaja en otra. Usá una caja de tu sucursal o pedile a administración que te asigne a %.',
@@ -114,10 +131,10 @@ begin
   end if;
   return new;
 end;
-$function$;
+$guard$;
 revoke all on function public.guard_cash_shift_branch() from public, anon, authenticated;
 comment on function public.guard_cash_shift_branch() is
-  'RF-66: valida la sucursal del turno y obtiene el nombre de cajas ajenas sin exponerlas mediante RLS.';
+  'RF-66: valida sucursal y conserva el rol invocador para distinguir API de SQL Editor.';
 
 -- RLS también limita la lectura de cajas, no alcanza con que la interfaz filtre la lista.
 drop policy if exists "personal activo lee cajas" on public.registers;
