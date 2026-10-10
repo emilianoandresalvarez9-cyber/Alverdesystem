@@ -62,6 +62,13 @@ describe("Campos", () => {
     expect(html).toMatch(/^<div class="selector"><label class="selector__prefijo" for="marca">Marca<\/label><select id="marca">/);
     expect(html).not.toContain("campo");
   });
+
+  it("SelectField hideLabel: la etiqueta sigue unida al select, sólo para lectores de pantalla", () => {
+    const html = render(<SelectField hideLabel id="suc" label="Sucursal de Ana"><option>Centro</option></SelectField>);
+    expect(html).toContain('<label class="sr" for="suc">Sucursal de Ana</label>');
+    expect(html).not.toContain("campo__etiqueta");
+    expect(html).toMatch(/<div class="selector"><select id="suc">/);
+  });
 });
 
 describe("Estados", () => {

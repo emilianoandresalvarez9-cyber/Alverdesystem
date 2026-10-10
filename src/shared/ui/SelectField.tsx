@@ -14,13 +14,15 @@ export type SelectFieldProps = SelectHTMLAttributes<HTMLSelectElement> & {
    * línea. Sin ayuda ni error. `className` va al `.selector`.
    */
   inline?: boolean;
+  /** La etiqueta queda sólo para lectores de pantalla (un select por fila de una tabla). */
+  hideLabel?: boolean;
 };
 
 /**
  * Select nativo con flecha propia, 44 px. Se usa con más de cuatro opciones o cuando la
  * lista crece con los datos. `className` va al contenedor `.campo`.
  */
-export function SelectField({ label, help, error, inline, id, className, children, ...rest }: SelectFieldProps) {
+export function SelectField({ label, help, error, inline, hideLabel, id, className, children, ...rest }: SelectFieldProps) {
   const autoId = useId();
   const selectId = id ?? autoId;
   if (inline) {
@@ -36,7 +38,7 @@ export function SelectField({ label, help, error, inline, id, className, childre
   const described = Boolean(help) || Boolean(error);
   return (
     <div className={["campo", error ? "campo--error" : "", className].filter(Boolean).join(" ")}>
-      <label className="campo__etiqueta" htmlFor={selectId}>{label}</label>
+      <label className={hideLabel ? "sr" : "campo__etiqueta"} htmlFor={selectId}>{label}</label>
       <div className="selector">
         <select
           id={selectId}
