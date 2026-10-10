@@ -55,6 +55,28 @@ create trigger stock_lots_negative_floor
   before insert or update of current_quantity on public.stock_lots
   for each row execute function public.guard_stock_lot_negative_floor();
 
+-- El trigger por fila se ejecuta cuando la fila ya está bloqueada. Este lock de sentencia corre
+-- antes de bloquear filas y serializa escrituras de stock para impedir que dos ventas simultáneas
+-- calculen el mismo saldo agregado y ambas lo lleven por debajo del piso.
+create or replace function public.lock_stock_floor_statement()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $lock$
+begin
+  perform pg_advisory_xact_lock(hashtextextended('stock-floor:global', 0));
+  return null;
+end;
+$lock$;
+revoke all on function public.lock_stock_floor_statement() from public, anon, authenticated;
+create trigger stock_floor_lock_before_insert
+  before insert on public.stock_lots
+  for each statement execute function public.lock_stock_floor_statement();
+create trigger stock_floor_lock_before_quantity_update
+  before update of current_quantity on public.stock_lots
+  for each statement execute function public.lock_stock_floor_statement();
+
 comment on function public.guard_stock_lot_negative_floor() is
   'RF-38: limita el stock neto por presentación y sucursal a -10; serializa las mutaciones para evitar sobreventa concurrente.';
 
