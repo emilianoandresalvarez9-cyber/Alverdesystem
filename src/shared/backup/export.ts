@@ -30,6 +30,7 @@ export const TABLES_TO_BACKUP = [
   "profiles",
   "stock_lots",
   "stock_movements",
+  "stock_transfers",
   "stock_warnings",
   "customers",
   "credit_movements",

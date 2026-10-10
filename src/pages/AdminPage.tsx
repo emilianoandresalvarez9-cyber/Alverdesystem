@@ -3,6 +3,7 @@ import { AppShell } from "../shared/components/AppShell";
 import { BackupCenter } from "../modules/admin/BackupCenter";
 import { StockDashboard } from "../modules/stock";
 import { StockWarningsReview } from "../modules/stock/StockWarningsReview";
+import { TransfersHistory } from "../modules/stock/TransfersHistory";
 import { ClassifierManager } from "../modules/admin/ClassifierManager";
 import { QuickRestock } from "../modules/restock/QuickRestock";
 import { RepositionList } from "../modules/restock/RepositionList";
@@ -136,6 +137,7 @@ export function AdminPage() {
           <>
             <StockWarningsReview />
             <StockDashboard />
+            <TransfersHistory />
           </>
         )}
 

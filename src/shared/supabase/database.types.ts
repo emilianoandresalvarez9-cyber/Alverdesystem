@@ -778,6 +778,51 @@ export type Database = {
           { foreignKeyName: "stock_movements_user_id_fkey"; columns: ["user_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] }
         ]
       }
+      stock_transfers: {
+        Row: {
+          id: string
+          local_id: string
+          from_lot_id: string
+          to_lot_id: string
+          from_branch_id: string
+          to_branch_id: string
+          quantity: number
+          note: string | null
+          user_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          local_id: string
+          from_lot_id: string
+          to_lot_id: string
+          from_branch_id: string
+          to_branch_id: string
+          quantity: number
+          note?: string | null
+          user_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          local_id?: string
+          from_lot_id?: string
+          to_lot_id?: string
+          from_branch_id?: string
+          to_branch_id?: string
+          quantity?: number
+          note?: string | null
+          user_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          { foreignKeyName: "stock_transfers_from_branch_id_fkey"; columns: ["from_branch_id"]; isOneToOne: false; referencedRelation: "branches"; referencedColumns: ["id"] },
+          { foreignKeyName: "stock_transfers_from_lot_id_fkey"; columns: ["from_lot_id"]; isOneToOne: false; referencedRelation: "stock_lots"; referencedColumns: ["id"] },
+          { foreignKeyName: "stock_transfers_to_branch_id_fkey"; columns: ["to_branch_id"]; isOneToOne: false; referencedRelation: "branches"; referencedColumns: ["id"] },
+          { foreignKeyName: "stock_transfers_to_lot_id_fkey"; columns: ["to_lot_id"]; isOneToOne: false; referencedRelation: "stock_lots"; referencedColumns: ["id"] },
+          { foreignKeyName: "stock_transfers_user_id_fkey"; columns: ["user_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] }
+        ]
+      }
       stock_warnings: {
         Row: {
           id: string
@@ -1169,6 +1214,26 @@ export type Database = {
           total: number
         }[]
       }
+      stock_transfers_list: {
+        Args: {
+          p_branch_id?: string
+          p_limit?: number
+        }
+        Returns: {
+          id: string
+          created_at: string
+          product_name: string
+          presentation_name: string
+          quantity: number
+          base_unit: string
+          from_branch_name: string
+          to_branch_name: string
+          user_name: string
+          note: string
+          from_lot_id: string
+          to_lot_id: string
+        }[]
+      }
       stock_warnings_for_review: {
         Args: {
           p_include_resolved?: boolean
@@ -1203,6 +1268,16 @@ export type Database = {
         }
         Returns: undefined
       }
+      transfer_stock: {
+        Args: {
+          p_lot_id: string
+          p_to_branch_id: string
+          p_quantity: number
+          p_note?: string
+          p_local_id?: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       app_role: "administrator" | "employee"
@@ -1212,7 +1287,7 @@ export type Database = {
       payment_method: "cash" | "transfer" | "qr" | "credit"
       sale_status: "closed" | "voided"
       stock_lot_status: "open" | "closed"
-      stock_movement_kind: "receipt" | "sale" | "portioning" | "waste" | "adjustment" | "discard"
+      stock_movement_kind: "receipt" | "sale" | "portioning" | "waste" | "adjustment" | "discard" | "transfer"
     }
     CompositeTypes: {
       [_ in never]: never
