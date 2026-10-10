@@ -28,7 +28,7 @@
 | RF-31 a RF-33c | Código + test | Caja, cierre por medio de pago, peso manual, interfaz de báscula, imagen del código. Desde la caja, un turno sólo se abre y se cierra: monto inicial, caja y apertura quedan fijos, y al cerrar la base pone la hora y calcula el efectivo esperado (#109). |
 | RF-34, RF-35, RF-37, RF-39, RF-40 | Código + test | Caché sin costos, cola con `localId`, solo-agregar, precios anteriores sin conexión, segunda copia en carpeta local. Anular una venta pide confirmación desde #103 (antes la anulaba un solo toque). |
 | RF-36 | Código + test | Indicador en todas las páginas desde #88. |
-| RF-38 | Código + test | La venta no se bloquea y queda marcada; **pantalla de revisión** para administradora desde #83. Una venta que llega con el turno ya cerrado también queda ahí (#112). |
+| RF-38 | Código + test | Se acepta un faltante agregado de hasta 10 unidades por presentación y sucursal; se rechaza una venta que supere ese límite. La pantalla de revisión muestra los faltantes permitidos y las ventas sin lotes (#83), además de ventas que llegan con el turno cerrado (#112). |
 | RF-41, RF-43 | Código + test | Respaldo al cerrar turno; exportación de cualquier tabla. |
 | RF-42 | Parcial (por diseño) | La segunda copia va a la carpeta que elija la dueña (puede ser la de Google Drive). No sube sola a Drive. |
 | RF-44 | Operativo, pendiente | Ensayo de restauración completa: no se hizo. Runbook en `docs/runbooks/restaurar-base.md`. |
