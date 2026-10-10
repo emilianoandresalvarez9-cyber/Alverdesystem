@@ -9,6 +9,7 @@ insert into auth.users (id, email) values
 update public.profiles set role = 'administrator' where id = '00000000-0000-0000-0000-0000000000a1';
 
 insert into public.branches (id, name) values ('00000000-0000-0000-0000-000000000b01', 'Central');
+update public.profiles set branch_id = '00000000-0000-0000-0000-000000000b01' where id = '00000000-0000-0000-0000-0000000000e1';
 insert into public.registers (id, branch_id, name) values ('00000000-0000-0000-0000-000000000b02', '00000000-0000-0000-0000-000000000b01', 'Caja 1');
 insert into public.registers (id, branch_id, name) values ('00000000-0000-0000-0000-000000000b03', '00000000-0000-0000-0000-000000000b01', 'Caja 2');
 insert into public.cash_shifts (id, register_id, user_id) values

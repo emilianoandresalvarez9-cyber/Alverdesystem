@@ -2,7 +2,7 @@
 -- su sucursal (la asignada o, si no tiene, la principal); administración, en cualquiera.
 -- Roles: empleado de Norte, empleado sin sucursal, administradora, SQL Editor (postgres) y anon.
 begin;
-select plan(14);
+select plan(16);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000000a1', 'admin@test'),
@@ -69,6 +69,8 @@ select lives_ok($$insert into public.cash_shifts (register_id, user_id, initial_
   'Administradora: abre turno en cualquier caja (RF-66)');
 -- Reasigna al empleado de Norte a Central (RF-67), como indica el aviso.
 update public.profiles set branch_id = '00000000-0000-0000-0000-000000000b01' where id = '00000000-0000-0000-0000-0000000000e1';
+select lives_ok($pg$update public.cash_shifts set status = 'closed' where id = '00000000-0000-0000-0000-000000000501'$pg$,
+  'Administración cierra el turno anterior de la sucursal Norte');
 reset role;
 
 -- ---------- Después de la reasignación ----------
@@ -78,7 +80,9 @@ select lives_ok($$insert into public.cash_shifts (register_id, user_id, initial_
   ('00000000-0000-0000-0000-000000000c07', '00000000-0000-0000-0000-0000000000e1', 0)$$,
   'Reasignado a Central: ya abre turno en una caja de Central');
 select lives_ok($$update public.cash_shifts set status = 'closed' where id = '00000000-0000-0000-0000-000000000501'$$,
-  'Reasignado: el turno que dejó abierto en Norte se puede cerrar igual');
+  'La solicitud de cierre no expone un error al empleado');
+select is((select count(*)::int from public.cash_shifts where id = '00000000-0000-0000-0000-000000000501'), 0,
+  'Tras la reasignación, RLS oculta el turno de Norte al empleado');
 reset role;
 select is((select status from public.cash_shifts where id = '00000000-0000-0000-0000-000000000501'), 'closed',
   'Ese turno quedó cerrado');

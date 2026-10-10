@@ -10,6 +10,7 @@ update public.profiles set role = 'administrator', display_name = 'Admin RF38' w
 update public.profiles set display_name = 'Cajera RF38' where id = '00000000-0000-0000-0000-00000000f382';
 
 insert into public.branches (id, name) values ('00000000-0000-0000-0000-00000000f3b1', 'RF38 sucursal');
+update public.profiles set branch_id = '00000000-0000-0000-0000-00000000f3b1' where id = '00000000-0000-0000-0000-00000000f382';
 insert into public.registers (id, branch_id, name) values ('00000000-0000-0000-0000-00000000f3b2', '00000000-0000-0000-0000-00000000f3b1', 'Caja RF38');
 insert into public.cash_shifts (id, register_id, user_id)
   values ('00000000-0000-0000-0000-00000000f3c1', '00000000-0000-0000-0000-00000000f3b2', '00000000-0000-0000-0000-00000000f382');

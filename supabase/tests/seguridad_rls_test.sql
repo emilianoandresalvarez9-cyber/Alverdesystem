@@ -11,6 +11,7 @@ insert into public.products (id, name, base_unit) values ('00000000-0000-0000-00
 insert into public.product_presentations (id, product_id, name, base_quantity, sale_price)
   values ('00000000-0000-0000-0000-0000000000c1', '00000000-0000-0000-0000-0000000000f1', '100 g', 100, 1500);
 insert into public.branches (id, name) values ('00000000-0000-0000-0000-000000000b01', 'Central');
+update public.profiles set branch_id = '00000000-0000-0000-0000-000000000b01' where id = '00000000-0000-0000-0000-0000000000e1';
 insert into public.registers (id, branch_id, name) values ('00000000-0000-0000-0000-000000000b02', '00000000-0000-0000-0000-000000000b01', 'Caja 1');
 insert into public.registers (id, branch_id, name) values ('00000000-0000-0000-0000-000000000b03', '00000000-0000-0000-0000-000000000b01', 'Caja 2');
 insert into public.customers (id, name) values ('00000000-0000-0000-0000-0000000000d1', 'Cliente');

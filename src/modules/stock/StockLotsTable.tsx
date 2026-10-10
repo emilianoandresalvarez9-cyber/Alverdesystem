@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { ActionsMenu, Badge, Button, EmptyState, useCompact, type MenuAction } from "../../shared/ui";
 import type { IconName } from "../../shared/ui";
 import { LotStatusBadge } from "./LotStatusBadge";
@@ -6,6 +6,7 @@ import { StockAdjustmentModal } from "./StockAdjustmentModal";
 import { TransferModal } from "./TransferModal";
 import { formatAmount, formatDay, remaining, unitLabel } from "./format";
 import type { StockLot } from "./types";
+import { groupStockLots } from "./stockGroups";
 import { useBranch } from "../../shared/branch/BranchContext";
 
 interface StockLotsTableProps {
@@ -57,6 +58,7 @@ export function StockLotsTable({
   enableFractioning = false,
   onFraction
 }: StockLotsTableProps) {
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set());
   const [lotToAdjust, setLotToAdjust] = useState<StockLot | null>(null);
   const [lotToTransfer, setLotToTransfer] = useState<StockLot | null>(null);
   const compact = useCompact();
@@ -95,26 +97,52 @@ export function StockLotsTable({
   );
   const stock = (lot: StockLot) => `${formatAmount(lot.current_quantity)} / ${formatAmount(lot.initial_quantity)} ${unitLabel(lot.base_unit)}`;
 
+  const groups = groupStockLots(lots);
+  const toggleGroup = (key: string) => setExpandedGroups((previous) => {
+    const next = new Set(previous);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    return next;
+  });
+  const groupedStock = (group: { lots: StockLot[] }) => {
+    const current = group.lots.reduce((sum, lot) => sum + lot.current_quantity, 0);
+    const initial = group.lots.reduce((sum, lot) => sum + lot.initial_quantity, 0);
+    return `${formatAmount(current)} / ${formatAmount(initial)} ${unitLabel(group.lots[0]!.base_unit)}`;
+  };
+
   return (
     <>
       {compact ? (
         <ul className="lista lista--plana">
-          {lots.map((lot) => {
-            const { all } = actionsFor(lot);
+          {groups.map((group) => {
+            const first = group.lots[0]!;
+            const expanded = expandedGroups.has(group.key);
+            const earliestExpiry = group.lots.map((lot) => lot.effective_expiry_date).filter((date): date is string => Boolean(date)).sort()[0];
             return (
-              <li key={lot.id} className={lot.status === "closed" ? "lote--cerrado" : undefined}>
+              <li key={group.key}>
                 <div className="lista__principal">
-                  <span className="lista__titulo">{lot.product_name}</span>
-                  <span className="lista__meta">
-                    {meta(lot)} · <span className="cifra">{stock(lot)}</span>
-                    {lot.effective_expiry_date ? <> · vence <span className="cifra">{formatDay(lot.effective_expiry_date)}</span></> : null}
-                  </span>
-                  <span className="fila lote__estados">
-                    <LotStatusBadge status={lot.expiry_status} daysUntilExpiry={lot.days_until_expiry} />
-                    {badges(lot)}
+                  <span className="lista__titulo">{first.product_name}</span>
+                  <span className="lista__meta">{meta(first)} · <span className="cifra">{groupedStock(group)}</span> · {group.lots.length} lotes
+                    {earliestExpiry ? <> · próximo vence <span className="cifra">{formatDay(earliestExpiry)}</span></> : null}
                   </span>
                 </div>
-                <ActionsMenu label={`Más acciones para ${lot.product_name}`} actions={all} />
+                <Button variant="fantasma" size="compacto" aria-expanded={expanded} onClick={() => toggleGroup(group.key)}>
+                  {expanded ? "Ocultar lotes" : "Ver lotes"}
+                </Button>
+                {expanded && <ul className="lista lista--plana">
+                  {group.lots.map((lot) => {
+                    const { all } = actionsFor(lot);
+                    return <li key={lot.id} className={lot.status === "closed" ? "lote--cerrado" : undefined}>
+                      <div className="lista__principal">
+                        <span className="lista__meta">{lot.supplier_name ?? "Sin proveedor"} · <span className="cifra">{stock(lot)}</span>
+                          {lot.effective_expiry_date ? <> · vence <span className="cifra">{formatDay(lot.effective_expiry_date)}</span></> : null}
+                        </span>
+                        <span className="fila lote__estados"><LotStatusBadge status={lot.expiry_status} daysUntilExpiry={lot.days_until_expiry} />{badges(lot)}</span>
+                      </div>
+                      <ActionsMenu label={`Más acciones para ${lot.product_name}`} actions={all} />
+                    </li>;
+                  })}
+                </ul>}
               </li>
             );
           })}
@@ -133,45 +161,42 @@ export function StockLotsTable({
               </tr>
             </thead>
             <tbody>
-              {lots.map((lot) => {
-                const { primary, all } = actionsFor(lot);
-                const left = remaining(lot.current_quantity, lot.initial_quantity);
-                return (
-                  <tr key={lot.id} className={lot.status === "closed" ? "lote--cerrado" : undefined}>
-                    <td>
-                      <div className="celda">
-                        <span className="celda__titulo">{lot.product_name}</span>
-                        <span className="suave">{meta(lot)}</span>
-                        {(lot.status === "closed" || lot.id.startsWith("pending:")) && <span className="fila lote__estados">{badges(lot)}</span>}
-                      </div>
-                    </td>
-                    <td>
-                      <div className="celda">
-                        <span className="cifra">{stock(lot)}</span>
-                        <span className={left.tone === "normal" ? "medidor lote__medidor" : `medidor medidor--${left.tone} lote__medidor`}
-                          style={{ "--v": `${left.percent}%` } as React.CSSProperties} aria-hidden="true"><span /></span>
-                      </div>
-                    </td>
-                    <td className="cifra">{formatDay(lot.received_at)}</td>
-                    <td>
-                      <div className="celda">
-                        {lot.effective_expiry_date && <span className="cifra">{formatDay(lot.effective_expiry_date)}</span>}
-                        <LotStatusBadge status={lot.expiry_status} daysUntilExpiry={lot.days_until_expiry} />
-                      </div>
-                    </td>
-                    <td className="cifra">{lot.opened_at ? formatDay(lot.opened_at) : <span className="apagada">—</span>}</td>
-                    <td className="acciones">
-                      <div className="fila lote__acciones">
-                        {primary && (
-                          <Button variant="secundario" size="compacto" icon={primary.icon as IconName} onClick={primary.onSelect}>
-                            {primary.label}
-                          </Button>
-                        )}
-                        <ActionsMenu label={`Más acciones para ${lot.product_name}`} actions={all} />
-                      </div>
-                    </td>
+              {groups.map((group) => {
+                const first = group.lots[0]!;
+                const expanded = expandedGroups.has(group.key);
+                const expiries = group.lots.filter((lot) => lot.effective_expiry_date).sort((a, b) => a.effective_expiry_date!.localeCompare(b.effective_expiry_date!));
+                const nextExpiry = expiries[0];
+                const left = remaining(group.lots.reduce((sum, lot) => sum + lot.current_quantity, 0), group.lots.reduce((sum, lot) => sum + lot.initial_quantity, 0));
+                return <Fragment key={group.key}>
+                  <tr>
+                    <td><div className="celda"><span className="celda__titulo">{first.product_name}</span><span className="suave">{meta(first)}</span></div></td>
+                    <td><div className="celda"><span className="cifra">{groupedStock(group)}</span>
+                      <span className={left.tone === "normal" ? "medidor lote__medidor" : `medidor medidor--${left.tone} lote__medidor`}
+                        style={{ "--v": `${left.percent}%` } as React.CSSProperties} aria-hidden="true"><span /></span></div></td>
+                    <td className="cifra">{group.lots.length} lotes</td>
+                    <td>{nextExpiry ? <div className="celda"><span className="cifra">{formatDay(nextExpiry.effective_expiry_date!)}</span>
+                      <LotStatusBadge status={nextExpiry.expiry_status} daysUntilExpiry={nextExpiry.days_until_expiry} /></div> : <span className="apagada">Sin vencimiento</span>}</td>
+                    <td><span className="apagada">—</span></td>
+                    <td className="acciones"><Button variant="secundario" size="compacto" aria-expanded={expanded} onClick={() => toggleGroup(group.key)}>
+                      {expanded ? "Ocultar lotes" : `Ver ${group.lots.length} lotes`}
+                    </Button></td>
                   </tr>
-                );
+                  {expanded && group.lots.map((lot) => {
+                    const { primary, all } = actionsFor(lot);
+                    return <tr key={lot.id} className={lot.status === "closed" ? "lote--cerrado" : undefined}>
+                      <td><div className="celda"><span className="suave">↳ {lot.supplier_name ?? "Sin proveedor"} · ingreso {formatDay(lot.received_at)}</span>
+                        {(lot.status === "closed" || lot.id.startsWith("pending:")) && <span className="fila lote__estados">{badges(lot)}</span>}</div></td>
+                      <td className="cifra">{stock(lot)}</td><td className="cifra">{formatDay(lot.received_at)}</td>
+                      <td><div className="celda">{lot.effective_expiry_date && <span className="cifra">{formatDay(lot.effective_expiry_date)}</span>}
+                        <LotStatusBadge status={lot.expiry_status} daysUntilExpiry={lot.days_until_expiry} /></div></td>
+                      <td className="cifra">{lot.opened_at ? formatDay(lot.opened_at) : <span className="apagada">—</span>}</td>
+                      <td className="acciones"><div className="fila lote__acciones">
+                        {primary && <Button variant="secundario" size="compacto" icon={primary.icon as IconName} onClick={primary.onSelect}>{primary.label}</Button>}
+                        <ActionsMenu label={`Más acciones para ${lot.product_name}`} actions={all} />
+                      </div></td>
+                    </tr>;
+                  })}
+                </Fragment>;
               })}
             </tbody>
           </table>

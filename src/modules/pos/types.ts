@@ -51,6 +51,8 @@ export interface SalePayload {
 
 export interface CurrentShift {
   id: string;
+  /** Usuario propietario del turno local; evita compartir una caja entre cuentas en el mismo equipo. */
+  ownerUserId?: string;
   registerId: string;
   registerName: string;
   /** RF-65/69: sucursal de la caja; define stock y precios de la venta. Turnos viejos no la tienen. */
