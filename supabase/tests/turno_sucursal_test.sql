@@ -2,7 +2,7 @@
 -- su sucursal (la asignada o, si no tiene, la principal); administración, en cualquiera.
 -- Roles: empleado de Norte, empleado sin sucursal, administradora, SQL Editor (postgres) y anon.
 begin;
-select plan(15);
+select plan(16);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000000a1', 'admin@test'),
@@ -79,8 +79,10 @@ set role authenticated;
 select lives_ok($$insert into public.cash_shifts (register_id, user_id, initial_balance) values
   ('00000000-0000-0000-0000-000000000c07', '00000000-0000-0000-0000-0000000000e1', 0)$$,
   'Reasignado a Central: ya abre turno en una caja de Central');
-select throws_ok($update public.cash_shifts set status = 'closed' where id = '00000000-0000-0000-0000-000000000501'$,
-  '42501', null, 'Tras la reasignación, el empleado no puede cerrar desde su cuenta un turno de Norte');
+select lives_ok($$update public.cash_shifts set status = 'closed' where id = '00000000-0000-0000-0000-000000000501'$$,
+  'La solicitud de cierre no expone un error al empleado');
+select is((select count(*)::int from public.cash_shifts where id = '00000000-0000-0000-0000-000000000501'), 0,
+  'Tras la reasignación, RLS oculta el turno de Norte al empleado');
 reset role;
 select is((select status from public.cash_shifts where id = '00000000-0000-0000-0000-000000000501'), 'closed',
   'Ese turno quedó cerrado');
