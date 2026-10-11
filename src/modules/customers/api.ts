@@ -50,21 +50,26 @@ export async function loadAccounts(): Promise<AccountsResult> {
   return { accounts: withPending(base.accounts, pending), refreshedAt: base.refreshedAt, fromCache };
 }
 
-/** Alta de cliente (RF-45). Soporta offline (T-13). */
+/**
+ * Crea el cliente en Supabase y solo confirma el alta cuando la base responde sin error.
+ * Esta pantalla exige conexión; no debe presentar una operación local pendiente como un cliente
+ * ya guardado, porque otros movimientos de fiado dependen del ID que confirma la base.
+ */
 export async function createCustomer(input: { name: string; phone?: string; creditLimit?: number | null }): Promise<void> {
   const name = input.name.trim();
   if (!name) throw new Error("El nombre es obligatorio.");
 
-  await enqueueOperation({
-    kind: "customer",
-    payload: {
-      name,
-      phone: input.phone?.trim() || null,
-      creditLimit: input.creditLimit
-    }
-  });
+  const creditLimit = input.creditLimit ?? null;
+  if (creditLimit !== null && (!Number.isFinite(creditLimit) || creditLimit < 0)) {
+    throw new Error("El tope de fiado debe ser un número válido igual o mayor a cero.");
+  }
 
-  synchronizePendingOperations().catch(console.error);
+  const { error } = await getSupabase().from("customers").insert({
+    name,
+    phone: input.phone?.trim() || null,
+    credit_limit: creditLimit
+  });
+  if (error) throw new Error(`No se pudo guardar el cliente: ${error.message}`);
 }
 
 /** RF-47: solo la administradora (lo controla la base). null = sin tope. */
