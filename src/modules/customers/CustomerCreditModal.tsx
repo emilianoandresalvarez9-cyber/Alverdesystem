@@ -58,8 +58,14 @@ export function CustomerCreditModal({ account, isAdmin, onClose, onChanged }: Pr
     const value = trimmed === "" ? null : Number(trimmed.replace(",", "."));
     if (value !== null && !(value >= 0)) return setMessage({ tone: "error", text: "El tope tiene que ser un número (o vacío para sin tope)." });
     try {
-      await setCreditLimit(account.id, value);
-      setMessage({ tone: "ok", text: value === null ? "Tope quitado." : `Tope actualizado a ${formatMoney(value)}.` });
+      const outcome = await setCreditLimit(account.id, value);
+      const limitText = value === null ? "sin tope" : `tope de ${formatMoney(value)}`;
+      setMessage({
+        tone: "ok",
+        text: outcome === "customer_created"
+          ? `Tope corregido y cliente guardado en la nube con ${limitText}.`
+          : value === null ? "Tope quitado." : `Tope actualizado a ${formatMoney(value)}.`
+      });
       onChanged();
     } catch (err) {
       setMessage({ tone: "error", text: err instanceof Error ? err.message : "No se pudo guardar el tope." });

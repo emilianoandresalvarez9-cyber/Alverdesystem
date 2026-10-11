@@ -1,5 +1,5 @@
 import { getSupabase, SQL_NULL } from "../../shared/supabase/client";
-import { allOperations, enqueueOperation, markOperationFailed, markOperationSynced, readSetting, writeSetting } from "../../shared/offline/queue";
+import { allOperations, enqueueOperation, markOperationFailed, markOperationSynced, readSetting, rewritePendingOperation, writeSetting } from "../../shared/offline/queue";
 import { isPermanentSyncError, synchronizePendingOperations } from "../../shared/offline/sync";
 import { pendingDeltas, withPending } from "./balance";
 import type { CreditMovementPayload, CreditMovementRow, CustomerAccount } from "./types";
@@ -57,6 +57,17 @@ export async function loadAccounts(): Promise<AccountsResult> {
 /** customers.credit_limit es numeric(14,2): más que esto la base responde 22003 (numeric field overflow). */
 export const MAX_CREDIT_LIMIT = 999_999_999_999.99;
 
+/** Valida el tope antes de tocar la cola o la base. null = sin tope. */
+export function assertValidCreditLimit(creditLimit: number | null): void {
+  if (creditLimit === null) return;
+  if (!Number.isFinite(creditLimit) || creditLimit < 0) {
+    throw new Error("El tope de fiado debe ser un número válido igual o mayor a cero.");
+  }
+  if (creditLimit > MAX_CREDIT_LIMIT) {
+    throw new Error("El tope de fiado es demasiado alto. El máximo permitido es $999.999.999.999,99.");
+  }
+}
+
 export class CustomerCreateError extends Error {
   constructor(message: string, readonly localId: string) {
     super(message);
@@ -73,12 +84,7 @@ export async function createCustomer(
 
   const phone = input.phone?.trim() || null;
   const creditLimit = input.creditLimit ?? null;
-  if (creditLimit !== null && (!Number.isFinite(creditLimit) || creditLimit < 0)) {
-    throw new Error("El tope de fiado debe ser un número válido igual o mayor a cero.");
-  }
-  if (creditLimit !== null && creditLimit > MAX_CREDIT_LIMIT) {
-    throw new Error("El tope de fiado es demasiado alto. El máximo permitido es $999.999.999.999,99.");
-  }
+  assertValidCreditLimit(creditLimit);
 
   const operations = await allOperations();
   const retryOperation = retryLocalId
@@ -107,13 +113,18 @@ export async function createCustomer(
     payload: { name, phone, creditLimit }
   })).localId;
 
+  return confirmCustomerOnServer(localId, { name, phone, creditLimit });
+}
+
+/** Envía SOLO esta alta (RPC idempotente por localId) y la marca sincronizada únicamente si Supabase la acepta. */
+async function confirmCustomerOnServer(localId: string, data: { name: string; phone: string | null; creditLimit: number | null }): Promise<string> {
   let error: { message: string; code?: string } | null = null;
   try {
     ({ error } = await getSupabase().rpc("sync_offline_customer", {
       p_id: localId,
-      p_name: name,
-      p_phone: phone ?? SQL_NULL,
-      p_credit_limit: creditLimit ?? SQL_NULL
+      p_name: data.name,
+      p_phone: data.phone ?? SQL_NULL,
+      p_credit_limit: data.creditLimit ?? SQL_NULL
     }));
   } catch (caught) {
     error = caught instanceof Error ? { message: caught.message } : { message: "Falló la solicitud de alta del cliente." };
@@ -138,10 +149,42 @@ export async function createCustomer(
   return localId;
 }
 
-/** RF-47: solo la administradora (lo controla la base). null = sin tope. */
-export async function setCreditLimit(customerId: string, limit: number | null): Promise<void> {
-  const { error } = await getSupabase().from("customers").update({ credit_limit: limit }).eq("id", customerId);
+
+export type CreditLimitOutcome = "updated" | "customer_created";
+
+/**
+ * RF-47: solo la administradora (lo controla la base). null = sin tope.
+ *
+ * Si la cuenta es un alta que todavía no llegó a la nube (operación `customer` pendiente), no hay
+ * fila que actualizar: se corrige el tope de ESA operación conservando su localId (los movimientos
+ * ya apuntan a él), se deja registro de la corrección y se envía solo esa alta.
+ */
+export async function setCreditLimit(customerId: string, limit: number | null): Promise<CreditLimitOutcome> {
+  assertValidCreditLimit(limit);
+
+  const pending = (await allOperations()).find((operation) =>
+    operation.kind === "customer" && operation.localId === customerId && !operation.syncedAt);
+  if (pending) {
+    const payload = pending.payload as { name?: string; phone?: string | null; creditLimit?: number | null; corrections?: unknown[] };
+    await rewritePendingOperation({
+      ...pending,
+      payload: {
+        ...payload,
+        creditLimit: limit,
+        corrections: [
+          ...(Array.isArray(payload.corrections) ? payload.corrections : []),
+          { field: "creditLimit", previous: payload.creditLimit ?? null, correctedAt: new Date().toISOString() }
+        ]
+      }
+    });
+    await confirmCustomerOnServer(customerId, { name: payload.name ?? "", phone: payload.phone || null, creditLimit: limit });
+    return "customer_created";
+  }
+
+  const { data, error } = await getSupabase().from("customers").update({ credit_limit: limit }).eq("id", customerId).select("id");
   if (error) throw new Error(error.code === "42501" ? "Solo la administradora define el tope de fiado." : error.message);
+  if (!data || data.length === 0) throw new Error("No se encontró al cliente en la nube, así que no se cambió el tope.");
+  return "updated";
 }
 
 /** Cargo, abono o ajuste. Se guarda primero en el equipo (RF-35) y se envía cuando hay red. */

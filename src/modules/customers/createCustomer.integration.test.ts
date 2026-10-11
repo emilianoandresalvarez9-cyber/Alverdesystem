@@ -2,10 +2,10 @@ import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Solo se simula Supabase. La cola (IndexedDB) y la sincronización son las reales.
-const { rpc } = vi.hoisted(() => ({ rpc: vi.fn() }));
-vi.mock("../../shared/supabase/client", () => ({ getSupabase: () => ({ rpc }), SQL_NULL: null }));
+const { rpc, from } = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn() }));
+vi.mock("../../shared/supabase/client", () => ({ getSupabase: () => ({ rpc, from }), SQL_NULL: null }));
 
-const { createCustomer } = await import("./api");
+const { createCustomer, setCreditLimit } = await import("./api");
 const { submitNewCustomer } = await import("./submitCustomer");
 const { pendingDeltas } = await import("./balance");
 const { allOperations, enqueueOperation, markOperationFailed, pendingOperations, resetOfflineStorageForTests } =
@@ -153,5 +153,86 @@ describe("Formulario Nuevo cliente: cuándo se cierra el modal", () => {
 
     await submitNewCustomer({ name: "Beto", phone: "", limit: "5000,5" }, true);
     expect(rpc.mock.calls[1]?.[1]).toMatchObject({ p_credit_limit: 5000.5 });
+  });
+});
+
+describe("Corrección del tope de un alta pendiente (caso Mayra: 22003 + movimiento con FK)", () => {
+  beforeEach(() => {
+    vi.stubGlobal("navigator", { onLine: true });
+    rpc.mockReset().mockResolvedValue({ error: null });
+    from.mockReset();
+  });
+  afterEach(async () => {
+    vi.unstubAllGlobals();
+    await resetOfflineStorageForTests();
+  });
+
+  async function seedMayra() {
+    const customer = await enqueueOperation({ kind: "customer", payload: { name: "Mayra", phone: "1135118442", creditLimit: 10_000_000_000_000 } });
+    await markOperationFailed(customer.localId, "numeric field overflow", "22003", true);
+    const movement = await enqueueOperation({
+      kind: "credit_movement",
+      payload: { customerId: customer.localId, movementKind: "payment", amount: 10, note: "prueba" }
+    });
+    await markOperationFailed(movement.localId, 'violates foreign key constraint "credit_movements_customer_id_fkey"', "23503", false);
+    return { customer, movement };
+  }
+
+  it("corrige solo el tope, conserva localId, deja registro, envía solo esa alta y no toca el movimiento", async () => {
+    const { customer, movement } = await seedMayra();
+
+    await expect(setCreditLimit(customer.localId, 500_000)).resolves.toBe("customer_created");
+
+    expect(from).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith("sync_offline_customer", {
+      p_id: customer.localId, p_name: "Mayra", p_phone: "1135118442", p_credit_limit: 500_000
+    });
+    const operations = await allOperations();
+    expect(operations).toHaveLength(2);
+    const fixed = operations.find((operation) => operation.localId === customer.localId);
+    expect(fixed?.syncedAt).toBeTruthy();
+    expect(fixed?.payload).toMatchObject({
+      name: "Mayra", phone: "1135118442", creditLimit: 500_000,
+      corrections: [{ field: "creditLimit", previous: 10_000_000_000_000 }]
+    });
+    const untouched = operations.find((operation) => operation.localId === movement.localId);
+    expect(untouched).toMatchObject({ retryable: false, failureCode: "23503", payload: { customerId: customer.localId, amount: 10 } });
+    expect(untouched?.syncedAt).toBeUndefined();
+  });
+
+  it("acepta 'sin tope' (null)", async () => {
+    const { customer } = await seedMayra();
+    await setCreditLimit(customer.localId, null);
+    expect(rpc.mock.calls[0]?.[1]).toMatchObject({ p_id: customer.localId, p_credit_limit: null });
+  });
+
+  it("un tope que sigue siendo inválido se rechaza sin modificar la operación ni llamar a la RPC", async () => {
+    const { customer } = await seedMayra();
+    await expect(setCreditLimit(customer.localId, 10_000_000_000_000)).rejects.toThrow("demasiado alto");
+    expect(rpc).not.toHaveBeenCalled();
+    const stored = (await customerOps())[0];
+    expect(stored?.payload).toMatchObject({ creditLimit: 10_000_000_000_000 });
+    expect(stored?.syncedAt).toBeUndefined();
+  });
+
+  it("si Supabase rechaza la corrección, el alta sigue pendiente con el mismo localId y el error visible", async () => {
+    const { customer } = await seedMayra();
+    rpc.mockResolvedValueOnce({ error: { code: "42501", message: "Solo la administradora define el tope de fiado (RF-47)." } });
+
+    await expect(setCreditLimit(customer.localId, 1000)).rejects.toMatchObject({ localId: customer.localId });
+
+    const stored = (await customerOps())[0];
+    expect(stored).toMatchObject({ localId: customer.localId, retryable: false, failureCode: "42501" });
+    expect(stored?.syncedAt).toBeUndefined();
+  });
+
+  it("cliente ya en la nube: actualiza por ID; si no actualiza ninguna fila, lo informa en vez de fingir éxito", async () => {
+    const select = vi.fn().mockResolvedValueOnce({ data: [{ id: "c1" }], error: null }).mockResolvedValueOnce({ data: [], error: null });
+    from.mockReturnValue({ update: () => ({ eq: () => ({ select }) }) });
+
+    await expect(setCreditLimit("c1", 2000)).resolves.toBe("updated");
+    await expect(setCreditLimit("c1", 2000)).rejects.toThrow("No se encontró al cliente en la nube");
+    expect(rpc).not.toHaveBeenCalled();
   });
 });
