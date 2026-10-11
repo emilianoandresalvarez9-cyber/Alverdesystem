@@ -25,7 +25,7 @@ vi.mock("../../shared/offline/sync", () => ({
   synchronizePendingOperations: vi.fn()
 }));
 
-import { accountsLoadError, createCustomer } from "./api";
+import { accountsLoadError, createCustomer, CustomerCreateError } from "./api";
 
 describe("Clientes: el error dice la causa real", () => {
   it("sin conexión y sin copia: pide conectarse", () => {
@@ -40,6 +40,8 @@ describe("Clientes: el error dice la causa real", () => {
 });
 
 describe("Clientes: alta confirmada por Supabase", () => {
+  const input = { name: "Mayra", phone: "11 1234", creditLimit: 100_000 };
+
   beforeEach(() => {
     mocks.getSupabase.mockReset().mockReturnValue({ rpc: mocks.rpc });
     mocks.rpc.mockReset().mockResolvedValue({ error: null });
@@ -49,12 +51,12 @@ describe("Clientes: alta confirmada por Supabase", () => {
     mocks.markOperationSynced.mockReset().mockResolvedValue(undefined);
   });
 
-  it("sincroniza datos normalizados con el RPC idempotente y espera su confirmación", async () => {
-    await expect(createCustomer({ name: "  Mayra  ", phone: "  11 1234  ", creditLimit: 100_000 })).resolves.toBeUndefined();
+  it("normaliza datos, encola y espera la RPC antes de marcar sincronizado", async () => {
+    await expect(createCustomer({ ...input, name: "  Mayra  ", phone: "  11 1234  " })).resolves.toBe("customer-local-1");
 
     expect(mocks.enqueueOperation).toHaveBeenCalledWith({
       kind: "customer",
-      payload: { name: "Mayra", phone: "11 1234", creditLimit: 100_000 }
+      payload: input
     });
     expect(mocks.rpc).toHaveBeenCalledWith("sync_offline_customer", {
       p_id: "customer-local-1",
@@ -65,25 +67,43 @@ describe("Clientes: alta confirmada por Supabase", () => {
     expect(mocks.markOperationSynced).toHaveBeenCalledWith("customer-local-1");
   });
 
-  it("reutiliza el localId pendiente en vez de crear otro cliente", async () => {
+  it("reutiliza un alta pendiente equivalente en vez de generar otro ID", async () => {
     mocks.allOperations.mockResolvedValueOnce([{
       localId: "existing-customer-id",
       kind: "customer",
-      payload: { name: "Mayra", phone: "11 1234", creditLimit: 100_000 }
+      payload: input
     }]);
 
-    await createCustomer({ name: " Mayra ", phone: "11 1234", creditLimit: 100_000 });
+    await createCustomer(input);
 
     expect(mocks.enqueueOperation).not.toHaveBeenCalled();
     expect(mocks.rpc).toHaveBeenCalledWith("sync_offline_customer", expect.objectContaining({ p_id: "existing-customer-id" }));
     expect(mocks.markOperationSynced).toHaveBeenCalledWith("existing-customer-id");
   });
 
-  it("conserva la operación y no la marca sincronizada cuando Supabase rechaza el alta", async () => {
+  it("al reintentar conserva el ID aunque la sincronización de fondo ya la marcó", async () => {
+    mocks.allOperations.mockResolvedValueOnce([{
+      localId: "existing-customer-id",
+      kind: "customer",
+      payload: input,
+      syncedAt: "2026-10-11T00:00:00.000Z"
+    }]);
+
+    await createCustomer(input, "existing-customer-id");
+
+    expect(mocks.enqueueOperation).not.toHaveBeenCalled();
+    expect(mocks.rpc).toHaveBeenCalledWith("sync_offline_customer", expect.objectContaining({ p_id: "existing-customer-id" }));
+  });
+
+  it("conserva el ID y no marca sincronizado si Supabase rechaza el alta", async () => {
     mocks.rpc.mockResolvedValueOnce({ error: { code: "23503", message: "foreign key failure" } });
 
-    await expect(createCustomer({ name: "Mayra" })).rejects.toThrow("No se pudo guardar el cliente: foreign key failure");
-
+    const result = createCustomer(input);
+    await expect(result).rejects.toMatchObject({
+      name: "CustomerCreateError",
+      localId: "customer-local-1",
+      message: "No se pudo guardar el cliente: foreign key failure"
+    });
     expect(mocks.markOperationFailed).toHaveBeenCalledWith("customer-local-1", "foreign key failure", "23503", false);
     expect(mocks.markOperationSynced).not.toHaveBeenCalled();
   });
@@ -93,5 +113,10 @@ describe("Clientes: alta confirmada por Supabase", () => {
     await expect(createCustomer({ name: "Mayra", creditLimit: Number.NaN })).rejects.toThrow("El tope de fiado");
     expect(mocks.allOperations).not.toHaveBeenCalled();
     expect(mocks.enqueueOperation).not.toHaveBeenCalled();
+  });
+
+  it("usa un tipo de error que permite a la pantalla reintentar con el mismo ID", async () => {
+    mocks.rpc.mockResolvedValueOnce({ error: { message: "sin conexión" } });
+    await expect(createCustomer(input)).rejects.toBeInstanceOf(CustomerCreateError);
   });
 });
