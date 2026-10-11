@@ -1,6 +1,6 @@
-import { getSupabase } from "../../shared/supabase/client";
-import { allOperations, enqueueOperation, readSetting, writeSetting } from "../../shared/offline/queue";
-import { synchronizePendingOperations } from "../../shared/offline/sync";
+import { getSupabase, SQL_NULL } from "../../shared/supabase/client";
+import { allOperations, enqueueOperation, markOperationFailed, markOperationSynced, readSetting, writeSetting } from "../../shared/offline/queue";
+import { isPermanentSyncError, synchronizePendingOperations } from "../../shared/offline/sync";
 import { pendingDeltas, withPending } from "./balance";
 import type { CreditMovementPayload, CreditMovementRow, CustomerAccount } from "./types";
 
@@ -51,25 +51,51 @@ export async function loadAccounts(): Promise<AccountsResult> {
 }
 
 /**
- * Crea el cliente en Supabase y solo confirma el alta cuando la base responde sin error.
- * Esta pantalla exige conexión; no debe presentar una operación local pendiente como un cliente
- * ya guardado, porque otros movimientos de fiado dependen del ID que confirma la base.
+ * Alta idempotente (RF-45). Se conserva el localId de una solicitud igual que ya esté pendiente,
+ * y la pantalla solo confirma el alta después de que sync_offline_customer responda correctamente.
+ * El ID compartido es necesario para que los movimientos locales de fiado apunten al cliente remoto.
  */
 export async function createCustomer(input: { name: string; phone?: string; creditLimit?: number | null }): Promise<void> {
   const name = input.name.trim();
   if (!name) throw new Error("El nombre es obligatorio.");
 
+  const phone = input.phone?.trim() || null;
   const creditLimit = input.creditLimit ?? null;
   if (creditLimit !== null && (!Number.isFinite(creditLimit) || creditLimit < 0)) {
     throw new Error("El tope de fiado debe ser un número válido igual o mayor a cero.");
   }
 
-  const { error } = await getSupabase().from("customers").insert({
-    name,
-    phone: input.phone?.trim() || null,
-    credit_limit: creditLimit
+  const operations = await allOperations();
+  const pendingCustomer = operations.find((operation) => {
+    if (operation.kind !== "customer" || operation.syncedAt) return false;
+    const payload = operation.payload as { name?: unknown; phone?: unknown; creditLimit?: unknown };
+    return payload.name === name
+      && (payload.phone || null) === phone
+      && (payload.creditLimit ?? null) === creditLimit;
   });
-  if (error) throw new Error(`No se pudo guardar el cliente: ${error.message}`);
+  const localId = pendingCustomer?.localId ?? (await enqueueOperation({
+    kind: "customer",
+    payload: { name, phone, creditLimit }
+  })).localId;
+
+  let error: { message: string; code?: string } | null = null;
+  try {
+    ({ error } = await getSupabase().rpc("sync_offline_customer", {
+      p_id: localId,
+      p_name: name,
+      p_phone: phone ?? SQL_NULL,
+      p_credit_limit: creditLimit ?? SQL_NULL
+    }));
+  } catch (caught) {
+    error = caught instanceof Error ? { message: caught.message } : { message: "Falló la solicitud de alta del cliente." };
+  }
+
+  if (error) {
+    await markOperationFailed(localId, error.message, error.code, !isPermanentSyncError(error.code));
+    throw new Error(`No se pudo guardar el cliente: ${error.message}`);
+  }
+
+  await markOperationSynced(localId);
 }
 
 /** RF-47: solo la administradora (lo controla la base). null = sin tope. */
