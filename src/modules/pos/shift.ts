@@ -149,7 +149,9 @@ export async function closeShift(userId: string): Promise<CloseResult> {
   const shift = await currentShift(userId);
   if (!shift) throw new Error("No hay un turno abierto en este equipo.");
 
-  await synchronizePendingOperations();
+  // Cerrar turno es una acción explícita: permite reintentar con el mismo localId las ventas
+  // rechazadas antes, por si ya se reparó el registro remoto que faltaba.
+  await synchronizePendingOperations({ retryRejected: true });
   const summary = await shiftSummary(shift);
   const refreshed = await currentShift(userId);
 
@@ -157,10 +159,17 @@ export async function closeShift(userId: string): Promise<CloseResult> {
     return { closed: false, summary, reason: "Para cerrar el turno hace falta conexión. Las ventas siguen guardadas en este equipo." };
   }
   if (summary.pendingSync > 0) {
+    const rejectedSale = (await allOperations()).find((operation) => {
+      if (operation.kind !== "sale" || operation.syncedAt || operation.retryable !== false) return false;
+      return (operation.payload as { shiftId?: string }).shiftId === shift.id;
+    });
+    const detail = rejectedSale?.failureMessage
+      ? ` Supabase la rechazó (${rejectedSale.failureCode ?? "sin código"}): ${rejectedSale.failureMessage}. La operación sigue guardada en este equipo; corregí la referencia/dato indicado y volvé a cerrar para reintentarla.`
+      : " Revisá la sincronización; la operación sigue guardada en este equipo y no se descartó.";
     return {
       closed: false,
       summary,
-      reason: `Quedan ${summary.pendingSync} venta(s) sin enviar. Revisá la conexión y probá de nuevo; no se perdió nada.`
+      reason: `Quedan ${summary.pendingSync} venta(s) sin enviar.${detail}`
     };
   }
 
