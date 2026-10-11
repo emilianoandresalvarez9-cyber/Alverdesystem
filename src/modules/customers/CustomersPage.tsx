@@ -5,7 +5,7 @@ import "../../styles/customers.css";
 import { useCurrentProfile } from "../../shared/auth/AuthGate";
 import { subscribeToQueueChanges } from "../../shared/offline/queue";
 import { formatMoney } from "../pos/money";
-import { createCustomer, loadAccounts, type AccountsResult } from "./api";
+import { createCustomer, CustomerCreateError, loadAccounts, type AccountsResult } from "./api";
 import { filterAccounts } from "./balance";
 import { CustomerCreditModal } from "./CustomerCreditModal";
 import { exportToExcel } from "../../shared/export/excel";
@@ -105,6 +105,7 @@ function NewCustomerDialog({ isAdmin, onClose, onCreated }: { isAdmin: boolean; 
   const [limit, setLimit] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [retryLocalId, setRetryLocalId] = useState<string | null>(null);
   const online = useOnline();
   const formId = useId();
 
@@ -112,9 +113,10 @@ function NewCustomerDialog({ isAdmin, onClose, onCreated }: { isAdmin: boolean; 
     event.preventDefault();
     setBusy(true);
     try {
-      await createCustomer({ name, phone, creditLimit: isAdmin && limit.trim() ? Number(limit.replace(",", ".")) : null });
+      await createCustomer({ name, phone, creditLimit: isAdmin && limit.trim() ? Number(limit.replace(",", ".")) : null }, retryLocalId ?? undefined);
       onCreated();
     } catch (err) {
+      if (err instanceof CustomerCreateError) setRetryLocalId(err.localId);
       setError(err instanceof Error ? err.message : "No se pudo crear el cliente.");
     } finally {
       setBusy(false);
@@ -125,15 +127,16 @@ function NewCustomerDialog({ isAdmin, onClose, onCreated }: { isAdmin: boolean; 
     <Modal open title="Nuevo cliente" onClose={onClose}
       footer={<>
         <Button variant="fantasma" onClick={onClose}>Cancelar</Button>
-        <Button type="submit" form={formId} icon="add" loading={busy} disabled={!online}>Crear cliente</Button>
+        <Button type="submit" form={formId} icon="add" loading={busy} disabled={!online}>{retryLocalId ? "Reintentar alta" : "Crear cliente"}</Button>
       </>}>
       <form id={formId} onSubmit={submit} className="pila">
-        <TextField label="Nombre" required autoFocus value={name} onChange={(e) => setName(e.target.value)} />
-        <TextField label="Teléfono (opcional)" icon="call" inputMode="tel" placeholder="11 1234-5678" value={phone} onChange={(e) => setPhone(e.target.value)} />
+        <TextField label="Nombre" required autoFocus disabled={!!retryLocalId} value={name} onChange={(e) => setName(e.target.value)} />
+        <TextField label="Teléfono (opcional)" icon="call" inputMode="tel" placeholder="11 1234-5678" disabled={!!retryLocalId} value={phone} onChange={(e) => setPhone(e.target.value)} />
         {isAdmin && (
-          <TextField label="Tope de fiado (opcional)" inputMode="decimal" numeric value={limit} onChange={(e) => setLimit(e.target.value)}
+          <TextField label="Tope de fiado (opcional)" inputMode="decimal" numeric disabled={!!retryLocalId} value={limit} onChange={(e) => setLimit(e.target.value)}
             help="Sólo lo ve y lo carga administración." />
         )}
+        {retryLocalId && <Message tone="aviso">Se conserva el mismo identificador local para no duplicar al cliente ni separar sus movimientos de fiado. Reintentá el alta con estos datos; cerrar esta ventana no borra la operación.</Message>}
         {error && <Message tone="error">{error}</Message>}
         {!online && <Message tone="aviso">Para crear un cliente necesitás conexión.</Message>}
       </form>
