@@ -7,7 +7,15 @@ import type { QueuedOperation } from "./types";
 export type SyncResult = {
   synchronized: number;
   failed: number;
+  rejected: number;
 };
+
+export type SyncOptions = { retryRejected?: boolean };
+
+/** Los errores de integridad, permisos o esquema no se resuelven esperando: requieren corregir datos/configuración. */
+export function isPermanentSyncError(code?: string): boolean {
+  return !!code && (code.startsWith("23") || ["42501", "42703", "42883", "42P01"].includes(code));
+}
 
 type PreSyncStep = () => Promise<void>;
 const preSyncSteps = new Set<PreSyncStep>([async () => { await upgradeLegacyOperations(); }]);
@@ -25,15 +33,15 @@ let inFlight: Promise<SyncResult> | undefined;
 let retryTimeout: ReturnType<typeof setTimeout> | undefined;
 let retryDelay = 2000;
 
-export function synchronizePendingOperations(): Promise<SyncResult> {
+export function synchronizePendingOperations(options: SyncOptions = {}): Promise<SyncResult> {
   if (retryTimeout) {
     clearTimeout(retryTimeout);
     retryTimeout = undefined;
   }
   
-  inFlight ??= runSynchronization().then((result) => {
+  inFlight ??= runSynchronization(options.retryRejected === true).then((result) => {
     inFlight = undefined;
-    if (result.failed > 0 && navigator.onLine) {
+    if (result.failed > result.rejected && navigator.onLine) {
       console.warn("Reintentando en " + retryDelay + "ms");
       retryTimeout = setTimeout(() => {
         void synchronizePendingOperations();
@@ -50,8 +58,8 @@ export function synchronizePendingOperations(): Promise<SyncResult> {
   return inFlight;
 }
 
-async function runSynchronization(): Promise<SyncResult> {
-  if (!navigator.onLine) return { synchronized: 0, failed: 0 };
+async function runSynchronization(retryRejected: boolean): Promise<SyncResult> {
+  if (!navigator.onLine) return { synchronized: 0, failed: 0, rejected: 0 };
 
   for (const step of preSyncSteps) {
     try {
@@ -64,13 +72,27 @@ async function runSynchronization(): Promise<SyncResult> {
   const operations = await pendingOperations();
   let synchronized = 0;
   let failed = 0;
+  let rejected = 0;
 
   for (const operation of operations) {
-    const { error } = await sendOperation(operation);
+    if (operation.retryable === false && !retryRejected) {
+      failed += 1;
+      rejected += 1;
+      continue;
+    }
+
+    let error: { message: string; code?: string } | null = null;
+    try {
+      ({ error } = await sendOperation(operation));
+    } catch (caught) {
+      error = caught instanceof Error ? { message: caught.message } : { message: "Falló la solicitud de sincronización." };
+    }
 
     if (error) {
       failed += 1;
-      await markOperationFailed(operation.localId, error.message);
+      const permanent = isPermanentSyncError(error.code);
+      if (permanent) rejected += 1;
+      await markOperationFailed(operation.localId, error.message, error.code, !permanent);
       continue;
     }
 
@@ -78,7 +100,7 @@ async function runSynchronization(): Promise<SyncResult> {
     await markOperationSynced(operation.localId);
   }
 
-  return { synchronized, failed };
+  return { synchronized, failed, rejected };
 }
 
 /** Cada tipo de operación va a su RPC, con argumentos tipados contra el esquema real. */

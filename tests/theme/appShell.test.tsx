@@ -56,10 +56,16 @@ describe("AppShell", () => {
 
   it("muestra en todas las páginas la conexión y las operaciones pendientes (RF-36)", () => {
     const html = renderShell("employee");
-    expect(html).toMatch(/<p class="conexion conexion--(ok|pendiente|sin)" role="status">/);
+    expect(html).toMatch(/<p class="conexion conexion--(ok|pendiente|sin)" role="status"(?: title="[^"]*")?>/);
     expect(connectionStatus(true, 0)).toMatchObject({ tone: "ok", long: "Conectado" });
     expect(connectionStatus(true, 1)).toMatchObject({ tone: "pendiente", long: "Conectado · 1 operación pendiente", short: "1 pendiente" });
     expect(connectionStatus(true, 3)).toMatchObject({ long: "Conectado · 3 operaciones pendientes", short: "3 pendientes" });
+    expect(connectionStatus(true, 2, 1, "customer does not exist")).toMatchObject({
+      tone: "pendiente",
+      long: "Conectado · 2 operaciones pendientes · 1 requiere atención",
+      short: "1 con error",
+      detail: "customer does not exist"
+    });
     // Sin conexión siempre dice cuántas esperan, aunque sean cero.
     expect(connectionStatus(false, 0)).toMatchObject({ tone: "sin", long: "Sin conexión · 0 operaciones pendientes" });
     expect(connectionStatus(false, 2)).toMatchObject({ short: "Sin conexión · 2" });

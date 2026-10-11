@@ -1,0 +1,55 @@
+import "fake-indexeddb/auto";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+const { rpc } = vi.hoisted(() => ({ rpc: vi.fn() }));
+vi.mock("../supabase/client", () => ({ getSupabase: () => ({ rpc }) }));
+
+const { isPermanentSyncError, synchronizePendingOperations } = await import("./sync");
+const { enqueueOperation, pendingOperations, resetOfflineStorageForTests } = await import("./queue");
+
+describe("offline sync", () => {
+  afterEach(async () => {
+    vi.unstubAllGlobals();
+    rpc.mockReset();
+    await resetOfflineStorageForTests();
+  });
+
+  it("classifies integrity, permission, and schema errors as permanent", () => {
+    expect(isPermanentSyncError("23503")).toBe(true);
+    expect(isPermanentSyncError("23505")).toBe(true);
+    expect(isPermanentSyncError("42501")).toBe(true);
+    expect(isPermanentSyncError("42P01")).toBe(true);
+    expect(isPermanentSyncError("42703")).toBe(true);
+  });
+
+  it("keeps network and transient server errors retryable", () => {
+    expect(isPermanentSyncError(undefined)).toBe(false);
+    expect(isPermanentSyncError("08006")).toBe(false);
+    expect(isPermanentSyncError("57014")).toBe(false);
+    expect(isPermanentSyncError("PGRST000")).toBe(false);
+  });
+
+  it("keeps an FK-rejected sale and stops retrying it until an explicit retry", async () => {
+    vi.stubGlobal("navigator", { onLine: true });
+    const operation = await enqueueOperation({ kind: "sale", payload: { shiftId: "shift-1" } });
+    rpc.mockResolvedValueOnce({ error: { code: "23503", message: "customer does not exist" } });
+
+    const first = await synchronizePendingOperations();
+    expect(first).toMatchObject({ synchronized: 0, failed: 1, rejected: 1 });
+    expect((await pendingOperations())[0]).toMatchObject({
+      localId: operation.localId,
+      retryable: false,
+      failureCode: "23503",
+      failureMessage: "customer does not exist"
+    });
+
+    await synchronizePendingOperations();
+    expect(rpc).toHaveBeenCalledTimes(1);
+
+    rpc.mockResolvedValueOnce({ error: null });
+    const retried = await synchronizePendingOperations({ retryRejected: true });
+    expect(retried).toMatchObject({ synchronized: 1, failed: 0, rejected: 0 });
+    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(await pendingOperations()).toEqual([]);
+  });
+});

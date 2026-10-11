@@ -161,6 +161,13 @@ export async function pendingOperationCount(): Promise<number> {
   return (await pendingOperations()).length;
 }
 
+export async function pendingOperationStatus(): Promise<{ total: number; rejected: number; lastError?: string }> {
+  const operations = await pendingOperations();
+  const rejected = operations.filter((operation) => operation.retryable === false);
+  const lastError = [...rejected].reverse().find((operation) => operation.failureMessage)?.failureMessage;
+  return { total: operations.length, rejected: rejected.length, ...(lastError ? { lastError } : {}) };
+}
+
 export async function markOperationSynced(localId: string): Promise<void> {
   const operation = await readRecord<QueuedOperation>(OPERATION_STORE, localId);
   if (!operation) throw new Error("No se encontro la operacion local a sincronizar.");
@@ -169,7 +176,9 @@ export async function markOperationSynced(localId: string): Promise<void> {
     ...operation,
     syncedAt: new Date().toISOString(),
     failedAt: undefined,
-    failureMessage: undefined
+    failureMessage: undefined,
+    failureCode: undefined,
+    retryable: undefined
   });
   emitQueueChange();
   pendingMirror = mirrorPendingQueue();
@@ -186,14 +195,21 @@ export async function rewritePendingOperation(operation: QueuedOperation): Promi
   emitQueueChange();
 }
 
-export async function markOperationFailed(localId: string, reason: string): Promise<void> {
+export async function markOperationFailed(
+  localId: string,
+  reason: string,
+  failureCode?: string,
+  retryable = true
+): Promise<void> {
   const operation = await readRecord<QueuedOperation>(OPERATION_STORE, localId);
   if (!operation) return;
 
   await putRecord(OPERATION_STORE, {
     ...operation,
     failedAt: new Date().toISOString(),
-    failureMessage: reason
+    failureMessage: reason,
+    failureCode,
+    retryable
   });
   emitQueueChange();
   pendingMirror = mirrorPendingQueue();

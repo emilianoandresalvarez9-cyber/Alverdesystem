@@ -9,6 +9,9 @@ export type QueuedOperation<TPayload = Record<string, unknown>> = {
   syncedAt?: string;
   failedAt?: string;
   failureMessage?: string;
+  failureCode?: string;
+  /** false cuando Supabase devolvió un rechazo permanente; sólo se reintenta por acción explícita. */
+  retryable?: boolean;
 };
 
 export type NewQueuedOperation<TPayload = Record<string, unknown>> = Omit<

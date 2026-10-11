@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { pendingOperationCount, subscribeToQueueChanges } from "../offline/queue";
+import { pendingOperationStatus, subscribeToQueueChanges } from "../offline/queue";
 import { Icon, type IconName } from "../ui/Icon";
 
 export type ConnectionStatus = {
@@ -9,6 +9,7 @@ export type ConnectionStatus = {
   long: string;
   /** Celular: «2 pendientes», «Sin conexión · 3». */
   short: string;
+  detail?: string;
 };
 
 const pendingText = (n: number) => (n === 1 ? "1 operación pendiente" : `${n} operaciones pendientes`);
@@ -18,9 +19,19 @@ const pendingText = (n: number) => (n === 1 ? "1 operación pendiente" : `${n} o
  * Sin conexión siempre muestra cuántas operaciones esperan, aunque sean cero:
  * quien atiende sabe que no hay nada en riesgo.
  */
-export function connectionStatus(online: boolean, pending: number): ConnectionStatus {
+export function connectionStatus(online: boolean, pending: number, rejected = 0, detail?: string): ConnectionStatus {
   if (!online) {
-    return { tone: "sin", icon: "cloud_off", long: `Sin conexión · ${pendingText(pending)}`, short: `Sin conexión · ${pending}` };
+    const attention = rejected > 0 ? ` · ${rejected} requieren atención` : "";
+    return { tone: "sin", icon: "cloud_off", long: `Sin conexión · ${pendingText(pending)}${attention}`, short: `Sin conexión · ${pending}`, ...(detail ? { detail } : {}) };
+  }
+  if (pending > 0 && rejected > 0) {
+    return {
+      tone: "pendiente",
+      icon: "sync",
+      long: `Conectado · ${pendingText(pending)} · ${rejected} ${rejected === 1 ? "requiere" : "requieren"} atención`,
+      short: `${rejected} con error`,
+      ...(detail ? { detail } : {})
+    };
   }
   if (pending > 0) {
     return { tone: "pendiente", icon: "sync", long: `Conectado · ${pendingText(pending)}`, short: `${pending} pendiente${pending === 1 ? "" : "s"}` };
@@ -31,11 +42,11 @@ export function connectionStatus(online: boolean, pending: number): ConnectionSt
 export function OfflineIndicator() {
   // RF-36: visible en todo momento, en todas las páginas (lo monta AppShell).
   const [online, setOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
-  const [pending, setPending] = useState(0);
+  const [queueStatus, setQueueStatus] = useState<{ total: number; rejected: number; lastError?: string }>({ total: 0, rejected: 0 });
 
   useEffect(() => {
     const updateNetwork = () => setOnline(navigator.onLine);
-    const updatePending = () => void pendingOperationCount().then(setPending);
+    const updatePending = () => void pendingOperationStatus().then(setQueueStatus);
     updatePending();
 
     addEventListener("online", updateNetwork);
@@ -48,9 +59,9 @@ export function OfflineIndicator() {
     };
   }, []);
 
-  const status = connectionStatus(online, pending);
+  const status = connectionStatus(online, queueStatus.total, queueStatus.rejected, queueStatus.lastError);
   return (
-    <p className={`conexion conexion--${status.tone}`} role="status">
+    <p className={`conexion conexion--${status.tone}`} role="status" title={status.detail}>
       <Icon name={status.icon} />
       <span className="conexion__largo">{status.long}</span>
       {/* Una sola de las dos se ve (y se lee) según el ancho. */}
