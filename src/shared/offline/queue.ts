@@ -176,7 +176,9 @@ export async function markOperationSynced(localId: string): Promise<void> {
     ...operation,
     syncedAt: new Date().toISOString(),
     failedAt: undefined,
-    failureMessage: undefined
+    failureMessage: undefined,
+    failureCode: undefined,
+    retryable: undefined
   });
   emitQueueChange();
   pendingMirror = mirrorPendingQueue();
