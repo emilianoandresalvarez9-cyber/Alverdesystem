@@ -28,7 +28,7 @@ export function connectionStatus(online: boolean, pending: number, rejected = 0,
     return {
       tone: "pendiente",
       icon: "sync",
-      long: `Conectado · ${pendingText(pending)} · ${rejected} requieren atención`,
+      long: `Conectado · ${pendingText(pending)} · ${rejected} ${rejected === 1 ? "requiere" : "requieren"} atención`,
       short: `${rejected} con error`,
       ...(detail ? { detail } : {})
     };
