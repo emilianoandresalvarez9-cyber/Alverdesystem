@@ -85,6 +85,19 @@ describe("Alta de cliente contra la cola real (RF-45, RF-35)", () => {
     expect(pendingDeltas(await allOperations()).deltas.get(pending.localId)).toBe(1500);
   });
 
+  it("rechaza un tope que excede numeric(14,2) antes de encolar ni llamar a la RPC (causa de Mayra: 22003)", async () => {
+    await expect(createCustomer({ name: "Mayra", creditLimit: 10_000_000_000_000 })).rejects.toThrow("demasiado alto");
+    expect(rpc).not.toHaveBeenCalled();
+    expect(await allOperations()).toHaveLength(0);
+    await expect(createCustomer({ name: "Mayra", creditLimit: 999_999_999_999.99 })).resolves.toBeTruthy();
+  });
+
+  it("un 22003 del servidor queda como rechazo permanente (no reintenta en bucle)", async () => {
+    rpc.mockResolvedValueOnce({ error: { code: "22003", message: "numeric field overflow" } });
+    await expect(createCustomer({ name: "Mayra", creditLimit: 5 })).rejects.toBeTruthy();
+    expect((await customerOps())[0]).toMatchObject({ retryable: false, failureCode: "22003" });
+  });
+
   it("enviar el alta no sincroniza ventas ni movimientos pendientes ni reintenta rechazados", async () => {
     const sale = await enqueueOperation({ kind: "sale", payload: { shiftId: "s1" } });
     const rejected = await enqueueOperation({ kind: "credit_movement", payload: { customerId: "ya-no-existe", amount: 10 } });

@@ -12,9 +12,12 @@ export type SyncResult = {
 
 export type SyncOptions = { retryRejected?: boolean };
 
-/** Los errores de integridad, permisos o esquema no se resuelven esperando: requieren corregir datos/configuración. */
+/**
+ * Los errores de integridad (23), datos inválidos (22: overflow numérico, formato), permisos o
+ * esquema no se resuelven esperando: requieren corregir datos/configuración.
+ */
 export function isPermanentSyncError(code?: string): boolean {
-  return !!code && (code.startsWith("23") || ["42501", "42703", "42883", "42P01"].includes(code));
+  return !!code && (code.startsWith("23") || code.startsWith("22") || ["42501", "42703", "42883", "42P01"].includes(code));
 }
 
 type PreSyncStep = () => Promise<void>;

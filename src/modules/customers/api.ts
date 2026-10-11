@@ -54,6 +54,9 @@ export async function loadAccounts(): Promise<AccountsResult> {
  * El formulario solo confirma el alta cuando Supabase acepta la RPC. El localId de la cola pasa
  * a ser el ID del cliente remoto y permite que los movimientos pendientes lo referencien.
  */
+/** customers.credit_limit es numeric(14,2): más que esto la base responde 22003 (numeric field overflow). */
+export const MAX_CREDIT_LIMIT = 999_999_999_999.99;
+
 export class CustomerCreateError extends Error {
   constructor(message: string, readonly localId: string) {
     super(message);
@@ -72,6 +75,9 @@ export async function createCustomer(
   const creditLimit = input.creditLimit ?? null;
   if (creditLimit !== null && (!Number.isFinite(creditLimit) || creditLimit < 0)) {
     throw new Error("El tope de fiado debe ser un número válido igual o mayor a cero.");
+  }
+  if (creditLimit !== null && creditLimit > MAX_CREDIT_LIMIT) {
+    throw new Error("El tope de fiado es demasiado alto. El máximo permitido es $999.999.999.999,99.");
   }
 
   const operations = await allOperations();

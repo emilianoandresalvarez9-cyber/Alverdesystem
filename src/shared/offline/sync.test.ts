@@ -22,6 +22,11 @@ describe("offline sync", () => {
     expect(isPermanentSyncError("42703")).toBe(true);
   });
 
+  it("classifies data exceptions (class 22, e.g. numeric overflow) as permanent, not endless retries", () => {
+    expect(isPermanentSyncError("22003")).toBe(true);
+    expect(isPermanentSyncError("22P02")).toBe(true);
+  });
+
   it("keeps network and transient server errors retryable", () => {
     expect(isPermanentSyncError(undefined)).toBe(false);
     expect(isPermanentSyncError("08006")).toBe(false);
