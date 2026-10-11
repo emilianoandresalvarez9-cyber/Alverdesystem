@@ -42,7 +42,7 @@ export function connectionStatus(online: boolean, pending: number, rejected = 0,
 export function OfflineIndicator() {
   // RF-36: visible en todo momento, en todas las páginas (lo monta AppShell).
   const [online, setOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
-  const [queueStatus, setQueueStatus] = useState({ total: 0, rejected: 0, lastError: undefined as string | undefined });
+  const [queueStatus, setQueueStatus] = useState<{ total: number; rejected: number; lastError?: string }>({ total: 0, rejected: 0 });
 
   useEffect(() => {
     const updateNetwork = () => setOnline(navigator.onLine);
