@@ -51,11 +51,20 @@ export async function loadAccounts(): Promise<AccountsResult> {
 }
 
 /**
- * Alta idempotente (RF-45). Se conserva el localId de una solicitud igual que ya esté pendiente,
- * y la pantalla solo confirma el alta después de que sync_offline_customer responda correctamente.
- * El ID compartido es necesario para que los movimientos locales de fiado apunten al cliente remoto.
+ * El formulario solo confirma el alta cuando Supabase acepta la RPC. El localId de la cola pasa
+ * a ser el ID del cliente remoto y permite que los movimientos pendientes lo referencien.
  */
-export async function createCustomer(input: { name: string; phone?: string; creditLimit?: number | null }): Promise<void> {
+export class CustomerCreateError extends Error {
+  constructor(message: string, readonly localId: string) {
+    super(message);
+    this.name = "CustomerCreateError";
+  }
+}
+
+export async function createCustomer(
+  input: { name: string; phone?: string; creditLimit?: number | null },
+  retryLocalId?: string
+): Promise<string> {
   const name = input.name.trim();
   if (!name) throw new Error("El nombre es obligatorio.");
 
@@ -66,7 +75,21 @@ export async function createCustomer(input: { name: string; phone?: string; cred
   }
 
   const operations = await allOperations();
-  const pendingCustomer = operations.find((operation) => {
+  const retryOperation = retryLocalId
+    ? operations.find((operation) => operation.localId === retryLocalId && operation.kind === "customer")
+    : undefined;
+  if (retryLocalId && !retryOperation) {
+    throw new Error("No se encontró la solicitud local para reintentar; no se creó un cliente nuevo.");
+  }
+
+  if (retryOperation) {
+    const payload = retryOperation.payload as { name?: unknown; phone?: unknown; creditLimit?: unknown };
+    if (payload.name !== name || (payload.phone || null) !== phone || (payload.creditLimit ?? null) !== creditLimit) {
+      throw new Error("Los datos del cliente cambiaron. No se puede reutilizar el ID local anterior.");
+    }
+  }
+
+  const pendingCustomer = retryOperation ?? operations.find((operation) => {
     if (operation.kind !== "customer" || operation.syncedAt) return false;
     const payload = operation.payload as { name?: unknown; phone?: unknown; creditLimit?: unknown };
     return payload.name === name
@@ -91,11 +114,22 @@ export async function createCustomer(input: { name: string; phone?: string; cred
   }
 
   if (error) {
-    await markOperationFailed(localId, error.message, error.code, !isPermanentSyncError(error.code));
-    throw new Error(`No se pudo guardar el cliente: ${error.message}`);
+    try {
+      await markOperationFailed(localId, error.message, error.code, !isPermanentSyncError(error.code));
+    } catch {
+      // Si falló IndexedDB al registrar el rechazo, se conserva el error remoto y el mismo localId.
+    }
+    throw new CustomerCreateError(`No se pudo guardar el cliente: ${error.message}`, localId);
   }
 
-  await markOperationSynced(localId);
+  try {
+    await markOperationSynced(localId);
+  } catch (caught) {
+    const detail = caught instanceof Error ? caught.message : "No se pudo actualizar la cola local.";
+    throw new CustomerCreateError(`Supabase aceptó el cliente, pero no se pudo confirmar en este equipo: ${detail}`, localId);
+  }
+
+  return localId;
 }
 
 /** RF-47: solo la administradora (lo controla la base). null = sin tope. */
