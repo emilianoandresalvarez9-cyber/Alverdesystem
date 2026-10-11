@@ -5,7 +5,8 @@ import "../../styles/customers.css";
 import { useCurrentProfile } from "../../shared/auth/AuthGate";
 import { subscribeToQueueChanges } from "../../shared/offline/queue";
 import { formatMoney } from "../pos/money";
-import { createCustomer, CustomerCreateError, loadAccounts, type AccountsResult } from "./api";
+import { loadAccounts, type AccountsResult } from "./api";
+import { submitNewCustomer } from "./submitCustomer";
 import { filterAccounts } from "./balance";
 import { CustomerCreditModal } from "./CustomerCreditModal";
 import { exportToExcel } from "../../shared/export/excel";
@@ -112,15 +113,15 @@ function NewCustomerDialog({ isAdmin, onClose, onCreated }: { isAdmin: boolean; 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
-    try {
-      await createCustomer({ name, phone, creditLimit: isAdmin && limit.trim() ? Number(limit.replace(",", ".")) : null }, retryLocalId ?? undefined);
+    setError(null);
+    const outcome = await submitNewCustomer({ name, phone, limit }, isAdmin, retryLocalId ?? undefined);
+    setBusy(false);
+    if (outcome.status === "created") {
       onCreated();
-    } catch (err) {
-      if (err instanceof CustomerCreateError) setRetryLocalId(err.localId);
-      setError(err instanceof Error ? err.message : "No se pudo crear el cliente.");
-    } finally {
-      setBusy(false);
+      return;
     }
+    if (outcome.retryLocalId) setRetryLocalId(outcome.retryLocalId);
+    setError(outcome.message);
   }
 
   return (
