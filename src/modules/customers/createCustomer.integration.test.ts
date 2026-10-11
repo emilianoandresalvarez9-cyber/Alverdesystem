@@ -53,7 +53,9 @@ describe("Alta de cliente contra la cola real (RF-45, RF-35)", () => {
   });
 
   it("reintento tras un fallo conserva el mismo localId y no crea una segunda operación", async () => {
-    rpc.mockResolvedValueOnce({ error: { message: "Failed to fetch" } });
+    rpc
+      .mockResolvedValueOnce({ error: { message: "Failed to fetch" } }) // 1.º intento: falla
+      .mockResolvedValueOnce({ error: null });                          // 2.º intento: Supabase acepta
     const first = await submitNewCustomer({ name: "Mayra", phone: "", limit: "" }, false);
     expect(first.status).toBe("failed");
     const retryLocalId = first.status === "failed" ? first.retryLocalId : undefined;
@@ -62,6 +64,8 @@ describe("Alta de cliente contra la cola real (RF-45, RF-35)", () => {
     const second = await submitNewCustomer({ name: "Mayra", phone: "", limit: "" }, false, retryLocalId);
 
     expect(second).toEqual({ status: "created", localId: retryLocalId });
+    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(rpc.mock.calls.map((call) => (call[1] as { p_id: string }).p_id)).toEqual([retryLocalId, retryLocalId]);
     const operations = await customerOps();
     expect(operations).toHaveLength(1);
     expect(operations[0]?.syncedAt).toBeTruthy();
@@ -145,6 +149,14 @@ describe("Formulario Nuevo cliente: cuándo se cierra el modal", () => {
 
     expect(outcome).toMatchObject({ status: "failed", message: "No se pudo guardar el cliente: fk violada" });
     expect(outcome.status === "failed" && outcome.retryLocalId).toBeTruthy();
+  });
+
+  it("un dato inválido se rechaza antes de crear nada: sin operación, sin RPC y sin retryLocalId (no hay qué reintentar)", async () => {
+    const outcome = await submitNewCustomer({ name: "Mayra", phone: "", limit: "10000000000000" }, true);
+
+    expect(outcome).toEqual({ status: "failed", message: expect.stringContaining("demasiado alto") });
+    expect(rpc).not.toHaveBeenCalled();
+    expect(await allOperations()).toHaveLength(0);
   });
 
   it("RF-47: el empleado no envía tope aunque lo escriba; la administradora sí", async () => {
