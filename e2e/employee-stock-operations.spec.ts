@@ -49,6 +49,9 @@ test("Empleado puede ingresar, fraccionar y ajustar stock desde Stock", async ({
   await page.getByLabel("Escanear código de barras").fill("7790000000008");
   await page.getByRole("button", { name: "Buscar" }).click();
   await expect(page.getByText("Lenteja E2E", { exact: false }).last()).toBeVisible();
+  // El código del fabricante es del producto y trae sus dos presentaciones: hay que elegir cuál entra.
+  await expect(page.getByRole("button", { name: "Ingresar lote" })).toBeDisabled();
+  await page.getByLabel("Presentación", { exact: true }).selectOption({ label: "Granel E2E" });
   await page.getByLabel("Cantidad a ingresar").fill("2");
   await page.getByRole("button", { name: "Ingresar lote" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Ingreso sincronizado correctamente" }))
