@@ -1,17 +1,19 @@
 import { useEffect, useState } from "react";
 import { getSupabase } from "../../shared/supabase/client";
 import { BarcodeSvg } from "./BarcodeSvg";
-import { Button, Badge, EmptyState } from "../../shared/ui";
+import { Button, Badge, EmptyState, Message } from "../../shared/ui";
 import type { BulkPresentationItem } from "./types";
+import { BULK_UNITS } from "./internalCodes";
 
 export function CounterBulkSheet() {
   const [items, setItems] = useState<BulkPresentationItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadGraneleros() {
       const sb = getSupabase();
-      // Obtener productos a granel (gramos) con sus presentaciones
+      // Productos a granel (gramos o mililitros) con sus presentaciones
       const { data, error } = await sb
         .from("products")
         .select(`
@@ -20,9 +22,10 @@ export function CounterBulkSheet() {
           presentations:product_presentations(id, name, internal_barcode, base_quantity, sale_price, active, sold_by_weight)
         `)
         .eq("active", true)
-        .eq("base_unit", "gram"); // RF-22: Granel
+        .in("base_unit", BULK_UNITS); // RF-22: granel
 
       if (error || !data) {
+        setError(`No se pudo cargar la planilla: ${error?.message ?? "sin respuesta de la base"}`);
         setLoading(false);
         return;
       }
@@ -68,6 +71,8 @@ export function CounterBulkSheet() {
   };
 
   if (loading) return <div className="pila pila--s" aria-busy="true" aria-label="Cargando planilla…"><span className="esqueleto" /><span className="esqueleto" /></div>;
+
+  if (error) return <Message tone="error">{error}</Message>;
 
   if (items.length === 0) {
     return (
