@@ -1,6 +1,8 @@
 import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { Badge, Button, EmptyState, Icon, Message, Modal, Options, SelectField, TextField, useCompact, type IconName, type OptionItem } from "../../shared/ui";
-import { enqueueOperation } from "../../shared/offline/queue";
+import { enqueueOperation, pendingOperations } from "../../shared/offline/queue";
+import { getSupabase } from "../../shared/supabase/client";
+import { checkGranelStock } from "./granelStock";
 import { synchronizePendingOperations } from "../../shared/offline/sync";
 import { useCatalog } from "../catalog/useCatalog";
 import { lookupBarcode, pricePerKilo, searchEntries, toPosEntries } from "./catalogLookup";
@@ -250,6 +252,14 @@ function Register({ shift, onClosed }: { shift: CurrentShift; onClosed: () => vo
   async function charge() {
     setCharging(true);
     try {
+      // RF-38: el granel no admite faltante. Con conexión se avisa antes de cobrar; sin conexión decide la base.
+      if (navigator.onLine) {
+        const shortage = await checkGranelStock(getSupabase(), lines, shift.branchId ?? workingBranchId ?? null, await pendingOperations());
+        if (shortage) {
+          setFeedback({ tone: "error", text: shortage });
+          return;
+        }
+      }
       const payload = buildSalePayload(lines, {
         shiftId: shift.id,
         paymentMethod: method,
