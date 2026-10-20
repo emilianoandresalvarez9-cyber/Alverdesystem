@@ -33,16 +33,35 @@ export function registerPreSyncStep(step: PreSyncStep): () => void {
 }
 
 let inFlight: Promise<SyncResult> | undefined;
+let followUp: Promise<SyncResult> | undefined;
+let followUpRetryRejected = false;
 let retryTimeout: ReturnType<typeof setTimeout> | undefined;
 let retryDelay = 2000;
 
+/**
+ * Una pasada lee la cola al empezar. Lo que se encola mientras corre (una venta cobrada durante el
+ * envío de la anterior) no estaba en esa lectura: se envía en una pasada siguiente, apenas termina
+ * la actual, en vez de esperar otro evento (RF-35). Todos los pedidos que llegan durante una
+ * pasada comparten la siguiente, y si alguno pidió reintentar las rechazadas, la siguiente lo hace.
+ */
 export function synchronizePendingOperations(options: SyncOptions = {}): Promise<SyncResult> {
   if (retryTimeout) {
     clearTimeout(retryTimeout);
     retryTimeout = undefined;
   }
-  
-  inFlight ??= runSynchronization(options.retryRejected === true).then((result) => {
+
+  if (inFlight) {
+    followUpRetryRejected ||= options.retryRejected === true;
+    followUp ??= inFlight.catch(() => undefined).then(() => {
+      const retryRejected = followUpRetryRejected;
+      followUp = undefined;
+      followUpRetryRejected = false;
+      return synchronizePendingOperations({ retryRejected });
+    });
+    return followUp;
+  }
+
+  inFlight = runSynchronization(options.retryRejected === true).then((result) => {
     inFlight = undefined;
     if (result.failed > result.rejected && navigator.onLine) {
       console.warn("Reintentando en " + retryDelay + "ms");

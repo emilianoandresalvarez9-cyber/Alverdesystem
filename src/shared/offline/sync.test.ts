@@ -57,4 +57,54 @@ describe("offline sync", () => {
     expect(rpc).toHaveBeenCalledTimes(2);
     expect(await pendingOperations()).toEqual([]);
   });
+
+  /** La primera llamada a la nube queda esperando hasta `release()`; las demás responden enseguida. */
+  function slowFirstCall() {
+    let release = () => {};
+    rpc.mockImplementationOnce(() => new Promise((resolve) => { release = () => resolve({ error: null }); }));
+    rpc.mockResolvedValue({ error: null });
+    return () => release();
+  }
+
+  it("RF-35: lo que se encola mientras otra sincronización está en curso se envía al terminar, sin esperar otro evento", async () => {
+    vi.stubGlobal("navigator", { onLine: true });
+    const release = slowFirstCall();
+    await enqueueOperation({ kind: "sale", payload: { shiftId: "shift-1", n: 1 } });
+    const running = synchronizePendingOperations();
+    await vi.waitFor(() => expect(rpc).toHaveBeenCalledTimes(1));
+
+    // Se cobran dos ventas más mientras la primera todavía se está enviando.
+    await enqueueOperation({ kind: "sale", payload: { shiftId: "shift-1", n: 2 } });
+    const second = synchronizePendingOperations();
+    await enqueueOperation({ kind: "sale", payload: { shiftId: "shift-1", n: 3 } });
+    const third = synchronizePendingOperations();
+
+    release();
+    expect(await running).toMatchObject({ synchronized: 1, failed: 0 });
+    expect(await second).toMatchObject({ synchronized: 2, failed: 0 });
+    expect(await third).toMatchObject({ synchronized: 2, failed: 0 });
+    expect(rpc).toHaveBeenCalledTimes(3);
+    expect(await pendingOperations()).toEqual([]);
+  });
+
+  it("un reintento explícito de rechazadas pedido durante una sincronización se hace al terminar (cierre de turno)", async () => {
+    vi.stubGlobal("navigator", { onLine: true });
+    const rejected = await enqueueOperation({ kind: "sale", payload: { shiftId: "shift-1" } });
+    rpc.mockResolvedValueOnce({ error: { code: "23503", message: "customer does not exist" } });
+    await synchronizePendingOperations();
+    rpc.mockReset();
+
+    const release = slowFirstCall();
+    await enqueueOperation({ kind: "stock_movement", payload: { action: "quick_restock" } });
+    const running = synchronizePendingOperations();
+    await vi.waitFor(() => expect(rpc).toHaveBeenCalledTimes(1));
+
+    const closing = synchronizePendingOperations({ retryRejected: true });
+    release();
+    await running;
+    expect(await closing).toMatchObject({ synchronized: 1, failed: 0, rejected: 0 });
+    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(rpc.mock.calls[1]?.[1]).toMatchObject({ payload: { localId: rejected.localId } });
+    expect(await pendingOperations()).toEqual([]);
+  });
 });
