@@ -4,52 +4,18 @@ import { useBranch } from "../../shared/branch/BranchContext";
 import { getSupabase } from "../../shared/supabase/client";
 import { loadCatalogSnapshot } from "../../shared/offline/queue";
 import { queueStockOperation, watchStockOperationSync } from "../stock/offlineStock";
-import { Button, Icon, Message, TextField } from "../../shared/ui";
+import { Button, Icon, Message, SelectField, TextField } from "../../shared/ui";
 import type { PresentationLookupResult } from "./types";
 import type { CatalogProduct } from "../catalog/types";
+import { lookupEntriesFromCatalog, presentationsForCode } from "./presentationLookup";
 import "../../styles/stock.css";
 
 interface QuickRestockProps {
   onSuccess?: () => void;
 }
 
-interface EmployeeCatalogRow {
-  presentation_id: string;
-  presentation_name: string;
-  product_id: string;
-  product_name: string;
-  base_quantity: number;
-  sale_price: number;
-  internal_barcode: string | null;
-  manufacturer_barcode: string | null;
-  base_unit: "gram" | "millilitre" | "unit";
-  sold_by_weight: boolean;
-  open_shelf_life_days: number | null;
-}
-
-function findCachedPresentation(rows: unknown[], code: string): PresentationLookupResult | null {
-  const products = rows as CatalogProduct[];
-  const entries = products.flatMap((product) => product.presentations.map((presentation) => ({ product, presentation })));
-  const internal = entries.find(({ presentation }) => presentation.internal_barcode === code);
-  const manufacturer = entries
-    .filter(({ product }) => product.manufacturer_barcode === code)
-    .sort((left, right) => left.presentation.base_quantity - right.presentation.base_quantity)[0];
-  const match = internal ?? manufacturer;
-  if (!match) return null;
-  return {
-    presentation_id: match.presentation.id,
-    presentation_name: match.presentation.name,
-    product_id: match.product.id,
-    product_name: match.product.name,
-    base_quantity: match.presentation.base_quantity,
-    sale_price: match.presentation.sale_price,
-    internal_barcode: match.presentation.internal_barcode,
-    manufacturer_barcode: match.product.manufacturer_barcode,
-    base_unit: match.product.base_unit,
-    sold_by_weight: match.presentation.sold_by_weight,
-    open_shelf_life_days: match.product.open_shelf_life_days,
-  };
-}
+const LOOKUP_COLUMNS =
+  "presentation_id, presentation_name, product_id, product_name, base_quantity, sale_price, internal_barcode, manufacturer_barcode, base_unit, sold_by_weight, open_shelf_life_days";
 
 export function QuickRestock({ onSuccess }: QuickRestockProps) {
   const profile = useCurrentProfile();
@@ -58,7 +24,9 @@ export function QuickRestock({ onSuccess }: QuickRestockProps) {
   const needsBranch = branch.writeId === null;
   const [barcode, setBarcode] = useState("");
   const [searching, setSearching] = useState(false);
-  const [foundPresentation, setFoundPresentation] = useState<PresentationLookupResult | null>(null);
+  // Presentaciones que trae el código; con más de una hay que elegir cuál entra.
+  const [matches, setMatches] = useState<PresentationLookupResult[]>([]);
+  const [chosenId, setChosenId] = useState("");
   const [quantity, setQuantity] = useState("");
   const [expiryDate, setExpiryDate] = useState("");
   const [loading, setLoading] = useState(false);
@@ -82,7 +50,14 @@ export function QuickRestock({ onSuccess }: QuickRestockProps) {
     setSearching(true);
     setError(null);
     setSuccessMsg(null);
-    setFoundPresentation(null);
+    setMatches([]);
+    setChosenId("");
+
+    const show = (found: PresentationLookupResult[]) => {
+      setMatches(found);
+      setChosenId(found.length === 1 ? found[0]!.presentation_id : "");
+      setQuantity("1");
+    };
 
     try {
       const supabase = getSupabase();
@@ -91,50 +66,43 @@ export function QuickRestock({ onSuccess }: QuickRestockProps) {
       // presentaciones queda restringida para Empleado por RLS.
       const { data: internalMatches, error: internalErr } = await supabase
         .from("employee_catalog")
-        .select("presentation_id, presentation_name, product_id, product_name, base_quantity, sale_price, internal_barcode, manufacturer_barcode, base_unit, sold_by_weight, open_shelf_life_days")
+        .select(LOOKUP_COLUMNS)
         .eq("internal_barcode", code)
         .limit(1);
 
       if (internalErr) throw internalErr;
 
-      const internalMatch = (internalMatches ?? [])[0] as EmployeeCatalogRow | undefined;
-      if (internalMatch) {
-        setFoundPresentation(internalMatch);
-        setQuantity("1");
-        return;
+      let found = presentationsForCode((internalMatches ?? []) as PresentationLookupResult[], code);
+      if (found.length === 0) {
+        // El código de fabricante pertenece al producto: vienen todas sus presentaciones.
+        const { data: manufacturerMatches, error: manufacturerErr } = await supabase
+          .from("employee_catalog")
+          .select(LOOKUP_COLUMNS)
+          .eq("manufacturer_barcode", code);
+
+        if (manufacturerErr) throw manufacturerErr;
+        found = presentationsForCode((manufacturerMatches ?? []) as PresentationLookupResult[], code);
       }
 
-      // El código de fabricante pertenece al producto y puede tener varias
-      // presentaciones; usar la unidad de menor contenido como opción rápida.
-      const { data: manufacturerMatches, error: manufacturerErr } = await supabase
-        .from("employee_catalog")
-        .select("presentation_id, presentation_name, product_id, product_name, base_quantity, sale_price, internal_barcode, manufacturer_barcode, base_unit, sold_by_weight, open_shelf_life_days")
-        .eq("manufacturer_barcode", code)
-        .order("base_quantity", { ascending: true })
-        .limit(1);
-
-      if (manufacturerErr) throw manufacturerErr;
-
-      const manufacturerMatch = (manufacturerMatches ?? [])[0] as EmployeeCatalogRow | undefined;
-      if (manufacturerMatch) {
-        setFoundPresentation(manufacturerMatch);
-        setQuantity("1");
-        return;
-      }
-
-      setError(`No se encontró ningún producto activo con el código: ${code}`);
+      if (found.length > 0) show(found);
+      else setError(`No se encontró ningún producto activo con el código: ${code}`);
     } catch (err) {
       const snapshot = await loadCatalogSnapshot();
-      const cached = snapshot ? findCachedPresentation(snapshot.rows, code) : null;
-      if (cached) {
-        setFoundPresentation(cached);
-        setQuantity("1");
+      const cached = snapshot ? presentationsForCode(lookupEntriesFromCatalog(snapshot.rows as CatalogProduct[]), code) : [];
+      if (cached.length > 0) {
+        show(cached);
       } else {
         setError(err instanceof Error ? `${err.message} No hay un catálogo local que incluya ese código.` : "Error al buscar producto");
       }
     } finally {
       setSearching(false);
     }
+  };
+
+  const foundPresentation = matches.find((match) => match.presentation_id === chosenId) ?? null;
+  const clearFound = () => {
+    setMatches([]);
+    setChosenId("");
   };
 
   const handleRestock = async () => {
@@ -173,7 +141,7 @@ export function QuickRestock({ onSuccess }: QuickRestockProps) {
 
       setSuccessMsg(`Ingreso guardado en este dispositivo. Se sincronizará al reconectar.`);
       setPendingFeedbackId(result.localId);
-      setFoundPresentation(null);
+      clearFound();
       setBarcode("");
       setQuantity("");
       setExpiryDate("");
@@ -212,12 +180,22 @@ export function QuickRestock({ onSuccess }: QuickRestockProps) {
       {error && <Message tone="error">{error}</Message>}
       {successMsg && <Message tone="exito">{successMsg}</Message>}
 
-      {foundPresentation && (
+      {matches.length > 0 && (
         <div className="pila ingreso__encontrado">
           <p className="fila">
             <Icon name="check_circle" />
-            <span><strong className="fuerte">{foundPresentation.product_name}</strong> <span className="suave">· {foundPresentation.presentation_name}</span></span>
+            <span>
+              <strong className="fuerte">{matches[0]!.product_name}</strong>
+              {foundPresentation && matches.length === 1 && <span className="suave"> · {foundPresentation.presentation_name}</span>}
+            </span>
           </p>
+          {matches.length > 1 && (
+            <SelectField label="Presentación" value={chosenId} onChange={(e) => setChosenId(e.target.value)}
+              help={`Este código es del producto y tiene ${matches.length} presentaciones: elegí cuál entra.`}>
+              <option value="">Elegí la presentación…</option>
+              {matches.map((match) => <option key={match.presentation_id} value={match.presentation_id}>{match.presentation_name}</option>)}
+            </SelectField>
+          )}
           <form className="form-fila" onSubmit={(e) => { e.preventDefault(); void handleRestock(); }}>
             <TextField
               label="Cantidad a ingresar"
@@ -235,8 +213,8 @@ export function QuickRestock({ onSuccess }: QuickRestockProps) {
               onChange={(e) => setExpiryDate(e.target.value)}
             />
             <div className="fila ingreso__acciones">
-              <Button variant="fantasma" onClick={() => setFoundPresentation(null)}>Cancelar</Button>
-              <Button type="submit" icon="add" loading={loading} disabled={!quantity || needsBranch}>
+              <Button variant="fantasma" onClick={clearFound}>Cancelar</Button>
+              <Button type="submit" icon="add" loading={loading} disabled={!quantity || needsBranch || !foundPresentation}>
                 {loading ? "Guardando…" : "Ingresar lote"}
               </Button>
             </div>
