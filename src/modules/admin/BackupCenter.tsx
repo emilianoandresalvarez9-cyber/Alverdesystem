@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { Button, Message } from "../../shared/ui";
 import { backupService } from "../../shared/backup/backupService";
-import { downloadFile, generateFullBackup, jsonToCSV, saveBackupToDisk } from "../../shared/backup/export";
+import { downloadFile, fetchAllRows, generateFullBackup, jsonToCSV, saveBackupToDisk } from "../../shared/backup/export";
 import { chooseBackupDirectory, tryWritePendingOperationsBackup } from "../../shared/offline/backup";
 import { pendingOperations } from "../../shared/offline/queue";
 import { synchronizePendingOperations } from "../../shared/offline/sync";
@@ -71,9 +71,7 @@ export function BackupCenter() {
   const exportCsv = (table: string, label: string) => run(`No se pudo exportar ${label}`, async () => {
     // La tabla llega por nombre en tiempo de ejecución: cliente sin tipos de tabla, solo para exportar.
     const exporter = getSupabase() as unknown as SupabaseClient;
-    const { data, error } = await exporter.from(table).select("*");
-    if (error) throw error;
-    downloadFile(jsonToCSV(data ?? []), `alverde-${table}.csv`, "text/csv");
+    downloadFile(jsonToCSV(await fetchAllRows(exporter, table)), `alverde-${table}.csv`, "text/csv");
     return `${label} exportado.`;
   });
 
