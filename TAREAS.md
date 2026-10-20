@@ -72,6 +72,11 @@
 
 ## Otros pendientes vistos (un PR cada uno)
 
+- **Auditoría sitio ↔ base del 20/10/2026:** la lista completa de defectos pendientes, con archivo, línea,
+  evidencia y arreglo propuesto, está en [docs/QA_QC/PENDIENTES-AUDITORIA-2026-10-20.md](docs/QA_QC/PENDIENTES-AUDITORIA-2026-10-20.md).
+  Empezar por ahí. Incluye lo que ya está en PR abiertos (#124 a #127) para no repetirlo, y que **producción no
+  registra migraciones**: el SQL de un PR mergeado hay que aplicarlo a mano en Supabase.
+
 - Stock: el aviso «Sin conexión» aparece aunque el error de carga sea otro. Se arregla como en Clientes, con un estado de error de carga separado (`accountsLoadError` en `src/modules/customers/api.ts`).
 - Margen y precio sugerido por sucursal: seguimiento de RF-69. Puede necesitar backend.
 - El probador del lector (Códigos y planilla) dice «ingresá el peso en gramos» al encontrar un granel, aunque ahí no se pide peso.
@@ -122,6 +127,8 @@ Suite con #111 a #114 integrados en una rama local: 541 aserciones pgTAP en 34 a
 **Permisos como producción:** #95 (GRANT explícito en `stock_warnings`, `missing_items` y `cash_shifts`) y #97 (EXECUTE explícito en `is_api_role` y `credit_movement_delta`) corrigieron «permission denied» que en producción aparecían y en las pruebas no. Desde entonces el job `database-strict` corre las migraciones y los pgTAP con el arnés de `qa/pg-harness/` (`npm run test:db:nodocker`), sin los privilegios automáticos de Supabase. Tienen que pasar `database` y `database-strict`.
 
 ## Registro de cambios de avance
+
+- 2026-10-20: auditoría sitio ↔ base. Producción coincide con las migraciones (salvo permisos de más) y no registra migraciones. Mergeados #121 (alta de producto con presentación), #122 (sincronización durante una pasada en curso) y #123 (precio de Balanza por kilo). Abiertos #124 a #127. Pendientes en `docs/QA_QC/PENDIENTES-AUDITORIA-2026-10-20.md`.
 
 - 2026-10-10 (segundo corte): revisión de seguridad, #107–#114 (personal activo, clave secreta, turno de caja, turno en su sucursal, pgTAP de RF-67, venta en turno cerrado, altas y bajas de personal, cabeceras). RF-67 pasa a «código + test».
 - 2026-10-10: #91–#93 y #96 (varias sucursales, RF-65 a RF-70), #94 (masiva por kilo en balanza), #95 y #97 (permisos explícitos y job `database-strict`), #98–#105 (RNF-06: sistema de diseño en todas las páginas).
