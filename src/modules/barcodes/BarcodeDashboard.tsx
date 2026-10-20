@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button, GlassCard, Message, SubTabs } from "../../shared/ui";
 import { getSupabase } from "../../shared/supabase/client";
 import { generateInternalEan13 } from "./ean13";
+import { needsInternalCode } from "./internalCodes";
 import { CounterBulkSheet } from "./CounterBulkSheet";
 import { BarcodeScannerTester } from "./BarcodeScannerTester";
 import type { BarcodeScanLookup } from "./types";
@@ -97,21 +98,24 @@ export function BarcodeDashboard() {
     try {
       const sb = getSupabase();
     
-    // Obtener presentaciones de productos en gramos sin código interno
+    // Presentaciones sin código interno; needsInternalCode decide cuáles lo necesitan (RF-20).
     const { data, error: listError } = await sb
       .from("product_presentations")
-      .select("id, product:products!inner(base_unit)")
-      .is("internal_barcode", null)
-      .eq("products.base_unit", "gram");
+      .select("id, active, internal_barcode, product:products!inner(base_unit, manufacturer_barcode, active)")
+      .is("internal_barcode", null);
 
     if (listError) throw listError;
 
-    if (!data || data.length === 0) {
-      setFeedback({ kind: "success", message: "No hay productos a granel pendientes de código." });
+    const pending = (data ?? []).filter((row) => needsInternalCode({
+      ...row,
+      product: Array.isArray(row.product) ? (row.product[0] ?? null) : row.product
+    }));
+    if (pending.length === 0) {
+      setFeedback({ kind: "success", message: "No hay presentaciones pendientes de código interno." });
       return;
     }
 
-    for (const row of data) {
+    for (const row of pending) {
       // 1. Obtenemos el ID único de la secuencia en la base de datos
       const { data: seq, error: seqError } = await sb.rpc("get_next_internal_code_seq");
       if (seqError) {
@@ -121,17 +125,19 @@ export function BarcodeDashboard() {
       // 2. Generamos el EAN-13 interno usando el prefijo 20
       const newBarcode = generateInternalEan13(seq, 20);
 
-      // 3. Guardamos el código y mostramos el error si falla
-      const { error: updateError } = await sb
+      // 3. Guardamos el código sólo si sigue sin tener uno (otra pantalla pudo asignarlo mientras tanto)
+      const { data: updated, error: updateError } = await sb
         .from("product_presentations")
         .update({ internal_barcode: newBarcode })
-        .eq("id", row.id);
+        .eq("id", row.id)
+        .is("internal_barcode", null)
+        .select("id");
 
       if (updateError) {
         throw new Error(`No se pudo guardar el código para el producto ${row.id}: ${updateError.message}`);
       }
-      
-      successCount++;
+
+      if (updated && updated.length > 0) successCount++;
     }
     
       setFeedback({ kind: "success", message: `Se generaron ${successCount} código${successCount === 1 ? "" : "s"} nuevo${successCount === 1 ? "" : "s"}.` });
