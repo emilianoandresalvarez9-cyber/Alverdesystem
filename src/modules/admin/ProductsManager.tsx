@@ -5,43 +5,50 @@ import { Button, TextField, SelectField, Message, Modal } from "../../shared/ui"
 import { formatMoney } from "../pos/money";
 import { parseEditedPrice, priceEditStart, pricePerKiloFromGram } from "../catalog/scalePricing";
 import { formatQuantity } from "../stock/format";
-import { normalizeManufacturerBarcode } from "./manufacturerBarcode";
 import { ProductPricing } from "./ProductPricing";
+import {
+  EMPTY_PRESENTATION_FORM, EMPTY_PRODUCT_FORM, MISSING_PRESENTATION_WARNING, baseQuantityHelp, createProductWithPresentation,
+  parsePresentationForm, parseProductForm, productFormFrom, productOptionLabel,
+  type PresentationFormValues, type ProductFormValues, type ProductStore
+} from "./productForm";
 
 import type { Product, Presentation, Brand, Category } from "../../shared/types";
+
+type ProductRow = Product & { product_presentations: { active: boolean }[] };
 
 export function ProductsManager() {
   const [errorMsg, setErrorMsg] = useState("");
   const [pricePrompt, setPricePrompt] = useState<{ presId: string; soldByWeight: boolean } | null>(null);
   const [newPriceInput, setNewPriceInput] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<ProductRow[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  
+
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [presentations, setPresentations] = useState<Presentation[]>([]);
-  
-  const [loading, setLoading] = useState(false);
+  // Último producto creado: el formulario vuelve a "Nuevo producto" y desde el aviso se abre su ficha.
+  const [createdProduct, setCreatedProduct] = useState<Product | null>(null);
 
-  // Form states (simplified)
-  const [productName, setProductName] = useState("");
-  const [productBarcode, setProductBarcode] = useState("");
-  const [productBrandId, setProductBrandId] = useState("");
-  const [productCategoryId, setProductCategoryId] = useState("");
-  const [productBaseUnit, setProductBaseUnit] = useState<Enums<"base_unit">>("unit");
-  const [productMultiplier, setProductMultiplier] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const [form, setForm] = useState<ProductFormValues>(EMPTY_PRODUCT_FORM);
+  const [presForm, setPresForm] = useState<PresentationFormValues>(EMPTY_PRESENTATION_FORM);
+  const setField = (patch: Partial<ProductFormValues>) => setForm((prev) => ({ ...prev, ...patch }));
+  const setPresField = (patch: Partial<PresentationFormValues>) => setPresForm((prev) => ({ ...prev, ...patch }));
 
   const sb = getSupabase();
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const [{ data: pData }, { data: bData }, { data: cData }] = await Promise.all([
-      sb.from("products").select("*").order("name"),
+    const [{ data: pData, error: pError }, { data: bData }, { data: cData }] = await Promise.all([
+      sb.from("products").select("*, product_presentations(active)").order("name"),
       sb.from("brands").select("*").order("name"),
       sb.from("categories").select("*").order("name")
     ]);
-    setProducts(pData || []);
+    if (pError) setErrorMsg(`No se pudieron cargar los productos: ${pError.message}`);
+    setProducts((pData ?? []) as ProductRow[]);
     setBrands(bData || []);
     setCategories(cData || []);
     setLoading(false);
@@ -51,51 +58,57 @@ export function ProductsManager() {
     loadData();
   }, [loadData]);
 
-  const handleSelectProduct = async (prod: Product | null) => {
-    if (!prod) return setSelectedProduct(null);
+  const handleSelectProduct = async (prod: Product | null, keepPresentationForm = false) => {
+    setCreatedProduct(null);
+    if (!keepPresentationForm) setPresForm(EMPTY_PRESENTATION_FORM);
+    if (!prod) return startNew();
     setSelectedProduct(prod);
-    setProductName(prod.name);
-    setProductBarcode(prod.manufacturer_barcode ?? "");
-    setProductBrandId(prod.brand_id || "");
-    setProductCategoryId(prod.category_id || "");
-    setProductBaseUnit(prod.base_unit || "unit");
-    setProductMultiplier(prod.price_multiplier == null ? "" : String(prod.price_multiplier));
+    setForm(productFormFrom(prod));
 
     const { data } = await sb.from("product_presentations").select("*").eq("product_id", prod.id).order("name");
     setPresentations(data || []);
   };
 
+  const store: ProductStore = {
+    insertProduct: async (payload) => {
+      const { data, error } = await sb.from("products").insert(payload).select().single();
+      return { data, error };
+    },
+    insertPresentation: async (payload) => {
+      const { error } = await sb.from("product_presentations").insert(payload);
+      return { error };
+    }
+  };
+
   const handleSaveProduct = async () => {
     setErrorMsg("");
     setSuccessMsg("");
-    if (!productName.trim()) return setErrorMsg("Nombre obligatorio");
-    const parsedMultiplier = productMultiplier.trim() === "" ? null : Number(productMultiplier);
-    if (parsedMultiplier !== null && (!Number.isFinite(parsedMultiplier) || parsedMultiplier <= 0)) {
-      return setErrorMsg("El multiplicador propio debe ser mayor que cero o quedar vacío para heredar.");
-    }
-    const payload = {
-      name: productName.trim(),
-      manufacturer_barcode: normalizeManufacturerBarcode(productBarcode),
-      brand_id: productBrandId || null,
-      category_id: productCategoryId || null,
-      base_unit: productBaseUnit,
-      price_multiplier: parsedMultiplier,
-      active: true
-    };
 
     if (selectedProduct) {
-      const { data, error } = await sb.from("products").update(payload).eq("id", selectedProduct.id).select().single();
+      const parsed = parseProductForm(form);
+      if (!parsed.ok) return setErrorMsg(parsed.error);
+      setSaving(true);
+      const { data, error } = await sb.from("products").update(parsed.value).eq("id", selectedProduct.id).select().single();
+      setSaving(false);
       if (error) setErrorMsg(error.message);
-      else { setSuccessMsg("Producto actualizado"); setSelectedProduct(data as Product); void loadData(); }
-    } else {
-      const { error, data } = await sb.from("products").insert(payload).select().single();
-      if (error) setErrorMsg(error.message);
-      else {
-        setSuccessMsg("Producto creado");
-        void loadData();
-        await handleSelectProduct(data);
-      }
+      else { setSuccessMsg("Cambios guardados"); setSelectedProduct(data as Product); void loadData(); }
+      return;
     }
+
+    setSaving(true);
+    const result = await createProductWithPresentation(store, form, presForm);
+    setSaving(false);
+    if (result.kind === "invalid" || result.kind === "failed") return setErrorMsg(result.message);
+    void loadData();
+    if (result.kind === "presentation_failed") {
+      // El producto quedó creado: se abre su ficha con la presentación cargada para reintentar "Añadir".
+      setErrorMsg(`Se creó «${result.product.name}», pero no su presentación: ${result.message}`);
+      await handleSelectProduct(result.product, true);
+      return;
+    }
+    startNew();
+    setCreatedProduct(result.product);
+    setSuccessMsg(`Se creó «${result.product.name}» con la presentación «${result.presentationName}». Ya aparece en la Caja y se le puede cargar stock en Stock, Ingreso rápido.`);
   };
 
   const handleArchiveProduct = async () => {
@@ -103,29 +116,30 @@ export function ProductsManager() {
     // confirm bypass
     const { error } = await sb.from("products").update({ active: false }).eq("id", selectedProduct.id);
     if (error) setErrorMsg(error.message);
-    else { setSuccessMsg("Archivado"); loadData(); setSelectedProduct(null); }
+    else {
+      setSelectedProduct(null);
+      setPresentations([]);
+      setForm(EMPTY_PRODUCT_FORM);
+      setSuccessMsg("Archivado");
+      void loadData();
+    }
   };
 
-  // Presentations
-  const [presName, setPresName] = useState("");
-  const [presBaseQty, setPresBaseQty] = useState("");
-  const [presSalePrice, setPresSalePrice] = useState("");
-
   const handleSavePresentation = async () => {
-    if (!selectedProduct || !presName || !presBaseQty || !presSalePrice) return setErrorMsg("Faltan datos");
-    
-    const { error } = await sb.from("product_presentations").insert({
-      product_id: selectedProduct.id,
-      name: presName,
-      base_quantity: parseFloat(presBaseQty),
-      sale_price: parseFloat(presSalePrice)
-    });
+    if (!selectedProduct) return;
+    setErrorMsg("");
+    setSuccessMsg("");
+    const parsed = parsePresentationForm(presForm);
+    if (!parsed.ok) return setErrorMsg(parsed.error);
+
+    const { error } = await sb.from("product_presentations").insert({ ...parsed.value, product_id: selectedProduct.id });
 
     if (error) setErrorMsg(error.message);
     else {
       setSuccessMsg("Presentación añadida");
-      setPresName(""); setPresBaseQty(""); setPresSalePrice("");
-      handleSelectProduct(selectedProduct);
+      setPresForm(EMPTY_PRESENTATION_FORM);
+      void loadData();
+      void handleSelectProduct(selectedProduct);
     }
   };
 
@@ -154,15 +168,26 @@ export function ProductsManager() {
 
   const startNew = () => {
     setSelectedProduct(null);
-    setProductName("");
-    setProductBarcode("");
-    setProductBrandId("");
-    setProductCategoryId("");
-    setProductBaseUnit("unit");
-    setProductMultiplier("");
+    setPresentations([]);
+    setCreatedProduct(null);
+    setForm(EMPTY_PRODUCT_FORM);
+    setPresForm(EMPTY_PRESENTATION_FORM);
     setErrorMsg("");
     setSuccessMsg("");
   };
+  const hasActivePresentation = (id: string) =>
+    products.find((p) => p.id === id)?.product_presentations.some((pr) => pr.active) ?? false;
+  const selectedWithoutPresentation = selectedProduct !== null && !presentations.some((pr) => pr.active);
+  const presentationFields = (
+    <div className="form-fila form-fila--tres">
+      <TextField label="Nombre de la presentación" placeholder="Bolsa 1 kg" value={presForm.name}
+        onChange={e => setPresField({ name: e.target.value })} />
+      <TextField label="Cantidad base" type="number" numeric min="0.001" step="0.001" value={presForm.baseQuantity}
+        onChange={e => setPresField({ baseQuantity: e.target.value })} help={baseQuantityHelp(form.baseUnit)} />
+      <TextField label="Precio" type="number" numeric min="0" step="0.01" value={presForm.salePrice}
+        onChange={e => setPresField({ salePrice: e.target.value })} />
+    </div>
+  );
   const priceText = (pr: Presentation) =>
     pr.sold_by_weight ? `${formatMoney(pricePerKiloFromGram(Number(pr.sale_price)))}/kg` : formatMoney(Number(pr.sale_price));
 
@@ -170,49 +195,68 @@ export function ProductsManager() {
     <>
       <div className="fila fila--m productos-barra">
         <SelectField inline label="Producto" className="crece" value={selectedProduct?.id ?? ""} disabled={loading}
-          onChange={(e) => void handleSelectProduct(products.find((p) => p.id === e.target.value) ?? null)}>
+          onChange={(e) => {
+            setErrorMsg("");
+            setSuccessMsg("");
+            void handleSelectProduct(products.find((p) => p.id === e.target.value) ?? null);
+          }}>
           <option value="">{loading ? "Cargando…" : "Elegí un producto…"}</option>
-          {products.map((p) => <option key={p.id} value={p.id}>{p.name}{p.active ? "" : " (archivado)"}</option>)}
+          {products.map((p) => <option key={p.id} value={p.id}>{productOptionLabel(p, hasActivePresentation(p.id))}</option>)}
         </SelectField>
         <Button variant="secundario" icon="add" onClick={startNew}>Nuevo producto</Button>
       </div>
 
       {errorMsg && <Message tone="error">{errorMsg}</Message>}
-      {successMsg && <Message tone="exito">{successMsg}</Message>}
+      {successMsg && (
+        <Message tone="exito">
+          {successMsg}
+          {createdProduct && (
+            <> <Button variant="fantasma" size="compacto" onClick={() => void handleSelectProduct(createdProduct)}>Abrir su ficha</Button></>
+          )}
+        </Message>
+      )}
 
       <section className="carta pila" aria-labelledby="ficha-producto">
-        <h3 className="titulo-seccion" id="ficha-producto">{selectedProduct ? "Ficha del producto" : "Nuevo producto"}</h3>
+        <h3 className="titulo-seccion" id="ficha-producto">{selectedProduct ? `Ficha de ${selectedProduct.name}` : "Nuevo producto"}</h3>
+        {selectedWithoutPresentation && <Message tone="aviso">{MISSING_PRESENTATION_WARNING}</Message>}
         <div className="form-fila form-fila--tres">
-          <TextField label="Nombre" value={productName} onChange={e => setProductName(e.target.value)} />
+          <TextField label="Nombre" value={form.name} onChange={e => setField({ name: e.target.value })} />
           <TextField
             label="Código de barras del fabricante"
             icon="barcode"
-            value={productBarcode}
-            onChange={e => setProductBarcode(e.target.value)}
+            value={form.barcode}
+            onChange={e => setField({ barcode: e.target.value })}
             inputMode="numeric"
             autoComplete="off"
             placeholder="Escaneá o escribí el código"
             help="Para encontrarlo al escanearlo en Caja. Conserva los ceros iniciales."
           />
-          <SelectField label="Marca" value={productBrandId} onChange={e => setProductBrandId(e.target.value)}>
+          <SelectField label="Marca" value={form.brandId} onChange={e => setField({ brandId: e.target.value })}>
             <option value="">Sin marca</option>
             {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
           </SelectField>
-          <SelectField label="Rubro" value={productCategoryId} onChange={e => setProductCategoryId(e.target.value)}>
+          <SelectField label="Rubro" value={form.categoryId} onChange={e => setField({ categoryId: e.target.value })}>
             <option value="">Sin rubro</option>
             {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </SelectField>
-          <SelectField label="Unidad base" value={productBaseUnit} onChange={e => setProductBaseUnit(e.target.value as Enums<"base_unit">)}>
+          <SelectField label="Unidad base" value={form.baseUnit} onChange={e => setField({ baseUnit: e.target.value as Enums<"base_unit"> })}>
             <option value="unit">Unidad</option>
             <option value="gram">Gramos</option>
             <option value="millilitre">Mililitros</option>
           </SelectField>
           <TextField label="Multiplicador propio (opcional)" type="number" numeric min="0.001" step="0.001"
-            value={productMultiplier} onChange={e => setProductMultiplier(e.target.value)}
+            value={form.multiplier} onChange={e => setField({ multiplier: e.target.value })}
             placeholder="Usa el del rubro" help="Vacío: usa el multiplicador del rubro y luego el general." />
         </div>
+        {!selectedProduct && (
+          <>
+            <h4 className="titulo-seccion">Primera presentación</h4>
+            <p className="cuerpo-s suave">Sin presentación el producto no aparece en la Caja ni se le puede cargar stock. Después podés agregar otras.</p>
+            {presentationFields}
+          </>
+        )}
         <div className="fila">
-          <Button onClick={handleSaveProduct}>Guardar producto</Button>
+          <Button onClick={handleSaveProduct} loading={saving}>{selectedProduct ? "Guardar cambios" : "Crear producto"}</Button>
           {selectedProduct && selectedProduct.active && (
             <Button variant="peligro" icon="archive" onClick={handleArchiveProduct}>Archivar</Button>
           )}
@@ -242,11 +286,9 @@ export function ProductsManager() {
                 </table>
               </div>
             )}
-            <div className="form-fila">
-              <TextField label="Nombre" placeholder="Bolsa 1 kg" value={presName} onChange={e => setPresName(e.target.value)} />
-              <TextField label="Cantidad base" type="number" numeric value={presBaseQty} onChange={e => setPresBaseQty(e.target.value)} />
-              <TextField label="Precio" type="number" numeric value={presSalePrice} onChange={e => setPresSalePrice(e.target.value)} />
-              <Button variant="secundario" icon="add" onClick={handleSavePresentation}>Añadir</Button>
+            {presentationFields}
+            <div className="fila">
+              <Button variant="secundario" icon="add" onClick={handleSavePresentation}>Añadir presentación</Button>
             </div>
           </section>
 
