@@ -3,7 +3,7 @@ import { getSupabase } from "../../shared/supabase/client";
 import type { Enums } from "../../shared/supabase/database.types";
 import { Button, TextField, SelectField, Message, Modal } from "../../shared/ui";
 import { formatMoney } from "../pos/money";
-import { pricePerKiloFromGram } from "../catalog/scalePricing";
+import { parseEditedPrice, priceEditStart, pricePerKiloFromGram } from "../catalog/scalePricing";
 import { formatQuantity } from "../stock/format";
 import { normalizeManufacturerBarcode } from "./manufacturerBarcode";
 import { ProductPricing } from "./ProductPricing";
@@ -12,7 +12,7 @@ import type { Product, Presentation, Brand, Category } from "../../shared/types"
 
 export function ProductsManager() {
   const [errorMsg, setErrorMsg] = useState("");
-  const [pricePrompt, setPricePrompt] = useState<{presId: string, oldPrice: number} | null>(null);
+  const [pricePrompt, setPricePrompt] = useState<{ presId: string; soldByWeight: boolean } | null>(null);
   const [newPriceInput, setNewPriceInput] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
@@ -129,21 +129,21 @@ export function ProductsManager() {
     }
   };
 
-  const handleUpdatePrice = (presId: string, oldPrice: number) => {
+  const handleUpdatePrice = (pr: Presentation) => {
     setErrorMsg("");
     setSuccessMsg("");
-    setPricePrompt({presId, oldPrice});
-    setNewPriceInput(oldPrice.toString());
+    setPricePrompt({ presId: pr.id, soldByWeight: pr.sold_by_weight });
+    setNewPriceInput(priceEditStart(pr));
   };
 
   const confirmUpdatePrice = async () => {
     if (!pricePrompt) return;
-    const newPrice = Number(newPriceInput);
-    if (!Number.isFinite(newPrice) || newPrice < 0) {
-      setErrorMsg("Ingresá un precio válido mayor o igual a 0.");
+    const parsed = parseEditedPrice(newPriceInput, pricePrompt.soldByWeight);
+    if (!parsed.ok) {
+      setErrorMsg(parsed.error);
       return;
     }
-    const { error } = await sb.from("product_presentations").update({ sale_price: newPrice }).eq("id", pricePrompt.presId);
+    const { error } = await sb.from("product_presentations").update({ sale_price: parsed.salePrice }).eq("id", pricePrompt.presId);
     if (error) setErrorMsg(error.message);
     else {
       setSuccessMsg("Precio actualizado");
@@ -234,7 +234,7 @@ export function ProductsManager() {
                         <td className="num">{formatQuantity(Number(pr.base_quantity), selectedProduct.base_unit)}</td>
                         <td className="num">{priceText(pr)}</td>
                         <td className="acciones">
-                          <Button variant="fantasma" size="compacto" icon="sell" onClick={() => handleUpdatePrice(pr.id, pr.sale_price)}>Cambiar precio base</Button>
+                          <Button variant="fantasma" size="compacto" icon="sell" onClick={() => handleUpdatePrice(pr)}>Cambiar precio base</Button>
                         </td>
                       </tr>
                     ))}
@@ -262,18 +262,20 @@ export function ProductsManager() {
         footer={(
           <>
             <Button variant="fantasma" onClick={() => setPricePrompt(null)}>Cancelar</Button>
-            <Button onClick={confirmUpdatePrice} disabled={!newPriceInput.trim() || !Number.isFinite(Number(newPriceInput)) || Number(newPriceInput) < 0}>
+            <Button onClick={confirmUpdatePrice} disabled={!pricePrompt || !parseEditedPrice(newPriceInput, pricePrompt.soldByWeight).ok}>
               Guardar precio
             </Button>
           </>
         )}
       >
         <TextField
-          label="Precio nuevo"
+          label={pricePrompt?.soldByWeight ? "Precio nuevo por kilo" : "Precio nuevo"}
           type="number"
           numeric
           min="0"
-          step="0.01"
+          step={pricePrompt?.soldByWeight ? "10" : "0.01"}
+          suffix={pricePrompt?.soldByWeight ? "/kg" : undefined}
+          help={pricePrompt?.soldByWeight ? "Se vende con balanza: el precio va por kilo, en múltiplos de $10." : undefined}
           value={newPriceInput}
           onChange={e => setNewPriceInput(e.target.value)}
           autoFocus
