@@ -118,6 +118,7 @@ Son dos roles nada más. Los costos y márgenes viven en una tabla separada con 
 - **RF-36.** La pantalla muestra en todo momento si hay operaciones pendientes de sincronizar y cuántas.
 - **RF-37.** Las ventas y movimientos de stock solo se agregan, nunca se sobrescriben, para que no choquen al sincronizar dos puestos a la vez.
 - **RF-38.** Si las ventas sin conexión dejan stock negativo, se permite un faltante agregado de hasta 10 unidades por presentación y sucursal. La venta que supere ese límite se rechaza; los faltantes permitidos quedan marcados para revisión del administrador.
+- **Aclaración RF-38 (granel, decisión de la dueña del 20/10/2026):** el granel (presentaciones que se venden con balanza) no admite faltante: no se puede vender, ajustar ni fraccionar más gramos o mililitros de los que hay en la sucursal, y sin lotes cargados no se vende. Con conexión, la caja lo avisa antes de cobrar; sin conexión, la venta se rechaza al sincronizar.
 - **RF-39.** Si los precios cambian mientras una caja está sin conexión, esa caja sigue usando los precios anteriores hasta reconectar.
 - **RF-40.** Además de guardarse en el navegador, las operaciones pendientes se respaldan en un segundo archivo local (disco o pendrive), para no perderse si el equipo se apaga de golpe.
 
