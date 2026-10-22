@@ -32,8 +32,8 @@ Una tarea está terminada solo si se cumplen **todas**:
 - Datos mock en `src/` fuera de archivos `*.test.ts`. La lista `qa/mocks-conocidos.txt` solo se achica.
 - **Editar una migración que ya existe.** Toda corrección de esquema va en una migración nueva con
   timestamp posterior. El job `migrations` del CI lo verifica.
-- Crear una vista o tabla en `public` sin revocar `anon`. Supabase concede todo objeto nuevo a `anon`
-  por defecto; una vista con `security_invoker = false` queda legible sin login.
+- Crear una vista o tabla en `public` sin revocar `anon`. Supabase concede todo objeto nuevo a
+  `anon` por defecto; una vista con `security_invoker = false` queda legible sin login.
 - Funciones `security definer` sin `set search_path = public`.
 - Escrituras de ventas, stock o fiado directo desde el navegador a las tablas. Van por RPC
   (`process_offline_sale`, `apply_offline_operation` o una RPC nueva) para ser atómicas e idempotentes.
@@ -57,3 +57,18 @@ Una tarea está terminada solo si se cumplen **todas**:
   mezclás.
 - Si no pudiste correr algo (por ejemplo, sin Docker), lo decís explícitamente en el PR. Para SQL
   sin Docker existe `npm run test:db:nodocker` (ver `qa/pg-harness/README.md`).
+
+## Bitácora de seguimiento de migraciones
+
+### 2026-10-22 15:24 ART (18:24 UTC) — Codex
+
+- Se guió al usuario para vincular el CLI local con el proyecto remoto Alverdesys
+  (`ivyozvynqlnucowrbury`) y reconciliar el historial tras aplicar RF-38.
+- El usuario ejecutó la reparación desde PowerShell. La salida posterior de
+  `npx --yes supabase@2.117.0 migration list --linked` muestra las versiones locales y remotas
+  coincidentes hasta `20261020120000`; ya no aparece la entrada remota `20261022175559`.
+- Este registro documenta el estado de seguimiento de migraciones; no afirma una nueva ejecución SQL.
+- Al momento de esta anotación, el PR #133 sigue en draft. Las migraciones nuevas de #133 y las de
+  #131/#134 no se aplicaron a producción. No ejecutar `db push` antes de revisar el orden y el
+  contenido de las migraciones que se integren.
+
