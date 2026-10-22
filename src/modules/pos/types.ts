@@ -61,4 +61,6 @@ export interface CurrentShift {
   initialBalance: number;
   /** false mientras el turno se abrió sin conexión y todavía no existe en la nube. */
   persisted: boolean;
+  /** Error devuelto por la base al intentar registrar en la nube un turno que se abrió sin conexión. */
+  persistError?: string;
 }

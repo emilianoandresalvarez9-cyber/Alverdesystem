@@ -122,12 +122,14 @@ export async function persistShift(): Promise<void> {
     { onConflict: "id", ignoreDuplicates: true }
   );
   if (error) {
-    if (error.code === "23505") {
-      throw new Error(`La ${shift.registerName} ya tiene un turno abierto de otra persona. Pedile que lo cierre o avisale a la administradora.`);
-    }
-    throw new Error(`No se pudo registrar el turno: ${error.message}`);
+    const message = error.code === "23505"
+      ? `La ${shift.registerName} ya tiene un turno abierto de otra persona. Pedile que lo cierre o avisale a la administradora.`
+      : `No se pudo registrar el turno: ${error.message}`;
+    await writeSetting(shiftKey(auth.user.id), { ...shift, ownerUserId: auth.user.id, persisted: false, persistError: message });
+    throw new Error(message);
   }
-  await writeSetting(shiftKey(auth.user.id), { ...shift, ownerUserId: auth.user.id, persisted: true });
+  const { persistError: _cleared, ...cleanShift } = shift;
+  await writeSetting(shiftKey(auth.user.id), { ...cleanShift, ownerUserId: auth.user.id, persisted: true });
 }
 
 registerPreSyncStep(persistShift);
@@ -155,8 +157,17 @@ export async function closeShift(userId: string): Promise<CloseResult> {
   const summary = await shiftSummary(shift);
   const refreshed = await currentShift(userId);
 
-  if (!navigator.onLine || !refreshed?.persisted) {
+  if (!navigator.onLine) {
     return { closed: false, summary, reason: "Para cerrar el turno hace falta conexión. Las ventas siguen guardadas en este equipo." };
+  }
+  if (!refreshed?.persisted) {
+    return {
+      closed: false,
+      summary,
+      reason: refreshed?.persistError
+        ? `${refreshed.persistError} Las ventas siguen guardadas en este equipo.`
+        : "Para cerrar el turno hace falta conexión. Las ventas siguen guardadas en este equipo."
+    };
   }
   if (summary.pendingSync > 0) {
     const rejectedSale = (await allOperations()).find((operation) => {
