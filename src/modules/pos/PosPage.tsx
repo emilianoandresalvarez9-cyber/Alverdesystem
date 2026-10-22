@@ -193,7 +193,8 @@ function formatTime(iso: string): string {
   return Number.isNaN(date.getTime()) ? "—" : TIME_FORMAT.format(date);
 }
 
-function Register({ shift, onClosed }: { shift: CurrentShift; onClosed: () => void }) {
+function Register({ shift: initialShift, onClosed }: { shift: CurrentShift; onClosed: () => void }) {
+  const [shift, setShift] = useState<CurrentShift>(initialShift);
   const { products, isLoading, isOffline } = useCatalog();
   // RF-69: precios de la sucursal de la caja (turnos viejos sin sucursal: la de trabajo).
   const { workingBranchId } = useBranch();
@@ -210,6 +211,27 @@ function Register({ shift, onClosed }: { shift: CurrentShift; onClosed: () => vo
   const [customer, setCustomer] = useState<CustomerAccount | null>(null);
   const scanRef = useRef<HTMLInputElement>(null);
   const compact = useCompact();
+
+  const refreshShift = useCallback(async () => {
+    if (!initialShift.ownerUserId) return;
+    const latest = await currentShift(initialShift.ownerUserId);
+    if (latest) setShift(latest);
+  }, [initialShift.ownerUserId]);
+
+  useEffect(() => { setShift(initialShift); }, [initialShift]);
+
+  useEffect(() => {
+    const syncAndRefresh = () => {
+      void synchronizePendingOperations()
+        .catch(() => undefined)
+        .finally(() => { void refreshShift(); });
+    };
+    addEventListener("online", syncAndRefresh);
+    if (navigator.onLine && !initialShift.persisted) {
+      syncAndRefresh();
+    }
+    return () => removeEventListener("online", syncAndRefresh);
+  }, [initialShift.persisted, refreshShift]);
 
   const total = cartTotal(lines);
   const results = /^\d+$/.test(query.trim()) ? [] : searchEntries(entries, query);
@@ -276,7 +298,9 @@ function Register({ shift, onClosed }: { shift: CurrentShift; onClosed: () => vo
           ? `Fiado guardado: ${formatMoney(payload.totalAmount)} a la cuenta de ${customer.name}.`
           : `Venta guardada: ${formatMoney(payload.totalAmount)} en ${PAYMENT_LABELS[payload.paymentMethod].toLowerCase()}.`
       });
-      void synchronizePendingOperations().catch(() => undefined);
+      void synchronizePendingOperations()
+        .catch(() => undefined)
+        .finally(() => { void refreshShift(); });
     } catch (err) {
       setFeedback({ tone: "error", text: err instanceof Error ? err.message : "No se pudo guardar la venta." });
     } finally {
@@ -297,11 +321,13 @@ function Register({ shift, onClosed }: { shift: CurrentShift; onClosed: () => vo
       <div className="pila">
         <div className="turno">
           <Badge tone="exito">Turno abierto</Badge>
-          {!shift.persisted && <Badge tone="aviso" icon="sync">Abierto sin conexión · se registra al sincronizar</Badge>}
+          {!shift.persisted && !shift.persistError && <Badge tone="aviso" icon="sync">Abierto sin conexión · se registra al sincronizar</Badge>}
+          {!shift.persisted && shift.persistError && <Badge tone="error" icon="error">Turno rechazado por el servidor</Badge>}
           <span><strong>{shift.registerName}</strong> · desde las <span className="cifra">{formatTime(shift.openedAt)}</span></span>
           <span>Efectivo inicial <span className="cifra">{formatMoney(shift.initialBalance)}</span></span>
           <Button variant="secundario" size="compacto" icon="lock" className="turno__cerrar" onClick={() => setClosing(true)}>Cerrar turno</Button>
         </div>
+        {shift.persistError && <Message tone="error">{shift.persistError}</Message>}
 
         <section className="pila pila--s" aria-label="Carga de productos">
           <form className="caja-busqueda" onSubmit={submitQuery}>

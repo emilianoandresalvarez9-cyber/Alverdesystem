@@ -14,7 +14,7 @@ vi.mock("../../shared/supabase/client", () => {
   };
 });
 
-const { currentShift, openShift } = await import("./shift");
+const { closeShift, currentShift, openShift, persistShift } = await import("./shift");
 const register = { id: "c9", name: "Caja Norte", branchName: "Norte", branchId: "norte" };
 
 describe("abrir turno (RF-66)", () => {
@@ -56,4 +56,27 @@ describe("abrir turno (RF-66)", () => {
     await openShift(register, 0, "cajera");
     expect((await currentShift("cajera"))?.persisted).toBe(true);
   });
+
+  it("A-04: si un turno abierto sin conexión es rechazado al volver la red, guarda persistError y closeShift muestra ese motivo", async () => {
+    vi.stubGlobal("navigator", { onLine: false });
+    await openShift(register, 2000, "cajera");
+
+    vi.stubGlobal("navigator", { onLine: true });
+    upsert.mockResolvedValue({
+      error: { code: "23505", message: "duplicate key value violates unique constraint" }
+    });
+
+    await expect(persistShift()).rejects.toThrow(/ya tiene un turno abierto de otra persona/);
+    const stored = await currentShift("cajera");
+    expect(stored?.persisted).toBe(false);
+    expect(stored?.persistError).toMatch(/ya tiene un turno abierto de otra persona/);
+
+    const outcome = await closeShift("cajera");
+    expect(outcome.closed).toBe(false);
+    if (!outcome.closed) {
+      expect(outcome.reason).toMatch(/ya tiene un turno abierto de otra persona/);
+      expect(outcome.reason).not.toMatch(/hace falta conexión/);
+    }
+  });
 });
+
