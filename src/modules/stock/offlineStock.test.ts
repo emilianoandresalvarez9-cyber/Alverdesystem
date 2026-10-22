@@ -126,5 +126,17 @@ describe("operaciones de stock pendientes", () => {
 
     expect(result[0]?.opened_at).toBe("2026-09-30T12:00:00.000Z");
   });
+
+  it("no aplica sobre la vista local una operación rechazada permanentemente por la base (A-02)", () => {
+    const rejected: QueuedOperation = {
+      ...operation("rejected-open", { action: "open_lot", lotId: "lot-1" }),
+      retryable: false,
+      failureCode: "P0001",
+      failureMessage: "Regla de oro del granel",
+    };
+
+    const result = withPendingStockOperations([lot], [rejected]);
+    expect(result[0]?.opened_at).toBeNull();
+  });
 });
 

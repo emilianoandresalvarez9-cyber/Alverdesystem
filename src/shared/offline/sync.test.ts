@@ -22,16 +22,19 @@ describe("offline sync", () => {
     expect(isPermanentSyncError("42703")).toBe(true);
   });
 
-  it("classifies data exceptions (class 22, e.g. numeric overflow) as permanent, not endless retries", () => {
+  it("classifies data exceptions (class 22, e.g. numeric overflow) and business rule rejections (P0001/P0002) as permanent", () => {
     expect(isPermanentSyncError("22003")).toBe(true);
     expect(isPermanentSyncError("22P02")).toBe(true);
+    expect(isPermanentSyncError("P0001", "Regla de oro del granel")).toBe(true);
+    expect(isPermanentSyncError("P0002", "Lote no encontrado.")).toBe(true);
   });
 
-  it("keeps network and transient server errors retryable", () => {
+  it("keeps network, transient server errors, and missing-shift P0002 retryable", () => {
     expect(isPermanentSyncError(undefined)).toBe(false);
     expect(isPermanentSyncError("08006")).toBe(false);
     expect(isPermanentSyncError("57014")).toBe(false);
     expect(isPermanentSyncError("PGRST000")).toBe(false);
+    expect(isPermanentSyncError("P0002", "El turno 123 todavía no existe en la nube; se reintentará.")).toBe(false);
   });
 
   it("keeps an FK-rejected sale and stops retrying it until an explicit retry", async () => {

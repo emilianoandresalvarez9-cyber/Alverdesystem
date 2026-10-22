@@ -32,10 +32,11 @@ describe("Acciones de un lote", () => {
     expect(run(lot({ opened_at: "2026-10-01T10:00:00Z" })).primary?.key).toBe("fraction");
   });
 
-  it("RF-12: con otra bolsa abierta, Abrir bolsa queda deshabilitada con el motivo y no va a la vista", () => {
-    const r = run(lot({ sold_by_weight: false }), { hasActiveBag: true });
+  it("RF-12: con otra bolsa abierta, Abrir bolsa queda deshabilitada con el motivo y no se ofrece Fraccionar en la cerrada (A-02)", () => {
+    const r = run(lot({}), { hasActiveBag: true });
     const open = r.all.find((a) => a.key === "open");
     expect(open).toMatchObject({ disabled: true, reason: "Ya hay una bolsa abierta de este producto." });
+    expect(keys(r)).not.toContain("fraction");
     expect(r.primary?.key).toBe("adjust");
   });
 
