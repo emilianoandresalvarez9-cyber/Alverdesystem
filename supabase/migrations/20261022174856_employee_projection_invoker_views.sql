@@ -171,15 +171,68 @@ grant execute on function private.customer_accounts_projection() to authenticate
 
 create or replace view public.employee_catalog
 with (security_invoker = true, security_barrier = true)
-as select * from private.employee_catalog_projection();
+as
+select
+  product_id,
+  product_name,
+  manufacturer_barcode,
+  base_unit,
+  open_shelf_life_days,
+  label_text,
+  brand_id,
+  brand_name,
+  category_id,
+  category_name,
+  presentation_id,
+  presentation_name,
+  base_quantity::numeric(14, 3) as base_quantity,
+  internal_barcode,
+  sale_price::numeric(14, 2) as sale_price,
+  sold_by_weight,
+  labels,
+  branch_prices
+from private.employee_catalog_projection();
 
 create or replace view public.employee_stock_lots
 with (security_invoker = true, security_barrier = true)
-as select * from private.employee_stock_lots_projection();
+as
+select
+  id,
+  presentation_id,
+  supplier_id,
+  initial_quantity::numeric(14, 3) as initial_quantity,
+  current_quantity::numeric(14, 3) as current_quantity,
+  received_at,
+  manufacturer_expiry_date,
+  opened_at,
+  portioned_at,
+  status,
+  effective_expiry_date,
+  product_id,
+  product_name,
+  base_unit,
+  open_shelf_life_days,
+  presentation_name,
+  base_quantity::numeric(14, 3) as base_quantity,
+  sold_by_weight,
+  supplier_name,
+  created_at,
+  branch_id,
+  branch_name
+from private.employee_stock_lots_projection();
 
 create or replace view public.customer_accounts
 with (security_invoker = true, security_barrier = true)
-as select * from private.customer_accounts_projection();
+as
+select
+  id,
+  name,
+  phone,
+  credit_limit::numeric(14, 2) as credit_limit,
+  active,
+  balance::numeric(14, 2) as balance,
+  last_movement_at
+from private.customer_accounts_projection();
 
 revoke all on public.employee_catalog from public, anon, authenticated;
 revoke all on public.employee_stock_lots from public, anon, authenticated;
