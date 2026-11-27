@@ -51,6 +51,13 @@ for (const path of allowed) {
   }
 }
 
+// 2a. console.log de depuración en código de producción (AGENTS.md). console.warn/error sí se usan.
+for (const f of prodSources) {
+  if (/\bconsole\.log\s*\(/.test(readFileSync(f.full, "utf8"))) {
+    errors.push(`${f.path}: console.log de depuración. Quitalo o usá console.warn/console.error si es un aviso real.`);
+  }
+}
+
 // 2b. Tipos de la base: sin `any` disfrazado (P20) y database.types.ts al día con las migraciones.
 const fakeAny = /ReturnType<\s*typeof\s+JSON\.parse\s*>/;
 for (const f of prodSources) {
