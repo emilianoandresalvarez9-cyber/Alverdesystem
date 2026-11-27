@@ -6,6 +6,11 @@ INSERT INTO auth.users (id, email) VALUES
   ('00000000-0000-0000-0000-00000000a501', 'admin-a05@test'),
   ('00000000-0000-0000-0000-00000000a502', 'emp1-a05@test'),
   ('00000000-0000-0000-0000-00000000a503', 'emp2-a05@test');
+-- Las cuentas nacen inactivas (20261127120000_cuentas_nuevas_inactivas.sql): el personal de esta
+-- prueba se da de alta como desde el SQL Editor, sin dejar movimientos en el historial.
+alter table public.profiles disable trigger audit_profiles_access;
+update public.profiles set active = true where not active;
+alter table public.profiles enable trigger audit_profiles_access;
 
 UPDATE public.profiles SET role = 'administrator' WHERE id = '00000000-0000-0000-0000-00000000a501';
 
