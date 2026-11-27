@@ -13,11 +13,20 @@ export type SyncResult = {
 export type SyncOptions = { retryRejected?: boolean };
 
 /**
- * Los errores de integridad (23), datos inválidos (22: overflow numérico, formato), permisos o
- * esquema no se resuelven esperando: requieren corregir datos/configuración.
+ * Los errores de integridad (23), datos inválidos (22: overflow numérico, formato), reglas de
+ * negocio (P0001/P0002 salvo espera explícita de turno), permisos o esquema no se resuelven
+ * esperando: requieren corregir datos/configuración.
  */
-export function isPermanentSyncError(code?: string): boolean {
-  return !!code && (code.startsWith("23") || code.startsWith("22") || ["42501", "42703", "42883", "42P01"].includes(code));
+export function isPermanentSyncError(code?: string, message?: string): boolean {
+  if (!code) return false;
+  if (code === "P0002" && message?.includes("se reintentará")) return false;
+  return (
+    code.startsWith("23") ||
+    code.startsWith("22") ||
+    code === "P0001" ||
+    code === "P0002" ||
+    ["42501", "42703", "42883", "42P01"].includes(code)
+  );
 }
 
 type PreSyncStep = () => Promise<void>;
@@ -112,7 +121,7 @@ async function runSynchronization(retryRejected: boolean): Promise<SyncResult> {
 
     if (error) {
       failed += 1;
-      const permanent = isPermanentSyncError(error.code);
+      const permanent = isPermanentSyncError(error.code, error.message);
       if (permanent) rejected += 1;
       await markOperationFailed(operation.localId, error.message, error.code, !permanent);
       continue;

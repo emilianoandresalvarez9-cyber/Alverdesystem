@@ -113,7 +113,7 @@ export function withPendingStockOperations(lots: StockLot[], operations: QueuedO
   const result = new Map(lots.map((lot) => [lot.id, { ...lot }]));
 
   for (const operation of operations) {
-    if (operation.kind !== "stock_movement") continue;
+    if (operation.kind !== "stock_movement" || operation.retryable === false) continue;
     const payload = operation.payload as StockPayload;
 
     if (payload.action === "quick_restock" && payload.targetPresentationId && typeof payload.quantity === "number") {

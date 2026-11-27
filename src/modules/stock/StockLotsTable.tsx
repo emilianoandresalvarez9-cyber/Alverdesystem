@@ -37,7 +37,7 @@ export function lotActions(lot: StockLot, opts: {
     all.push({ key: "open", label: "Abrir bolsa", icon: "unarchive", onSelect: opts.onOpen,
       disabled: opts.hasActiveBag, reason: opts.hasActiveBag ? "Ya hay una bolsa abierta de este producto." : undefined });
   }
-  if (opts.canFraction && !isPending && !isClosed && lot.sold_by_weight) {
+  if (opts.canFraction && !isPending && !isClosed && lot.sold_by_weight && (Boolean(lot.opened_at) || !opts.hasActiveBag)) {
     all.push({ key: "fraction", label: "Fraccionar", icon: "call_split", onSelect: opts.onFraction });
   }
   if (!isPending && !isClosed) all.push({ key: "adjust", label: "Ajustar", icon: "edit", onSelect: opts.onAdjust });
