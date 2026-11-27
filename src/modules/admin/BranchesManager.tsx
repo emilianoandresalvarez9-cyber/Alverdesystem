@@ -3,8 +3,9 @@ import { getSupabase } from "../../shared/supabase/client";
 import { Badge, Button, EmptyState, Message, Modal, SelectField, TextField, useCompact } from "../../shared/ui";
 import { useCurrentProfile } from "../../shared/auth/AuthGate";
 import { staffAccess } from "./staffAccess";
+import { mainBranch, runAndReload } from "./branchRules";
 
-type Branch = { id: string; name: string; address: string | null; archived_at: string | null };
+type Branch = { id: string; name: string; address: string | null; created_at: string; archived_at: string | null };
 type Register = { id: string; branch_id: string; name: string; archived_at: string | null };
 type Person = { id: string; display_name: string; role: "administrator" | "employee"; active: boolean; branch_id: string | null };
 
@@ -21,7 +22,7 @@ export function BranchesManager() {
   const load = useCallback(async () => {
     const supabase = getSupabase();
     const [b, r] = await Promise.all([
-      supabase.from("branches").select("id, name, address, archived_at").order("name"),
+      supabase.from("branches").select("id, name, address, created_at, archived_at").order("name"),
       supabase.from("registers").select("id, branch_id, name, archived_at").order("name")
     ]);
     if (b.error || r.error) setError((b.error ?? r.error)?.message ?? "No se pudo cargar.");
@@ -35,10 +36,10 @@ export function BranchesManager() {
 
   useEffect(() => { void load(); }, [load]);
 
-  async function run(action: () => PromiseLike<{ error: { message: string } | null }>) {
-    const { error: err } = await action();
-    if (err) setError(err.message);
-    await load();
+  async function run(action: () => PromiseLike<{ error: { message: string; code?: string | null } | null }>) {
+    // El error se muestra después de recargar: load() limpia el anterior.
+    const message = await runAndReload(action, load);
+    if (message) setError(message);
   }
 
   if (loading) {
@@ -137,7 +138,7 @@ function StaffBranches({ branches }: { branches: Branch[] }) {
     setSaved(null);
     const { error: err } = await getSupabase().from("profiles").update({ branch_id: branchId || null }).eq("id", person.id);
     if (err) return setError(err.message);
-    const name = branches.find((b) => b.id === branchId)?.name ?? "la sucursal principal";
+    const name = branches.find((b) => b.id === branchId)?.name ?? `la sucursal principal (${mainBranch(branches)?.name ?? "sin definir"})`;
     setSaved(`${person.display_name} trabaja ahora en ${name}. Lo ve la próxima vez que abra una pantalla.`);
     await load();
   }
@@ -154,7 +155,8 @@ function StaffBranches({ branches }: { branches: Branch[] }) {
     await load();
   }
 
-  const mainName = branches[0]?.name ?? "la principal";
+  // La misma que usa la base (default_branch_id): la más antigua, no la primera por nombre.
+  const mainName = mainBranch(branches)?.name ?? "la principal";
   const roleLabel = (person: Person) => (person.role === "administrator" ? "Administrador" : "Empleado");
   const branchSelect = (person: Person) => (
     <SelectField hideLabel label={`Sucursal de ${person.display_name}`} value={person.branch_id ?? ""}
