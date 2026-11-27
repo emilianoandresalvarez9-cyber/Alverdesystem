@@ -1,4 +1,5 @@
 /** RF-68: validación de un traspaso entre sucursales antes de mandarlo. Lógica pura. */
+import { parseStockQuantity } from "./quantityInput";
 
 export type TransferCheck =
   | { ok: true; quantity: number }
@@ -14,9 +15,9 @@ export function checkTransfer(input: {
   if (input.fromBranchId && input.toBranchId === input.fromBranchId) {
     return { ok: false, reason: "El lote ya está en esa sucursal." };
   }
-  const quantity = Number(input.rawQuantity.trim().replace(",", "."));
-  if (!Number.isFinite(quantity) || quantity <= 0) return { ok: false, reason: "Indicá cuánto traspasar." };
-  if (Math.round(quantity * 1000) !== quantity * 1000) return { ok: false, reason: "Hasta tres decimales." };
+  const parsed = parseStockQuantity(input.rawQuantity, "Indicá cuánto traspasar.");
+  if (!parsed.ok) return parsed;
+  const quantity = parsed.quantity;
   if (quantity > input.available) return { ok: false, reason: `No alcanza: el lote tiene ${input.available}.` };
   return { ok: true, quantity };
 }

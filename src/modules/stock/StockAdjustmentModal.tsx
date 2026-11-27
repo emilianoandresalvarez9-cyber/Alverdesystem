@@ -4,6 +4,7 @@ import { Modal, Button, Message, Options, TextField } from "../../shared/ui";
 import { formatQuantity, unitLabel } from "./format";
 import { queueStockOperation, watchStockOperationSync } from "./offlineStock";
 import type { StockLot } from "./types";
+import { parseStockQuantity } from "./quantityInput";
 
 interface StockAdjustmentModalProps {
   lot: StockLot | null;
@@ -50,11 +51,13 @@ export function StockAdjustmentModal({
   if (!lot) return null;
 
   const handleSubmit = async () => {
-    const qty = parseFloat(quantity);
-    if (isNaN(qty) || qty <= 0) {
-      setError("Ingresá una cantidad mayor a 0.");
+    // E-02: más de tres decimales se encolaba y la base lo rechazaba para siempre (22023).
+    const parsed = parseStockQuantity(quantity);
+    if (!parsed.ok) {
+      setError(parsed.reason);
       return;
     }
+    const qty = parsed.quantity;
     if (kind !== "adjustment" || adjustmentDirection === "remove") {
       if (qty > lot.current_quantity) {
       setError(`No podés descontar más del stock actual (${formatQuantity(lot.current_quantity, lot.base_unit)}).`);

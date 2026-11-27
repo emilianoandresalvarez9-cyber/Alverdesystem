@@ -16,4 +16,16 @@ describe("RF-68: validar traspaso", () => {
     expect(checkTransfer({ ...base, rawQuantity: "21" }).ok).toBe(false);
     expect(checkTransfer({ ...base, rawQuantity: "1.0001" }).ok).toBe(false);
   });
+
+  it("E-01: acepta cantidades válidas de tres decimales que el cálculo con flotantes rechazaba", () => {
+    for (const raw of ["1.005", "1,005", "4.35", "0.001", "8.115"]) {
+      expect(checkTransfer({ ...base, rawQuantity: raw }), raw).toEqual({ ok: true, quantity: Number(raw.replace(",", ".")) });
+    }
+  });
+
+  it("explica por qué rechaza: sin cantidad o con más de tres decimales", () => {
+    expect(checkTransfer({ ...base, rawQuantity: "" })).toEqual({ ok: false, reason: "Indicá cuánto traspasar." });
+    expect(checkTransfer({ ...base, rawQuantity: "abc" })).toEqual({ ok: false, reason: "Indicá cuánto traspasar." });
+    expect(checkTransfer({ ...base, rawQuantity: "1.0001" })).toEqual({ ok: false, reason: "Hasta tres decimales." });
+  });
 });
