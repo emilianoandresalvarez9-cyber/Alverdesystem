@@ -1211,6 +1211,30 @@ export type Database = {
         }
         Returns: boolean
       }
+      public_branches: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          name: string
+          address: string
+        }[]
+      }
+      public_price_list: {
+        Args: {
+          p_branch_id?: string
+        }
+        Returns: {
+          presentation_id: string
+          product_id: string
+          product_name: string
+          brand_name: string
+          category_name: string
+          presentation_name: string
+          sold_by_weight: boolean
+          price: number
+          availability: string
+        }[]
+      }
       quick_restock: {
         Args: {
           p_presentation_id: string
