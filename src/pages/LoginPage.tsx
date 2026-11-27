@@ -28,7 +28,7 @@ export function LoginPage() {
       const profile = await currentProfile(session);
       if (!profile.active) {
         await signOut();
-        throw new Error("Tu usuario está desactivado. Pedile a la administradora que lo reactive.");
+        throw new Error("Tu usuario no está activo. Pedile a la administradora que lo active.");
       }
       storeLastProfile(profile); // la primera página ya se dibuja con su marco (RNF-08)
       location.assign(homeFor(profile.role));

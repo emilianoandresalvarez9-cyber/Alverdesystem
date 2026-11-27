@@ -103,6 +103,9 @@ jobs:
             > /dev/null
           echo "TEST_EMPLOYEE_EMAIL=${test_email}" >> "$GITHUB_ENV"
           echo "TEST_EMPLOYEE_PASSWORD=${test_password}" >> "$GITHUB_ENV"
+      # Las cuentas nacen inactivas: la del empleado E2E se activa como lo haría administración.
+      - name: Activate E2E employee
+        run: supabase db query --local --file supabase/seed.e2e.activar.sql
       - run: npx playwright test
       - uses: actions/upload-artifact@v4
         if: always()
