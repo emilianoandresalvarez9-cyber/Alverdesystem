@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabase } from "../../shared/supabase/client";
 import { formatMoney } from "../pos/money";
 import { getEffectiveMultiplier, suggestPresentationPrice, type PriceCategory, type PriceCategoryMultiplier } from "../catalog/priceSuggestion";
+import { presentationPriceLabel } from "../catalog/scalePricing";
 import type { Product, Presentation } from "../../shared/types";
 import { Badge, Button, Message, SelectField, TextField } from "../../shared/ui";
 import { PriceHistoryPanel } from "./PriceHistoryPanel";
@@ -196,7 +197,7 @@ export function ProductPricing({ product, presentations, onPricesSaved }: {
                   return (
                     <tr key={presentation.id}>
                       <td>{presentation.name}</td>
-                      <td className="num">{formatMoney(Number(presentation.sale_price))}</td>
+                      <td className="num">{presentationPriceLabel({ sale_price: Number(presentation.sale_price), sold_by_weight: presentation.sold_by_weight }, formatMoney)}</td>
                       <td className="num fuerte">{suggestion ? `${formatMoney(suggestion.displayPrice)}${presentation.sold_by_weight ? "/kg" : ""}` : "—"}</td>
                       <td className="acciones">
                         {suggestion
