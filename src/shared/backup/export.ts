@@ -94,20 +94,21 @@ export async function generateFullBackup(): Promise<BackupData> {
 }
 
 /**
- * Convierte datos JSON a formato CSV compatible con Excel (RF-43)
+ * Convierte filas a CSV para Excel (RF-43). Excel en español separa columnas con «;» (la coma es
+ * el separador decimal) y necesita la marca BOM para leer los acentos como UTF-8: con coma y sin
+ * BOM, cada fila caía en una sola celda y «Almacén» se veía «AlmacÃ©n». Mismo formato que
+ * `src/shared/export/excel.ts`.
  */
 export function jsonToCSV(data: Record<string, unknown>[]): string {
   if (!data || data.length === 0) return "";
   const headers = Object.keys(data[0] || {});
-  const rows = data.map(row => 
-    headers.map(header => {
-      const val = row[header];
-      if (val === null || val === undefined) return '""';
-      const str = String(val).replace(/"/g, '""');
-      return `"${str}"`;
-    }).join(",")
-  );
-  return [headers.join(","), ...rows].join("\n");
+  const cell = (value: unknown) => {
+    if (value === null || value === undefined) return '""';
+    const text = typeof value === "object" ? JSON.stringify(value) : String(value);
+    return `"${text.replace(/"/g, '""')}"`;
+  };
+  const lines = [headers.map(cell).join(";"), ...data.map((row) => headers.map((header) => cell(row[header])).join(";"))];
+  return "\uFEFF" + lines.join("\r\n");
 }
 
 /**
