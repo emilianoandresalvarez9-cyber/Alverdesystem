@@ -128,7 +128,8 @@ export default defineConfig({
         admin: fileURLToPath(new URL("./admin.html", import.meta.url)),
         stock: fileURLToPath(new URL("./stock.html", import.meta.url)),
         pos: fileURLToPath(new URL("./pos.html", import.meta.url)),
-        customers: fileURLToPath(new URL("./customers.html", import.meta.url))
+        customers: fileURLToPath(new URL("./customers.html", import.meta.url)),
+        precios: fileURLToPath(new URL("./precios.html", import.meta.url))
       }
     }
   }

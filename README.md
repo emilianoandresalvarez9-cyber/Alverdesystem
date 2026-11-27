@@ -6,7 +6,7 @@ Sistema web de gestión para dietética, según `requisitos-sistema-dietetica.md
 Reglas para agentes: `AGENTS.md`.
 
 Páginas: `/` (ingreso), `/catalog.html`, `/pos.html` (caja), `/customers.html` (clientes y fiado),
-`/admin.html` (solo administradora).
+`/admin.html` (solo administradora) y `/precios.html` (sitio público: lista de precios y disponibilidad en vivo, sin iniciar sesión).
 
 ## Qué ya está resuelto
 
