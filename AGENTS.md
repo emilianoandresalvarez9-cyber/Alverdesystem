@@ -9,6 +9,8 @@ comentario dicen otra cosa, vale lo que dice acá.
 2. Correr `npm ci && npm run verify` sobre `main` y anotar el resultado. Si `main` ya está roja,
    no empezás tu tarea: lo reportás.
 3. Trabajar en una rama propia y abrir Pull Request hacia `main`. Nunca escribir en `main`.
+4. Revisar los pendientes abiertos antes de elegir tarea: `TAREAS.md` y la lista de la auditoría
+   sitio ↔ base (`docs/QA_QC/PENDIENTES-AUDITORIA-2026-10-20.md`). No repetir lo que ya está en un PR abierto.
 
 ## Definición de terminado
 
