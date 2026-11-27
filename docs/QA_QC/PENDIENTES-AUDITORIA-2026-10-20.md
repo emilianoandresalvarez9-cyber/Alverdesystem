@@ -6,6 +6,47 @@ falle si el defecto vuelve, pgTAP con roles reales si tocás SQL y nunca editar 
 Las referencias `archivo:línea` son de `main` al 20/10/2026, después de mergear #121, #122 y #123.
 Si la línea cambió, buscá por el texto citado.
 
+## Estado al 27/11/2026 (leer primero)
+
+Qué pasó desde que se escribió esta lista. «Mergeado» significa que está en `main` con el CI verde; ninguno
+tuvo prueba manual en navegador contra la base real, salvo donde se indica.
+
+| Punto | PR | Estado |
+|---|---|---|
+| A-01 a A-05 | #129, #130, #132, #131, #134 | Mergeados. Las migraciones de #131 y #134 (`20261022180000`, `20261022190000`) están aplicadas en producción; se comprobó que el código de `fraction_stock` y `sale_void_return_stock` coincide con el del repo. |
+| C-02 | #140 | Mergeado. |
+| C-03 | #139 | Mergeado. |
+| D-01 | #142 | Mergeado. |
+| E-01, E-02 | #143 | Mergeados. |
+| E-06 | #141 | Mergeado; `qa:guard` ahora rechaza `console.log` en `src/`. |
+| B-02 | #133 (abierto) | Sin mergear. Ver la nota de abajo antes de mergearlo. |
+
+Siguen abiertos: A-06, B-01, B-03 a B-06, C-01, D-02 a D-05, E-03 a E-05, E-07 a E-14.
+
+Cambios que no estaban en la lista:
+
+- **Las cuentas nuevas nacen inactivas** (#135, migración `20261127120000`, aplicada en producción). Una cuenta
+  de Auth no tiene acceso hasta que administración la activa en Sucursales y cajas → Personal. La primera
+  administradora de una base nueva se activa con el SQL del README. **Todo pgTAP que cree usuarios tiene que
+  activarlos después de crearlos** (ver el bloque `alter table public.profiles disable trigger
+  audit_profiles_access` en cualquier archivo de `supabase/tests/`); si no, su personal no tiene acceso y las
+  aserciones fallan. Eso le pasó a `main` al mergear #131 y #134 (lo corrigió #137) y le va a pasar a #133.
+- **Sitio público** (#136, migración `20261127130000`, aplicada en producción): `/precios.html` muestra precio y
+  disponibilidad sin sesión, con las funciones `public_price_list` y `public_branches`. Son las únicas dos
+  funciones que `anon` puede ejecutar. Se comprobó en el sitio publicado que la lista carga con datos reales.
+- **Dependencias** (#138): `npm audit` bajó de 11 avisos a 5. Los que quedan piden cambios incompatibles.
+- **Producción ya registra migraciones**: `supabase_migrations.schema_migrations` tiene las 51 del repo. Las
+  cuatro de este período se aplicaron por SQL y se registraron a mano con su versión.
+- **Cuentas en producción**: quedó activa una sola administradora; las otras cuatro cuentas se dieron de baja
+  (no se borraron).
+
+Operativo, sin hacer:
+
+- **El registro abierto sigue encendido** en Supabase (Authentication → Sign In / Providers). Con #135 una
+  cuenta registrada por un extraño nace sin acceso, pero conviene apagarlo igual.
+- `main` sigue sin protección de rama.
+- La protección de contraseñas filtradas sigue apagada (asesor `auth_leaked_password_protection`).
+
 ## 0. Contexto que conviene saber
 
 - **La base de producción coincide con el repo.** Se comparó el catálogo completo del proyecto Supabase
