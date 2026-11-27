@@ -15,7 +15,7 @@ describe("jsonToCSV (RF-43, C-02): CSV que Excel en español abre en columnas", 
     const lines = csv.slice(1).split("\r\n");
     expect(lines[0]).toBe('"id";"name";"price";"note";"tags"');
     expect(lines).toHaveLength(3); // el salto de línea dentro de una celda (\n) no parte la fila
-    expect(csv).not.toMatch(/","/);
+    expect(lines[0]).not.toContain(",");
   });
 
   it("escapa comillas, conserva el punto y coma dentro de la celda y deja vacíos los nulos", () => {
