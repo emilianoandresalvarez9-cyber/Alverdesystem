@@ -12,6 +12,11 @@ insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000000e2', 'emp2@test'),
   ('00000000-0000-0000-0000-0000000000e9', 'baja@test'),
   ('00000000-0000-0000-0000-0000000000f7', 'sinperfil@test');
+-- Las cuentas nacen inactivas (20261127120000_cuentas_nuevas_inactivas.sql): el personal de esta
+-- prueba se da de alta como desde el SQL Editor, sin dejar movimientos en el historial.
+alter table public.profiles disable trigger audit_profiles_access;
+update public.profiles set active = true where not active;
+alter table public.profiles enable trigger audit_profiles_access;
 -- Una cuenta sin perfil (por ejemplo, si se borró a mano): nadie salvo administración se lo crea.
 delete from public.profiles where id = '00000000-0000-0000-0000-0000000000f7';
 update public.profiles set role = 'administrator'

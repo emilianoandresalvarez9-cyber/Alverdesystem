@@ -3,6 +3,11 @@ begin;
 select plan(7);
 
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-00000000f291', 'rf28b-admin@test');
+-- Las cuentas nacen inactivas (20261127120000_cuentas_nuevas_inactivas.sql): el personal de esta
+-- prueba se da de alta como desde el SQL Editor, sin dejar movimientos en el historial.
+alter table public.profiles disable trigger audit_profiles_access;
+update public.profiles set active = true where not active;
+alter table public.profiles enable trigger audit_profiles_access;
 update public.profiles set role = 'administrator' where id = '00000000-0000-0000-0000-00000000f291';
 insert into public.categories (id, name) values ('00000000-0000-0000-0000-00000000f2c9', 'RF28B granos');
 insert into public.products (id, name, base_unit, category_id) values

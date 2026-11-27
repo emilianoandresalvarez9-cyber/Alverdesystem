@@ -50,13 +50,15 @@ npx supabase db reset
 npx supabase status
 ```
 
-Copia la URL y la clave anon local que informa `supabase status` a `.env.local`. Para crear el primer acceso, crea un usuario en Supabase Studio / Auth con metadata `display_name`; luego, en el SQL Editor local, asígnale rol de administradora:
+Copia la URL y la clave anon local que informa `supabase status` a `.env.local`. Para crear el primer acceso, crea un usuario en Supabase Studio / Auth con metadata `display_name`; luego, en el SQL Editor local, asígnale rol de administradora y actívalo:
 
 ```sql
 update public.profiles
-set role = 'administrator'
+set role = 'administrator', active = true
 where id = 'UUID_DEL_USUARIO';
 ```
+
+**Toda cuenta nueva nace inactiva** (sin acceso a ningún dato). La primera administradora se activa con el SQL de arriba; a las demás personas las activa una administradora desde Administración → Sucursales y cajas → Personal, con el botón «Activar». Así, aunque el registro abierto de Supabase quedara encendido por error, una cuenta que nadie aprobó no entra.
 
 La migración crea el perfil automáticamente al crear un usuario de Auth. No hay credenciales de Supabase en el repositorio.
 
@@ -69,6 +71,8 @@ local**: `playwright.config.ts` corta si la URL no es `localhost`/`127.0.0.1`. P
 ```bash
 npx supabase start && npx supabase db reset
 npx supabase db query --local --file supabase/seed.e2e.sql
+# después de crear el empleado de prueba en Auth (empleado@alverde.local), activarlo:
+npx supabase db query --local --file supabase/seed.e2e.activar.sql
 printf "VITE_SUPABASE_URL=http://127.0.0.1:54321\nVITE_SUPABASE_ANON_KEY=<anon key de supabase status>\n" > .env.e2e.local
 npm run test:e2e
 ```

@@ -10,6 +10,11 @@ insert into public.registers (id, branch_id, name) values
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-000000008005', 'branch-employee@test'),
   ('00000000-0000-0000-0000-000000008006', 'branch-admin@test');
+-- Las cuentas nacen inactivas (20261127120000_cuentas_nuevas_inactivas.sql): el personal de esta
+-- prueba se da de alta como desde el SQL Editor, sin dejar movimientos en el historial.
+alter table public.profiles disable trigger audit_profiles_access;
+update public.profiles set active = true where not active;
+alter table public.profiles enable trigger audit_profiles_access;
 update public.profiles set branch_id = '00000000-0000-0000-0000-000000008001'
 where id = '00000000-0000-0000-0000-000000008005';
 update public.profiles set role = 'administrator'
